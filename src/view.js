@@ -26,12 +26,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	const g = canvas.getContext('2d')
 	const { lanes, transport } = engine
 	const { clock } = transport
-	const opts = { mode: 'dial', slices: 192, landscape: true, ground: 'flamingo', cycleLoops: 4 }
+	const opts = { mode: 'dial', slices: 192, landscape: true, ground: 'vallotton', cycleLoops: 4 }
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	let W, H, S, CX, CY, DPR
 	let bg = document.createElement('canvas'), bg2 = document.createElement('canvas')
 	// ground state: current G, and while cycling an incoming one fading in
-	let G = GROUNDS.flamingo, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
+	let G = GROUNDS.vallotton, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
 	const cursors = new Map() // key -> {lane, x, y, name, until}
 	let heat = 0, lastT = performance.now(), lastBeat = -1, hover = null, drag = null
 

@@ -2,14 +2,14 @@
    tokens with flat offset shadows, serif italics, no app labels. Mono only for the debug panel. */
 :root {
 	--ink: #211a2e;
-	--paper: #f3e8cf;
-	--sky: #efe2c3;
+	--paper: #f1ecc4;
+	--sky: #4e3f84;
 	--violet: #4a3870;
 	--lilac: #9a85b4;
 	--ochre: #d9a03c;
 	--vermilion: #d24b2a;
 	--shadow: rgba(42, 28, 72, 0.5);
-	--title: #211a2e;
+	--title: #f1ecc4;
 	--serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
 	--sans: 'Bricolage Grotesque', system-ui, sans-serif;
 	--mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
