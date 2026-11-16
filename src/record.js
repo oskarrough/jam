@@ -1,5 +1,5 @@
 // Souvenirs: record 8 bars of the jam, store them, replay them read-only at /r/<id>.
-//   rec = { v: 1, loop: {bpm, beatsPerBar, bars}, bars: N, seats: [name|null ×seats],
+//   rec = { v: 1, loop: {bpm, beatsPerBar, bars, root, scale, chords}, bars: N, seats: [name|null ×seats],
 //           frames: [{seat: data} ×N],   // seat data per bar; a seat is omitted if unchanged since the bar before
 //           cursors: [[ms, seatIndex, x, y, down, name], …], room, at }
 
@@ -38,7 +38,8 @@ export function createRecorder({ engine, transport, seatName }) {
 		const barMs = clock.barMs(l)
 		const bars = l.bars >= MIN_BARS ? l.bars : l.bars * Math.ceil(MIN_BARS / l.bars)
 		const start = clock.nextLoop(clock.now() + 50)
-		const rec = { v: 1, loop: { bpm: l.bpm, beatsPerBar: l.beatsPerBar, bars: l.bars }, bars, seats: [], frames: [], cursors: [], at: Date.now() }
+		const { bpm, beatsPerBar, root, scale, chords } = l
+		const rec = { v: 1, loop: { bpm, beatsPerBar, bars: l.bars, root, scale, chords }, bars, seats: [], frames: [], cursors: [], at: Date.now() }
 		let resolve
 		const promise = new Promise((r) => (resolve = r))
 		cur = { rec, start, running: false, promise }
@@ -89,8 +90,8 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 	const emit = (ev, d) => (listeners[ev] || []).forEach((fn) => fn(d))
 	const on = (ev, fn) => ((listeners[ev] ||= []).push(fn), () => (listeners[ev] = listeners[ev].filter((f) => f !== fn)))
 
-	const origin = Math.ceil(clock.now() + 300)
-	const loop = { ...rec.loop, origin }
+	let origin = Math.ceil(clock.now() + 300)
+	let loop = { ...rec.loop, origin }
 	clock.setLoop(loop)
 	const barMs = clock.barMs(loop), totalMs = rec.bars * barMs
 
@@ -138,5 +139,14 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 		peers,
 		debug: () => ({ connected: false, kind: 'replay', bars: rec.bars, bar, peers: peers.length, ...clock.stats() }),
 		close() {},
+		// back to bar 1, so whoever presses play hears the recording from the top
+		restart() {
+			origin = Math.ceil(clock.now() + 120)
+			loop = { ...rec.loop, origin }
+			clock.setLoop(loop)
+			bar = -1
+			lastPass = -1
+			tick()
+		},
 	}
 }

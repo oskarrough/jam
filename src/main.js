@@ -162,7 +162,7 @@ const word = (text, fn) => { const b = document.createElement('button'); b.textC
 const live = () => word('play live', () => (location.href = '/'))
 if (replay) {
 	const from = rec.room && rec.room !== 'open' ? [' of ', Object.assign(document.createElement('b'), { textContent: rec.room })] : []
-	jamline.append('a recording', ...from, ' · ', live())
+	jamline.append('a recording', ...from, ' · ', saveAudio(), ' · ', live())
 } else if (replayId) jamline.append('that recording is gone · ', live())
 else if (transport.kind === 'ws') {
 	const fresh = (text) => Object.assign(word(text, () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))), { title: 'a new jam with its own link, for you and whoever you send it to' })
@@ -178,6 +178,31 @@ else if (transport.kind === 'ws') {
 		jamline.append(b, ' · ', out, ' · ', fresh('another'))
 	}
 }
+// save audio: render the recording offline (m4a or WAV); phones share it, desktops download it
+function saveAudio() {
+	let file = null, busy = false
+	const b = word('save audio', async () => {
+		if (busy) return
+		busy = true
+		try {
+			if (!file) {
+				b.textContent = 'rendering…'
+				const { renderRecording, encodeRecording } = await import('./export.js')
+				const who = [...new Set(rec.seats.filter(Boolean))].join(', ')
+				file = await encodeRecording(await renderRecording(rec, SEAT_IDS), { name: 'roughjam-' + replayId, title: rec.room && rec.room !== 'open' ? rec.room : 'roughjam', artist: who })
+			}
+			const { deliver } = await import('./export.js')
+			b.textContent = (await deliver(file)) === 'shared' ? 'save audio' : 'saved'
+		} catch (e) {
+			// the share sheet wants a fresh tap once rendering took a while
+			b.textContent = e.name === 'NotAllowedError' && file ? 'send audio' : 'could not save'
+			if (e.name !== 'NotAllowedError') console.warn(e)
+		}
+		busy = false
+	})
+	b.title = 'this recording as an audio file'
+	return b
+}
 // seats are drawn by view.js; this only keeps the peers line current
 function renderSeats() {
 	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name || playerName(seats.findIndex((L) => L.id === p.seat))))
@@ -190,6 +215,15 @@ $('sound').onclick = () => {
 }
 // first touch wakes the sound; after that the speaker token is theirs
 $('c').addEventListener('pointerdown', () => { if (!engine.soundOn) $('sound').click() }, { once: true, capture: true })
+if (replay) {
+	// a recording plays on the first tap anywhere, from bar 1
+	const wake = (e) => { if (!e.target.closest?.('button, a, input, select')) $('sound').click() }
+	document.addEventListener('pointerdown', wake, { capture: true })
+	engine.on('sound', (on) => {
+		document.removeEventListener('pointerdown', wake, { capture: true })
+		if (on) transport.restart()
+	})
+}
 // two-finger tap undoes, three redoes. The first finger has already drawn, so the tap first puts that back.
 {
 	const c = $('c'), touches = new Map()

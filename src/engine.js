@@ -19,26 +19,8 @@ export function createEngine(transport, { seatIds, instruments }) {
 	const on = (ev, fn) => (listeners[ev] ||= []).push(fn)
 
 
-	const master = audio.createGain()
+	const { master, roomIn, analyser } = mixBus(audio)
 	master.gain.value = 0
-	const comp = audio.createDynamicsCompressor()
-	comp.threshold.value = -14
-	comp.ratio.value = 3
-	const limiter = audio.createDynamicsCompressor()
-	limiter.threshold.value = -3
-	limiter.knee.value = 0
-	limiter.ratio.value = 20
-	limiter.attack.value = 0.001
-	limiter.release.value = 0.1
-	const analyser = audio.createAnalyser()
-	analyser.fftSize = 512
-	master.connect(comp).connect(limiter).connect(analyser).connect(audio.destination)
-	const room = audio.createConvolver()
-	room.buffer = impulse(audio, 2.8, 2.4)
-	const roomIn = audio.createGain()
-	const wet = audio.createGain()
-	wet.gain.value = 0.55
-	roomIn.connect(room).connect(wet).connect(master)
 
 	const loop = () => clock.loopAt()
 	kit(audio).follow(loop)
@@ -173,6 +155,30 @@ export function createEngine(transport, { seatIds, instruments }) {
 		steps, loop,
 		setTick(ms) { cfg.tickMs = ms; clearInterval(timer); timer = setInterval(tick, ms) },
 	}
+}
+
+// The master chain every seat plays into: glue compressor, limiter, a shared room. The export renders through it too.
+export function mixBus(audio, dest = audio.destination) {
+	const master = audio.createGain()
+	const comp = audio.createDynamicsCompressor()
+	comp.threshold.value = -14
+	comp.ratio.value = 3
+	const limiter = audio.createDynamicsCompressor()
+	limiter.threshold.value = -3
+	limiter.knee.value = 0
+	limiter.ratio.value = 20
+	limiter.attack.value = 0.001
+	limiter.release.value = 0.1
+	const analyser = audio.createAnalyser()
+	analyser.fftSize = 512
+	master.connect(comp).connect(limiter).connect(analyser).connect(dest)
+	const room = audio.createConvolver()
+	room.buffer = impulse(audio, 2.8, 2.4)
+	const roomIn = audio.createGain()
+	const wet = audio.createGain()
+	wet.gain.value = 0.55
+	roomIn.connect(room).connect(wet).connect(master)
+	return { master, roomIn, analyser }
 }
 
 function impulse(ac, sec, decay) {

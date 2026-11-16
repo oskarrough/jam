@@ -65,6 +65,24 @@ export class JamRoom extends DurableObject {
 const MAX_REC = 1 << 20
 const recId = () => [...crypto.getRandomValues(new Uint8Array(8))].map((b) => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('')
 
+// The link preview for /r/<id>: who played what, in which key. Names are the players' own text; setAttribute escapes them.
+async function recCard(env, id) {
+	try {
+		const r = await env.ROOMS.get(env.ROOMS.idFromName('rec/' + id)).fetch('https://rec/', { headers: { 'x-roughjam-rec': '1' } })
+		if (!r.ok) return null
+		const rec = await r.json()
+		const first = Object.values(rec.frames?.[0] || {})
+		const who = (rec.seats || []).map((name, i) => name && first[i]?.instrument && `${name} on ${first[i].instrument}`).filter(Boolean)
+		const l = rec.loop || {}
+		const key = l.root ? `${l.root} ${l.scale || ''}`.trim() + ', ' : ''
+		const room = rec.room && rec.room !== 'open' ? ` of ${rec.room}` : ''
+		return {
+			title: `a recording${room} · roughjam`.slice(0, 120),
+			description: `${rec.bars} bars, ${key}${Math.round(l.bpm)} bpm${who.length ? ' · ' + who.join(', ') : ''}. Tap to listen.`.slice(0, 300),
+		}
+	} catch { return null }
+}
+
 export default {
 	async fetch(req, env) {
 		if (req.headers.get('upgrade') === 'websocket') {
@@ -87,7 +105,17 @@ export default {
 		if (m && m[3]) return Response.redirect(new URL(`/${m[1]}/${m[2]}`, req.url), 301)
 		if (m) {
 			const page = await env.ASSETS.fetch(new Request(new URL('/', req.url), req))
-			return new HTMLRewriter().on('head', { element: (el) => el.prepend('<base href="/">', { html: true }) }).transform(page)
+			let html = new HTMLRewriter().on('head', { element: (el) => el.prepend('<base href="/">', { html: true }) })
+			const card = m[1] === 'r' ? await recCard(env, m[2]) : null
+			if (card) {
+				const set = (sel, v) => (html = html.on(sel, { element: (el) => el.setAttribute('content', v) }))
+				html = html.on('title', { element: (el) => el.setInnerContent(card.title) })
+				set('meta[property="og:title"]', card.title)
+				set('meta[property="og:description"]', card.description)
+				set('meta[name="description"]', card.description)
+				html = html.on('head', { element: (el) => el.append(`<meta property="og:url" content="${new URL(path, req.url).href}">`, { html: true }) })
+			}
+			return html.transform(page)
 		}
 		return env.ASSETS.fetch(req)
 	},
