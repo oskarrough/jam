@@ -51,7 +51,7 @@ export default {
 		filt.Q.value = 2
 		const pump = audio.createGain()
 		const amp = audio.createGain()
-		amp.gain.value = params.level
+		amp.gain.value = 0
 		filt.connect(pump).connect(amp).connect(out)
 		const oscs = []
 		for (let n = 0; n < 3; n++) {
@@ -81,6 +81,7 @@ export default {
 		function applyLive(e) {
 			live = { x: clamp(e.x, 0, 1), y: clamp(e.y, 0, 1) }
 			const now = audio.currentTime
+			amp.gain.setTargetAtTime(params.level, now, 0.03)
 			filt.frequency.setTargetAtTime(cutoffOf(live.y), now, 0.015)
 			filt.Q.setTargetAtTime(qOf(live.x), now, 0.03)
 			if (params.record && clock.playing) {
@@ -127,7 +128,8 @@ export default {
 			}),
 			step(i, time, dur) {
 				const abs = absOf(clock, time)
-				amp.gain.setTargetAtTime(params.level, time, 0.05)
+				// an empty sweep is silent: the pad only sounds while you play it or it has moves to replay
+				amp.gain.setTargetAtTime(live || state.auto.some(Boolean) ? params.level : 0, time, 0.05)
 				if (i % engine.barSteps() === 0) retune(abs, time)
 				if (i % 4 === 0 && params.pump > 0) {
 					pump.gain.setValueAtTime(1 - params.pump, time)
