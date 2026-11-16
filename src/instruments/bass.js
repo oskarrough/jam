@@ -15,7 +15,8 @@ export default stepline({
 	glyph: '<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/>', name: 'Bass', how: 'Draw a line along your ring; higher is a higher note. Shift-drag erases.', base: 33,
 	params: { cutoff: { value: 9, min: 2, max: 24, step: 0.5 } },
 	generate: gen,
-	sample: [0, -1, -1, 0, -1, -1, 3, -1, -1, -1, 4, -1, -1, -1, 2, -1, 0, -1, -1, 0, -1, -1, 3, -1, -1, -1, 5, -1, 4, -1, 2, -1],
+	// 3-3-2 under one bar each of A, C, D, E; the octave jump on the third hit
+	sample: [0, -1, -1, 0, -1, -1, 5, -1, 0, -1, -1, 0, -1, -1, 3, -1, 1, -1, -1, 1, -1, -1, 6, -1, 1, -1, -1, 1, -1, -1, 4, -1, 2, -1, -1, 2, -1, -1, 7, -1, 2, -1, -1, 2, -1, -1, 5, -1, 3, -1, -1, 3, -1, -1, 3, -1, 3, -1, 4, -1, 3, -1, 2, -1],
 	voice({ audio: ac, out, params }, m, t, dur) {
 		const f = mtof(m), g = ac.createGain(), lp = ac.createBiquadFilter()
 		lp.type = 'lowpass'; lp.Q.value = 7

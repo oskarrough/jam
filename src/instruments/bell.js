@@ -15,7 +15,8 @@ export default stepline({
 	glyph: '<path d="M10 21c0-8 2-13 6-13s6 5 6 13z"/><path d="M7 21h18M16 24v2"/>', name: 'Bell', how: 'Draw a line along your ring; higher is a higher note. Shift-drag erases.', base: 69,
 	params: { ratio: { value: 3.5, min: 1, max: 8, step: 0.01 }, index: { value: 2.2, min: 0, max: 8, step: 0.1 } },
 	generate: gen,
-	sample: [-1, -1, -1, -1, -1, -1, -1, -1, 6, -1, 5, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, 6, -1, 5, -1, 3, -1],
+	// chattery repeated notes: a question over A and C, an answer over D and E
+	sample: [3, -1, 3, -1, 3, -1, 2, -1, 1, -1, -1, -1, 1, -1, 2, -1, 3, -1, 3, -1, 4, -1, 3, -1, 2, -1, -1, -1, 1, -1, -1, -1, 2, -1, 2, -1, 2, -1, 1, -1, 0, -1, -1, -1, 1, -1, 2, -1, 3, -1, -1, -1, 2, -1, 1, -1, 0, -1, -1, -1, -1, -1, -1, -1],
 	voice({ audio: ac, out, params }, m, t) {
 		const f = mtof(m), g = ac.createGain(), mg = ac.createGain()
 		env(g, t, 0.002, 0.12, 1.5); g.connect(out)

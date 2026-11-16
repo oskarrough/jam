@@ -15,7 +15,8 @@ export default stepline({
 	glyph: '<path d="M7 7v18M13 7v18M19 7v18M25 7v18"/><path class="f" d="M9.5 7h2v10h-2zM21.5 7h2v10h-2z"/>', name: 'Keys', how: 'Draw a line along your ring; higher is a higher note. Shift-drag erases.', base: 57,
 	params: { decay: { value: 0.8, min: 0.1, max: 3, step: 0.05 } },
 	generate: gen,
-	sample: [4, -1, -1, -1, 5, -1, -1, 4, -1, -1, 3, -1, -1, -1, -1, -1, 2, -1, -1, -1, 3, -1, -1, 4, -1, -1, 5, -1, -1, -1, -1, -1],
+	// the stab, 3-3-2 like the bass, one chord tone per hit
+	sample: [3, -1, -1, 3, -1, -1, 1, -1, 3, -1, -1, 3, -1, -1, 5, -1, 4, -1, -1, 4, -1, -1, 3, -1, 4, -1, -1, 4, -1, -1, 6, -1, 4, -1, -1, 4, -1, -1, 2, -1, 4, -1, -1, 4, -1, -1, 6, -1, 3, -1, -1, 3, -1, -1, 5, -1, 3, -1, 3, -1, 2, -1, 3, -1],
 	voice({ audio: ac, out, params }, m, t) {
 		const f = mtof(m), g = ac.createGain(), lp = ac.createBiquadFilter()
 		lp.type = 'lowpass'; lp.frequency.value = 2600

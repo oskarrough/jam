@@ -5,9 +5,15 @@ import { INK, SERIF } from '../palette.js'
 
 const ROWS = 3
 function drumSample() {
-	const d = new Array(32).fill(0)
-	for (let i = 0; i < 32; i++) { if (i % 8 === 0) d[i] |= 1; if (i % 8 === 4) d[i] |= 2; if (i % 2 === 0) d[i] |= 4 }
-	d[11] |= 1; d[27] |= 1; d[31] |= 4
+	// kick on 1 and the 3-3-2 push, snare on 2 and 4, hats on the offbeats; a fill into the top
+	const d = new Array(64).fill(0)
+	for (let b = 0; b < 4; b++) {
+		const o = b * 16
+		d[o] |= 1; d[o + 6] |= 1; d[o + 8] |= 1
+		d[o + 4] |= 2; d[o + 12] |= 2
+		for (const h of [2, 6, 10, 14]) d[o + h] |= 4
+	}
+	d[30] |= 1; d[62] |= 1; d[63] |= 2; d[61] |= 2
 	return d
 }
 function drumGen() {
