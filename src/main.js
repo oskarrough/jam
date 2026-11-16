@@ -3,7 +3,7 @@
 import { createLocalTransport } from './transport/local.js'
 import { createEngine } from './engine.js'
 import { createView } from './view.js'
-import { createPicker } from './picker.js'
+import { createStrip } from './picker.js'
 import { jellify } from './jelly.js'
 import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
@@ -218,6 +218,8 @@ addEventListener('keydown', (e) => {
 	else if (/^[1-9]$/.test(e.key) && +e.key <= lanes.length) sit(+e.key - 1)
 	else if (e.key === 'd') debug.toggle()
 	else if (e.key === 'e') setErase(!me.erase)
+	else if (e.key === 'j' || e.key === 'ArrowLeft') { e.preventDefault(); cycleInstrument(-1) }
+	else if (e.key === 'k' || e.key === 'ArrowRight') { e.preventDefault(); cycleInstrument(1) }
 	else if (e.key === 'Escape' && view.focus.on) view.setFocus(-1)
 })
 setInterval(() => {
@@ -240,39 +242,57 @@ document.querySelectorAll('.token').forEach((el) => jellify(el))
 jellify(document.querySelector('.tempo'), { amount: 0.08 })
 
 /* ───────── zoom: tap your badge and your instrument opens big, in its own form; the machine shrinks beside it ───────── */
-const picker = createPicker({ engine, registry, view, me })
 const devbar = $('devbar')
+const strip = createStrip({ engine, registry, me, el: devbar })
 function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.lane) }
 addEventListener('zoom', (e) => {
 	const { on, dev } = e.detail
 	document.body.classList.toggle('zoomed', on)
-	if (!on) picker.close()
-	else {
-		devbar.style.left = dev.x + dev.w - 12 + 'px'
-		devbar.style.top = dev.y + 12 + 'px'
-		paintPick()
+	if (on) {
+		devbar.style.left = dev.x + 'px'
+		devbar.style.top = dev.y - 54 + 'px'
+		devbar.style.width = dev.w + 'px'
+		strip.paint()
 	}
 	rideSheet()
 })
-// the devbar is pinned to the sheet: it slides in and out with it, frame for frame
+// the strip is pinned to the sheet: it slides in and out with it, frame for frame
 let riding = 0
 function rideSheet() {
 	if (riding) return
 	const go = () => {
 		const x = view.sheetShift
 		devbar.hidden = !Number.isFinite(x) || x > innerWidth
-		if (!devbar.hidden) devbar.style.transform = `translateX(calc(-100% + ${x}px))`
+		if (!devbar.hidden) devbar.style.transform = `translateX(${x}px)`
 		riding = view.moving || (view.focus.on && x > 0) ? requestAnimationFrame(go) : 0
 	}
 	riding = requestAnimationFrame(go)
 }
-// the pick token wears the current instrument's glyph
-function paintPick() { const L = lanes[me.lane]; if (L) $('pick').innerHTML = picker.glyph(L.module.id) }
-engine.on('lanes', () => view.focus.on && paintPick())
-$('pick').onclick = () => picker.toggle($('pick').getBoundingClientRect())
-$('back').onclick = () => view.setFocus(-1)
-jellify($('pick'))
-jellify($('back'))
+engine.on('lanes', () => view.focus.on && strip.paint())
+
+// j / k (or ← / →) cycle your instrument from anywhere. On the dial a glyph token pops up by your badge
+// with the name under it, so you see what you landed on; zoomed in, the strip shows it.
+const flash = document.createElement('div')
+flash.className = 'flash'
+flash.hidden = true
+flash.setAttribute('aria-live', 'polite')
+document.body.append(flash)
+let flashT = 0
+function cycleInstrument(d) {
+	if (replay || me.lane < 0) return
+	const id = strip.cycle(d)
+	if (!id || view.focus.on) return
+	const s = view.seatAt(me.lane), L = lanes[me.lane]
+	flash.style.setProperty('--c', L.color)
+	flash.innerHTML = `<span class="token">${strip.glyph(id)}</span><i></i>`
+	flash.querySelector('i').textContent = registry.get(id).name.toLowerCase()
+	flash.style.left = s.x + 'px'
+	flash.style.top = s.y + 'px'
+	flash.hidden = false
+	flash.classList.remove('pop'); void flash.offsetWidth; flash.classList.add('pop')
+	clearTimeout(flashT)
+	flashT = setTimeout(() => (flash.hidden = true), 1100)
+}
 
 // handy in the console
 Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart } })

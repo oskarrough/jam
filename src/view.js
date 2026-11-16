@@ -55,7 +55,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		H = innerHeight
 		canvas.width = W * DPR
 		canvas.height = H * DPR
-		const narrow = W < 640, top = narrow ? 150 : 24, bottom = narrow ? 96 : 84
+		const narrow = W < 640, top = narrow ? 44 : 24, bottom = narrow ? 96 : 84, STRIP = 58 // room above the zoomed sheet for the instrument strip
 		S0 = Math.max(240, Math.min(W - 24, H - top - bottom))
 		CX0 = W / 2
 		CY0 = top + (H - top - bottom) / 2
@@ -64,14 +64,14 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			SF = Math.min(180, W * 0.46)
 			CXF = 8 + SF / 2
 			CYF = H - bottom - SF / 2 + 6
-			dev = { x: 12, y: top + 6, w: W - 24, h: Math.max(160, H - bottom - SF - top - 12) }
+			dev = { x: 12, y: 8 + STRIP, w: W - 24, h: Math.max(160, H - bottom - SF - STRIP - 16) }
 		} else {
-			// wide: the machine bottom-left under the seat list, the sheet to its right
-			SF = Math.max(220, Math.min(W * 0.34, H - bottom - 230, 520))
+			// wide: the machine bottom-left, the sheet to its right
+			SF = Math.max(220, Math.min(W * 0.34, H - bottom - 120, 520))
 			CXF = 20 + SF / 2
 			CYF = H - bottom - SF / 2 - 4
 			const x = CXF + SF / 2 + 28
-			dev = { x, y: 52, w: W - x - 24, h: H - 52 - bottom - 16 } // clear of the controls bar top-right
+			dev = { x, y: 12 + STRIP, w: W - x - 24, h: H - 12 - STRIP - bottom - 16 }
 		}
 		applyZoom()
 		sizeLanes()
@@ -82,16 +82,47 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 
 	// the zoom is one move in two beats, with no cross-fade: first the machine slides and shrinks into its corner,
 	// then the sheet slides in from the right edge, opaque. Zooming out plays it backwards.
-	const ease = (t) => t * t * (3 - 2 * t)
+	// Every timing knob lives in Z, tunable live from the debug panel (zoom folder) and kept in localStorage.
+	const ZOOM_DEFAULTS = { inMs: 550, outMs: 550, machineEnd: 0.6, sheetStart: 0.45, machineEase: 'smooth', sheetEase: 'smooth', machineBezier: '0.4, 0, 0.2, 1', sheetBezier: '0.2, 0.8, 0.3, 1', slide: 1, slidePad: 24, scale: 1, dx: 0, dy: 0, barLag: 0 }
+	const Z = { ...ZOOM_DEFAULTS }
+	try { Object.assign(Z, JSON.parse(localStorage.getItem('roughjam.zoom') || '{}')) } catch {}
+	const EASES = {
+		linear: (t) => t,
+		smooth: (t) => t * t * (3 - 2 * t),
+		'in-out cubic': (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
+		'out cubic': (t) => 1 - (1 - t) ** 3,
+		'out expo': (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t)),
+		'out back': (t) => 1 + 2.70158 * (t - 1) ** 3 + 1.70158 * (t - 1) ** 2,
+	}
+	// cubic-bezier(x1, y1, x2, y2) like CSS: solve x(u) = t by Newton, then read y(u)
+	const bezierCache = new Map()
+	function bezier(str) {
+		if (bezierCache.has(str)) return bezierCache.get(str)
+		const [x1, y1, x2, y2] = String(str).split(',').map(Number)
+		const B = (a, b, u) => 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3
+		const dB = (a, b, u) => 3 * a * (1 - u) ** 2 + 6 * (b - a) * u * (1 - u) + 3 * (1 - b) * u * u
+		const f = [x1, y1, x2, y2].some((v) => !Number.isFinite(v)) ? EASES.smooth : (t) => {
+			let u = t
+			for (let i = 0; i < 8; i++) { const d = dB(x1, x2, u); if (Math.abs(d) < 1e-6) break; u = Math.max(0, Math.min(1, u - (B(x1, x2, u) - t) / d)) }
+			return B(y1, y2, u)
+		}
+		bezierCache.set(str, f)
+		return f
+	}
+	const easeOf = (name, bz) => (name === 'custom' ? bezier(bz) : EASES[name] || EASES.smooth)
 	const clamp01 = (t) => Math.max(0, Math.min(1, t))
-	const eMachine = () => ease(clamp01(zt / 0.6))
-	const eSheet = () => ease(clamp01((zt - 0.45) / 0.55))
+	const eMachine = () => easeOf(Z.machineEase, Z.machineBezier)(clamp01(zt / Math.max(0.01, Z.machineEnd)))
+	const sheetP = () => clamp01((zt - Z.sheetStart) / Math.max(0.01, 1 - Z.sheetStart))
+	const eSheet = () => easeOf(Z.sheetEase, Z.sheetBezier)(sheetP())
+	// the strip above the sheet can trail it a little (barLag of the sheet's own move)
+	const eBar = () => easeOf(Z.sheetEase, Z.sheetBezier)(clamp01((sheetP() - Z.barLag) / Math.max(0.01, 1 - Z.barLag)))
+	const slideDist = () => (W - dev.x + Z.slidePad) * Z.slide
 	let sheetLane = -1 // the lane whose canvas is sized to the sheet (lags focus on the way out)
 	function applyZoom() {
 		const e = eMachine()
-		S = S0 + (SF - S0) * e
-		CX = CX0 + (CXF - CX0) * e
-		CY = CY0 + (CYF - CY0) * e
+		S = S0 + (SF * Z.scale - S0) * e
+		CX = CX0 + (CXF + Z.dx - CX0) * e
+		CY = CY0 + (CYF + Z.dy - CY0) * e
 	}
 	const small = () => S < 330 // below this the dial drops its captions and numerals
 
@@ -340,7 +371,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		heat = Math.max(heat * Math.pow(0.04, dt), Math.min(0.9, engine.level() * 2.5))
 		const zTarget = focus.on ? 1 : 0
 		if (zt !== zTarget) {
-			zt = reduce ? zTarget : zTarget > zt ? Math.min(zTarget, zt + dt / 0.55) : Math.max(zTarget, zt - dt / 0.55)
+			zt = reduce ? zTarget : zTarget > zt ? Math.min(zTarget, zt + dt / Math.max(0.05, Z.inMs / 1000)) : Math.max(zTarget, zt - dt / Math.max(0.05, Z.outMs / 1000))
 			applyZoom()
 			if (!focus.on && sheetLane >= 0 && eSheet() === 0) { sheetLane = -1; sizeLanes() }
 		}
@@ -415,19 +446,38 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 
 
 	// the sheet your instrument plays on in focus: paper, ink edge, flat shadow, beat ticks along the top
+	const CHAMBER = '#1b1529', PALE = '#efe6f4'
+	let filterOK = null
+	function canFilter() {
+		if (filterOK !== null) return filterOK
+		try {
+			const c = document.createElement('canvas'); c.width = c.height = 1
+			const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 1, 1)
+			const t = document.createElement('canvas'); t.width = t.height = 1
+			const y = t.getContext('2d', { willReadFrequently: true }); y.filter = 'invert(1)'; y.drawImage(c, 0, 0)
+			filterOK = y.getImageData(0, 0, 1, 1).data[0] > 200
+		} catch { filterOK = false }
+		return filterOK
+	}
 	function drawDevice(phase) {
 		const e = eSheet(), { x, y, w, h } = dev, L = lanes[sheetLane]
 		g.save()
-		g.translate((1 - e) * (W - x + 24), 0) // slides in from the right edge, never translucent
+		g.translate((1 - e) * slideDist(), 0) // slides in from the right edge, never translucent
 		g.fillStyle = 'rgba(42,28,72,.5)'
 		g.fillRect(x + 6, y + 8, w, h)
-		g.fillStyle = PAPER
+		// the sheet is the eye's chamber: a deep ink ground, the instrument drawn on it as scratchboard. The lane
+		// canvas is drawn in ink for the paper rings, so here it goes through invert + half-turn hue: ink turns pale,
+		// pigments keep their hue and come up bright. Browsers without canvas filters keep a paper sheet.
+		const dark = canFilter()
+		g.fillStyle = dark ? CHAMBER : PAPER
 		g.fillRect(x, y, w, h)
 		if (L && L.w === Math.round(w)) {
-			const steps = engine.steps()
-			for (let s = 0; s < steps; s += 4) { g.fillStyle = s % 16 ? ink(0.06) : ink(0.16); g.fillRect(x + (s / steps) * w, y, 1, h) }
+			const steps = engine.steps(), fg = dark ? (a) => rgba(PALE, a) : ink
+			for (let s = 0; s < steps; s += 4) { g.fillStyle = s % 16 ? fg(0.07) : fg(0.18); g.fillRect(x + (s / steps) * w, y, 1, h) }
+			if (dark) g.filter = 'invert(1) hue-rotate(180deg)'
 			g.drawImage(L.canvas, x, y, w, h)
-			g.fillStyle = INK
+			g.filter = 'none'
+			g.fillStyle = dark ? PALE : INK
 			g.fillRect(x + phase * w, y - 5, 1.5, 10)
 			g.fillRect(x + phase * w, y + h - 5, 1.5, 10)
 		}
@@ -701,7 +751,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		// true while zooming in or out; a cue for anything expensive to rest for half a second
 		get moving() { return moving },
 		// how far the sheet is still off to the right, in px (0 when it has arrived); DOM chrome on the sheet rides with it
-		get sheetShift() { return sheetLane < 0 ? Infinity : (1 - eSheet()) * (W - dev.x + 24) },
+		get sheetShift() { return sheetLane < 0 ? Infinity : (1 - eBar()) * slideDist() },
+		// zoom tuning (debug panel): the live knobs, their defaults, and a hook to apply a change
+		zoom: Z, zoomDefaults: ZOOM_DEFAULTS, easeNames: [...Object.keys(EASES), 'custom'],
+		zoomChanged() { bezierCache.clear(); applyZoom(); try { localStorage.setItem('roughjam.zoom', JSON.stringify(Z)) } catch {} },
 		get focus() { return { ...focus, dev: focus.on ? { ...dev } : null } },
 		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
 		ground: () => ({ ...(G2 || G) }),

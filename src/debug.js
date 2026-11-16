@@ -83,6 +83,38 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	viewF.add(view.opts, 'cycleLoops', 1, 16, 1).name('cycle every n loops')
 	viewF.add(view.opts, 'slices', 32, 512, 1).name('ring slices')
 	heart?.addGui(gui)
+
+	// ── zoom: every knob of the badge → sheet transition, live, kept in this browser
+	const zF = gui.addFolder('zoom').close()
+	const Z = view.zoom, zc = () => view.zoomChanged()
+	zF.add(Z, 'inMs', 100, 2000, 10).name('in ms').onChange(zc)
+	zF.add(Z, 'outMs', 100, 2000, 10).name('out ms').onChange(zc)
+	zF.add(Z, 'machineEnd', 0.1, 1, 0.01).name('machine done at').onChange(zc)
+	zF.add(Z, 'sheetStart', 0, 0.9, 0.01).name('sheet starts at').onChange(zc)
+	zF.add(Z, 'machineEase', view.easeNames).name('machine ease').onChange(zc)
+	zF.add(Z, 'machineBezier').name('machine bezier').onFinishChange(zc)
+	zF.add(Z, 'sheetEase', view.easeNames).name('sheet ease').onChange(zc)
+	zF.add(Z, 'sheetBezier').name('sheet bezier').onFinishChange(zc)
+	zF.add(Z, 'slide', 0, 1.5, 0.01).name('slide distance ×').onChange(zc)
+	zF.add(Z, 'slidePad', 0, 200, 1).name('slide extra px').onChange(zc)
+	zF.add(Z, 'barLag', 0, 0.8, 0.01).name('strip lag').onChange(zc)
+	zF.add(Z, 'scale', 0.5, 1.6, 0.01).name('machine end scale').onChange(zc)
+	zF.add(Z, 'dx', -300, 300, 1).name('machine end x').onChange(zc)
+	zF.add(Z, 'dy', -300, 300, 1).name('machine end y').onChange(zc)
+	let playing = 0
+	zF.add({ play() {
+		clearTimeout(playing)
+		if (me.lane < 0) return
+		view.setFocus(me.lane)
+		playing = setTimeout(() => view.setFocus(-1), Z.inMs + 900)
+	} }, 'play').name('play in → out')
+	zF.add({ toggle() { view.setFocus(view.focus.on ? -1 : me.lane) } }, 'toggle').name('in / out')
+	const copyCtl = zF.add({ async copy() {
+		const json = JSON.stringify(Z)
+		try { await navigator.clipboard.writeText(json); copyCtl.name('copied ✓') } catch { console.log(json); copyCtl.name('in the console') }
+		setTimeout(() => copyCtl.name('copy values'), 1500)
+	} }, 'copy').name('copy values')
+	zF.add({ reset() { Object.assign(Z, view.zoomDefaults); zc(); zF.controllersRecursive().forEach((c) => c.updateDisplay()) } }, 'reset').name('reset')
 	const botF = gui.addFolder('robots')
 	botF.add(bots.opts, 'on').onChange(() => { document.getElementById('bots')?.setAttribute('aria-pressed', bots.opts.on); renderSeats() }).listen()
 	botF.add(bots.opts, 'minLoops', 1, 16, 1).name('min loops between')
