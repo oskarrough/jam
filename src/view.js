@@ -261,6 +261,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 
 	function paintBackdrop(cv, G) {
+		cv.frost = null
 		cv.width = W * DPR
 		cv.height = H * DPR
 		const c = cv.getContext('2d'), R = rng(7)
@@ -530,17 +531,31 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 
 
+	// a blurred copy of a backdrop: shrink it twice and let smoothing do the blur on the way back up. Cached until repaint.
+	function frost(cv) {
+		if (cv.frost) return cv.frost
+		const a = document.createElement('canvas'), b = document.createElement('canvas')
+		a.width = Math.max(1, Math.round(W / 6)); a.height = Math.max(1, Math.round(H / 6))
+		b.width = Math.max(1, Math.round(W / 28)); b.height = Math.max(1, Math.round(H / 28))
+		a.getContext('2d').drawImage(cv, 0, 0, a.width, a.height)
+		b.getContext('2d').drawImage(a, 0, 0, b.width, b.height)
+		return (cv.frost = b)
+	}
+
 	function drawDial(t, dt, phase, loop) {
 		const outer = ringIn(lanes.length - 1) + ringT() + 8, inner = ringIn(0) - 6, M = medallion()
 
-		// the medallion: a vellum lens laid on the landscape. The field and sky show through at the rim
-		// and clear up toward the rings, so the notes sit on something quiet. Ink rim, no shadow slab.
-		const lens = g.createRadialGradient(CX, CY, inner * 0.6, CX, CY, M)
-		lens.addColorStop(0, rgba(PAPER, 0.62))
-		lens.addColorStop(Math.min(0.95, outer / M), rgba(PAPER, 0.5))
-		lens.addColorStop(1, rgba(PAPER, 0.16))
-		g.fillStyle = lens
-		wobble(g, CX, CY, M, 1, 1.2); g.fill()
+		// the medallion: frosted paper in the ground's own tint. Mostly opaque; the land behind survives only as
+		// soft colour (a heavily blurred copy of the backdrop), never as a line crossing the rings.
+		g.fillStyle = 'rgba(30,20,60,.35)'
+		g.beginPath(); g.arc(CX + S * 0.012, CY + S * 0.016, M, 0, TAU); g.fill()
+		g.save()
+		wobble(g, CX, CY, M, 1, 1.2); g.clip()
+		g.drawImage(frost(bg), 0, 0, W, H)
+		g.fillStyle = rgba(mixHex(PAPER, G.sky[1], 0.16), 0.84)
+		g.fillRect(CX - M - 4, CY - M - 4, M * 2 + 8, M * 2 + 8)
+		g.restore()
+		wobble(g, CX, CY, M, 1, 1.2)
 		g.strokeStyle = ink(0.75); g.lineWidth = 1.2; g.stroke()
 		g.lineWidth = 0.5; g.strokeStyle = ink(0.22)
 		wobble(g, CX, CY, M - 5, 2, 1); g.stroke()

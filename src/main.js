@@ -173,33 +173,13 @@ else if (transport.kind === 'ws') {
 			setTimeout(() => (b.textContent = room), 1600)
 		})
 		b.title = 'copy the link to this jam'
-		jamline.append(b)
-		const h1 = document.querySelector('h1')
-		h1.style.cursor = 'pointer'
-		h1.title = 'back to the open jam'
-		h1.onclick = () => (location.href = '/')
+		const out = word('leave', () => (location.href = '/'))
+		out.title = 'back to the jam everyone lands in'
+		jamline.append(b, ' · ', out)
 	}
 }
+// seats live on the dial (view.js draws them from seat(i) every frame); this only keeps the peers line current
 function renderSeats() {
-	const ol = $('seats')
-	if (!ol) return
-	ol.innerHTML = ''
-	;[...lanes].reverse().forEach((L) => {
-		const i = L.index, st = seat(i)
-		const li = document.createElement('li')
-		li.className = 'seat' + (st.me ? ' mine' : st.bot ? ' bot' : st.human ? '' : ' empty')
-		li.style.setProperty('--c', L.color)
-		const b = document.createElement('button')
-		b.innerHTML = '<span class="dot"></span><span class="inst"></span><span class="who"></span>'
-		b.querySelector('.inst').textContent = L.module.name.toLowerCase()
-		b.querySelector('.who').textContent = st.human || st.bot ? st.label : '…'
-		b.disabled = !st.me && st.human
-		b.title = st.me ? 'open your instrument' : st.human ? `${st.label}'s ring` : 'take this ring'
-		b.setAttribute('aria-label', st.me ? `${L.module.name}, your ring` : `Take the ${L.module.name} ring`)
-		b.onclick = () => (st.me ? toggleFocus() : sit(i))
-		li.appendChild(b)
-		ol.appendChild(li)
-	})
 	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name || playerName(lanes.findIndex((L) => L.id === p.instrument))))
 	$('peers').textContent = names.length > 1 ? names.join(', ').replace(/, ([^,]*)$/, ' & $1') : ''
 }

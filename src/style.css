@@ -23,25 +23,14 @@ input, textarea, .lil-gui input { user-select: text; -webkit-user-select: text }
 canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair }
 body.erasing canvas { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='%23f3e8cf' fill-opacity='.6' stroke='%23211a2e' stroke-width='1.3' stroke-dasharray='2 2'/%3E%3C/svg%3E") 12 12, cell }
 
-/* title and seats, top left, on the sky */
+/* top left stays empty except for the jam's name in a private jam, or what a recording is; seats live on the dial */
 .panel { color: var(--title); position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: max(16px, env(safe-area-inset-left, 0px)); width: 15rem; max-width: calc(100% - 32px); pointer-events: none }
 .panel > * { pointer-events: auto }
-h1 { margin: 0 0 0.6rem; font: 400 40px/0.9 var(--serif); font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 144; letter-spacing: -0.02em }
-h1 em { font-style: italic; font-weight: 300; opacity: 0.75 }
-.seats { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px }
-.seat button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 0.8rem 4.6rem 1fr; align-items: baseline; gap: 0.5rem; padding: 0.2rem 0.1rem; cursor: pointer }
-.seat button:hover .who, .seat button:focus-visible .who { text-decoration: underline wavy currentColor 1px; text-underline-offset: 3px }
-.seat button:focus-visible { outline: 1.5px solid currentColor; outline-offset: 2px }
-.seat button:disabled { cursor: default }
-.dot { width: 0.7rem; height: 0.7rem; border-radius: 52% 48% 55% 45%; background: var(--c); border: 1px solid currentColor; align-self: center }
-.inst { font: italic 400 16px/1.2 var(--serif) }
-.who { font: 400 13px/1.2 var(--sans); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
-.seat.bot .who { font-style: italic }
-.seat.empty .who { opacity: 0.4 }
-.seat.mine .who { opacity: 1; font-weight: 600 }
-.seat.mine .who::before { content: '☞ ' ; font-weight: 400 }
+/* no title on screen: the eye is the mark. The h1 stays for screen readers and the tab. */
+h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0 }
+.jamline:empty { display: none }
 /* which jam you're in, and a way to start your own: a line of text, links as words */
-.jamline { margin: 0.55rem 0 0; font: italic 400 15px/1.3 var(--serif); opacity: 0.85 }
+.jamline { margin: 0 0 0.3rem; font: italic 400 15px/1.3 var(--serif); opacity: 0.85 }
 .jamline b { font-weight: 600 }
 .jamline button { all: unset; cursor: pointer; text-decoration: underline wavy color-mix(in srgb, currentColor 45%, transparent) 1px; text-underline-offset: 3px }
 .jamline button:hover, .jamline button:focus-visible { text-decoration-color: currentColor }
@@ -103,10 +92,6 @@ output.pending { color: var(--vermilion) }
 
 @media (max-width: 640px) {
 	.panel { width: auto; right: max(16px, env(safe-area-inset-right, 0px)) }
-	h1 { font-size: 30px; margin-bottom: 0.3rem }
-	.seats { grid-template-columns: 1fr 1fr; column-gap: 0.8rem }
-	.seat button { grid-template-columns: 0.7rem 3.6rem 1fr; gap: 0.35rem }
-	.inst { font-size: 14px }
 	.peers { display: none }
 	/* seven pieces have to fit a 390px phone */
 	.deck { gap: 5px }
