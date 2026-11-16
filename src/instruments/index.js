@@ -15,6 +15,7 @@
 //             x = loop phase clockwise from 12 o'clock, y = 0 on the outside.
 
 import { bass, keys, bell, drums } from './builtins.js'
+import { instruments as lab } from './lab/index.js'
 
 export const registry = new Map()
 export function register(mod) {
@@ -23,3 +24,5 @@ export function register(mod) {
 }
 
 ;[bass, keys, bell, drums].forEach(register)
+// the ten drawable instruments from the lab (lab/index.html plays them one at a time)
+lab.forEach(register)
