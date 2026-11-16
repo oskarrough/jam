@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Campfire Jam</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<canvas id="c" aria-label="Campfire loop. One ring per instrument around a fire. Draw on your ring to play."></canvas>
+
+<div class="panel">
+	<div>
+		<h1>Campfire Jam</h1>
+		<div class="meta">A minor pentatonic · shared loop</div>
+	</div>
+	<ul class="seats" id="seats"></ul>
+</div>
+
+<div class="peers meta" id="peers"></div>
+
+<div class="bar">
+	<button id="sound" aria-pressed="false">Sound on</button>
+	<div class="group">
+		<button id="slower" aria-label="Slower">−</button>
+		<span class="bpm" id="bpm">92 bpm</span>
+		<button id="faster" aria-label="Faster">+</button>
+	</div>
+	<button id="clear">Clear my ring</button>
+	<button id="bots" aria-pressed="true">Frengers</button>
+	<div class="hint"><span>Draw on your ring. <kbd>Shift</kbd>-drag erases. <kbd>d</kbd> debug.</span> <span class="long">Open another tab to take a second seat; tabs share one clock.</span></div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
