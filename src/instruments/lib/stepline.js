@@ -1,6 +1,6 @@
 // Stepline: draw a line across the seat, one note per step, height = pitch.
 // Factory used by the bass, keys and bell instruments; they differ only in voice and range.
-// `voices` ([[name, fn], …]) makes the voice a choice: a `voice` param that syncs like any other; the first listed is the default.
+// `voices` ([[name, fn], …]) adds a synced `voice` param; the first is the default.
 
 import { fit, val, rgba } from './util.js'
 import { kit } from './kit.js'
@@ -19,7 +19,6 @@ export function stepline({ id, name, how, glyph, base, voice, voices, params = {
 		glyph,
 		voices: voices ? voices.map(([n]) => n) : null,
 		params: { octave: { value: 0, min: -1, max: 1, step: 1 }, ...params },
-		// optional hooks used by bots and first load
 		generate: (steps) => ({ notes: fit(generate(), steps, -1) }),
 		sample: (steps) => ({ notes: fit(sample, steps, -1) }),
 		create(ctx) {
@@ -43,7 +42,6 @@ export function stepline({ id, name, how, glyph, base, voice, voices, params = {
 					const erase = e.alt || e.button === 2
 					if (e.type === 'down') { put(s, v, erase); last = { s, v, erase } }
 					else if (e.type === 'move' && last) {
-						// fill skipped steps the short way round, interpolating height
 						let d = s - last.s
 						if (d > n / 2) d -= n
 						if (d < -n / 2) d += n
@@ -61,7 +59,6 @@ export function stepline({ id, name, how, glyph, base, voice, voices, params = {
 					const n = notes.length, pos = clock.pos()
 					const X = (s) => ((s + 0.5) / n) * w, Y = (v) => (1 - (v + 0.5) / 8) * h
 					const color = ctx.color
-					// ligne claire: pigment line inside an ink line, notes as inked beads
 					const lw = Math.max(1.6, Math.min(5, h * 0.06))
 					g.lineCap = 'round'
 					g.lineJoin = 'round'

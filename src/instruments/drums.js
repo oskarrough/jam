@@ -1,6 +1,5 @@
-// Drums: kick, snare and hat in three rows, 808 style. Tap a step to set or clear a hit;
-// drag up or down on it to set how loud it hits; drag sideways to paint, where the pen's height in the row is how loud
-// each hit lands, so a curve drawn along a row is its dynamics. Shift or right-drag erases.
+// Drums: kick, snare, hat in three rows. Tap a step to toggle it, drag up or down for loudness,
+// drag sideways to paint a dynamics curve. Shift or right-drag erases.
 //
 // state = { hits, vel }
 //   hits[s]  bitmask per step: 1 kick, 2 snare, 4 hat
@@ -16,7 +15,6 @@ const LABELS = ['kick', 'snare', 'hat']
 const blankVel = (n) => Array.from({ length: n }, () => [LV, LV, LV])
 
 function drumSample() {
-	// kick on 1 and the 3-3-2 push, snare on 2 and 4, hats on the offbeats; a fill into the top
 	const d = new Array(64).fill(0), v = blankVel(64)
 	for (let b = 0; b < 4; b++) {
 		const o = b * 16
@@ -41,7 +39,6 @@ function drumGen() {
 	return { d: a, v }
 }
 
-// level 6 is the old loudness; accents go louder and brighter, ghosts quieter and duller
 const gainOf = (lv) => Math.pow(lv / LV, 1.25)
 const hitVoice = {
 	1({ audio: ac, out }, t, lv) {
@@ -76,7 +73,7 @@ export default {
 		const { clock } = ctx
 		let hits = new Array(clock.steps).fill(0)
 		let vel = blankVel(clock.steps)
-		let g = null // the gesture in progress
+		let g = null
 		const ensure = () => {
 			if (hits.length !== clock.steps) hits = fit(hits, clock.steps, 0)
 			if (vel.length !== hits.length) vel = fit(vel, hits.length, [LV, LV, LV]).map((x) => x.slice())
@@ -88,7 +85,7 @@ export default {
 			if (on && lv) vel[s][row] = lv
 		}
 		const lvOf = (s, row) => vel[s]?.[row] || LV
-		// how loud a hit drawn at height y would be in this row: the pen sits where the stem's top would (see frame)
+		// the pen sits where the stem's top would (see frame)
 		const lvAt = (y, row) => clamp(Math.round((((1 - y) * ROWS - row - 0.1) / 0.68) * 9), 1, 9)
 		return {
 			get state() { return { hits, vel } },
@@ -113,7 +110,7 @@ export default {
 						else return
 					}
 					if (g.mode === 'level') {
-						// a third of the height is the whole range, so one row's band covers it
+						// a third of the height covers the whole range
 						const lv = clamp(Math.round(g.lv - (e.y - g.y0) * 24), 1, 9)
 						put(g.s, g.row, true, lv)
 						g.shown = lv
@@ -122,14 +119,12 @@ export default {
 					let d = s - g.s
 					if (d > n / 2) d -= n
 					if (d < -n / 2) d += n
-					// painting: each step's level follows the pen, eased across any steps skipped in one move
 					const lv = g.mode === 'paint' ? lvAt(e.y, g.row) : g.lv, from = g.paintLv ?? lv
-					if (g.mode === 'paint' && !g.paintLv) put(g.s, g.row, true, lv) // the step you started on, too
+					if (g.mode === 'paint' && !g.paintLv) put(g.s, g.row, true, lv)
 					for (let j = 1; j <= Math.abs(d); j++) put((g.s + Math.sign(d) * j + n) % n, g.row, g.mode !== 'erase', Math.round(from + ((lv - from) * j) / Math.abs(d)))
 					if (g.mode === 'paint') g.paintLv = lv
 					g.s = s
 				} else if (e.type === 'up' && g) {
-					// a plain tap on a hit that was already there takes it away
 					if (!g.mode && g.had) put(g.s, g.row, false)
 					g = null
 				}
@@ -151,7 +146,6 @@ export default {
 				gx.fillStyle = rgba(INK, 0.55)
 				LABELS.forEach((label, r) => gx.fillText(label, cw + 3, strip ? rowY(r) : h - (r + 1) * band + 6))
 				if (!strip) {
-					// a floor per row with step ticks, heavier on the beat, so stems have something to stand on
 					for (let r = 0; r < ROWS; r++) {
 						const base = h - r * band - band * 0.1
 						gx.fillStyle = rgba(INK, 0.3)
@@ -176,7 +170,6 @@ export default {
 							y = rowY(r)
 							size = full * (0.45 + 0.55 * k) + f * 2
 						} else {
-							// a stem whose height is how loud the step hits
 							const base = h - r * band - band * 0.1
 							y = base - k * band * 0.68
 							size = Math.min(full, cw * 0.32) * (0.75 + 0.35 * k) + f * 2
@@ -190,7 +183,6 @@ export default {
 						else gx.arc(x, y, size, 0, 6.283)
 						gx.fill()
 						gx.strokeStyle = INK; gx.lineWidth = 1; gx.stroke()
-						// an accent gets a second ring
 						if (lv >= 9) { gx.beginPath(); gx.arc(x, y, size + 3.5, 0, 6.283); gx.stroke() }
 						if (g?.shown && g.s === s && g.row === r && g.mode === 'level') {
 							gx.fillStyle = INK; gx.textAlign = 'center'; gx.textBaseline = 'bottom'

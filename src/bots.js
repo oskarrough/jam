@@ -1,12 +1,6 @@
-// Bots: off by default, so a lone visitor hears the default song in empty seats with nobody
-// pretending to play it. The robots token turns them on for the whole jam (it rides on the loop as
-// `robots`). When on, they sit in empty seats. Every few loops one sweeps a cursor round its ring,
-// then a freshly generated part lands. Only one tab in the room (the lowest id) drives them.
-//
-// Riffs: a player can hand a robot their motif (drag your seat badge onto the robot's).
-// The robot then plays it back in its own instrument and improvises on it every loop or
-// two: theme, two variations, a call-and-response, again (see src/phrase.js). The motif
-// travels in the seat data as `riff`, so every tab sees it and any tab can take over driving.
+// Bots: off by default; the `robots` token on the loop turns them on for the whole jam. They sit in empty seats; every few loops one
+// sweeps a cursor round its ring, then a new part lands. Only the lowest-id tab drives them.
+// Riffs: drag your badge onto a robot's to hand it your motif (src/phrase.js); it rides in seat data as `riff`.
 
 import { toPhrase, fromPhrase, vary, canPhrase } from './phrase.js'
 
@@ -15,7 +9,7 @@ export const botName = (i) => `Robot ${String.fromCharCode(65 + i)}`
 export function createBots(engine, { seated, view }) {
 	const { seats, transport } = engine
 	const opts = { on: false, minLoops: 2, maxLoops: 5, sweepMs: 1600, riffSweepMs: 900 }
-	const bots = new Map() // seat index -> {nextAt, sweep, riffId}
+	const bots = new Map()
 
 	const leader = () => {
 		const ids = [transport.id, ...transport.peers.map((p) => p.id)].filter(Boolean).sort()
@@ -24,7 +18,6 @@ export function createBots(engine, { seated, view }) {
 	const loopMs = () => transport.clock.loopMs(transport.clock.loopAt())
 	const canRiff = (L) => !!(L.riff?.motif && canPhrase(L.module.id))
 
-	// the next turn of a riff: { state, riff } with the riff's turn advanced
 	function riffTurn(L) {
 		const r = L.riff
 		const v = vary(r.motif, r.turn || 0, r.last)
@@ -41,7 +34,6 @@ export function createBots(engine, { seated, view }) {
 			let b = bots.get(i)
 			if (!active) { bots.delete(i); return }
 			if (!b) bots.set(i, (b = { nextAt: now + 800 + Math.random() * loopMs() * 1.5, sweep: null }))
-			// a freshly handed motif: answer it straight away
 			if (riffing && b.riffId !== L.riff.id) { b.riffId = L.riff.id; b.sweep = null; b.nextAt = now }
 			if (!riffing) b.riffId = null
 			if (!b.sweep && now > b.nextAt) {
@@ -50,7 +42,7 @@ export function createBots(engine, { seated, view }) {
 				if (target) b.sweep = { t0: now, y: 0.5, mod: L.module, target, riff: turn?.riff, ms: turn ? opts.riffSweepMs : opts.sweepMs }
 				else b.nextAt = now + loopMs()
 			}
-			if (b.sweep && b.sweep.mod !== L.module) b.sweep = null // seat changed instrument mid-sweep
+			if (b.sweep && b.sweep.mod !== L.module) b.sweep = null
 			if (b.sweep) {
 				const f = (now - b.sweep.t0) / b.sweep.ms
 				b.sweep.y = Math.max(0.05, Math.min(0.95, b.sweep.y + (Math.random() - 0.5) * 0.15))
@@ -62,7 +54,6 @@ export function createBots(engine, { seated, view }) {
 					L.instance.setState(b.sweep.target)
 					if (b.sweep.riff) L.riff = b.sweep.riff
 					engine.push(L)
-					// riffs move every loop or two, so you hear the conversation; plain bots drift slower
 					b.nextAt = now + loopMs() * (b.sweep.riff ? 1 + ((L.riff.turn || 0) % 2) : opts.minLoops + Math.random() * (opts.maxLoops - opts.minLoops))
 					b.sweep = null
 				}
@@ -71,7 +62,6 @@ export function createBots(engine, { seated, view }) {
 	}
 	setInterval(tick, 60)
 
-	// hand seat `from`'s part to the robot at seat `to`; returns false if either side can't phrase
 	function hand(from, to, { by } = {}) {
 		const A = seats[from], B = seats[to]
 		if (!A || !B || from === to || seated(to) || !canPhrase(A.module.id) || !canPhrase(B.module.id)) return false
@@ -81,7 +71,6 @@ export function createBots(engine, { seated, view }) {
 		engine.push(B)
 		return true
 	}
-	// let a robot go back to its own ideas
 	function release(i) {
 		const L = seats[i]
 		if (!L?.riff) return

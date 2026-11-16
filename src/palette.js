@@ -3,12 +3,9 @@ export const INK = '#211a2e'
 export const PAPER = '#f3e8cf'
 export const SERIF = 'Fraunces, "Iowan Old Style", Georgia, serif'
 export const SANS = '"Bricolage Grotesque", system-ui, sans-serif'
-// seat pigments, picked to read on paper: violet, viridian, flamingo, ultramarine, ochre, vermilion
 export const SEAT_COLORS = ['#5a3f8e', '#2f7a58', '#d65f7c', '#2b4fa6', '#c08419', '#d24b2a']
-// theme handed to the lab instruments (see lab/util.js theme())
 export const INK_THEME = { fg: INK, dim: 'rgba(33,26,46,0.45)', faint: 'rgba(33,26,46,0.1)', font: SANS }
 
-// Grounds: whole-scene colourings for the landscape and the dial. Pick one in the debug panel (view > ground).
 // paper is the dial's own ground; dark marks grounds whose sky needs light marks and a light title.
 export const GROUNDS = {
 	flamingo: {

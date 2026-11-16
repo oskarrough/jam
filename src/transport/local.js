@@ -1,7 +1,5 @@
 // Local transport: same API as sync/sync.js, over BroadcastChannel between tabs of one browser.
-// Lets the page run with no server, and lets the debug panel fake latency, jitter and clock skew
-// so we can hear what the network transport has to fix.
-//
+// No server needed; the debug panel can fake latency, jitter and clock skew.
 //   const t = createLocalTransport({ room, name, seat, color })
 //   t.on('welcome' | 'peers' | 'apply' | 'pending' | 'cursor' | 'loop' | 'status', fn)
 //   t.edit(seat, data)          -> server ms it lands at
@@ -58,8 +56,8 @@ export function createLocalTransport({ room = 'open', name = 'anon', seat = null
 	const clock = createLocalClock()
 	const id = Math.random().toString(36).slice(2, 9)
 	const listeners = {}
-	const seats = {} // seat -> [{at, data, rev, from}]
-	const others = new Map() // id -> {id, name, seat, color, last}
+	const seats = {}
+	const others = new Map()
 	const me = { id, name, seat, color }
 	const fake = { latency: 0, jitter: 0, quantize: 'bar' }
 	let welcomed = false, sent = 0, recv = 0, lastLateMs = 0, rev = 0
@@ -137,7 +135,6 @@ export function createLocalTransport({ room = 'open', name = 'anon', seat = null
 		}
 	}
 
-	// Join: ask for the room's state. Alone after 400 ms means we are the room.
 	tx({ t: 'hello', name: me.name, seat: me.seat, color: me.color })
 	setTimeout(() => { if (!welcomed) { welcomed = true; emit('welcome', { id, loop: clock.loopAt(), seats: {}, peers: peers() }) } emit('status', { connected: !!chan }) }, 400)
 	setInterval(() => {

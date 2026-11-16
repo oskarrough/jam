@@ -1,14 +1,11 @@
 // Voices from Oskar's jukebox synth (github.com/oskarrough/jukebox, src/synth.js at 0936ef2), which started
 // from Simon Willison's Scrimshaw Jukebox (https://tools.simonwillison.net/scrimshaw-jukebox, Apache License 2.0).
-// A trimmed copy: only the helpers and the twelve voices the jam offers. No song player, no master chain;
-// each voice plays into the seat's `out` like any other. The expensive ones (bell, gong, choir…) stay behind.
-//
+// A trimmed copy: only the twelve voices the jam offers, each playing into the seat's `out`.
 // voice(name, trimDb)(ctx, midi, time, dur, vel): plays one note of that voice into ctx.out.
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x))
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 
-/* --------------------------------------------------------------- helpers */
 function G(S, v = 0) {
 	const g = S.ctx.createGain()
 	g.gain.value = v
@@ -36,7 +33,6 @@ function O(S, type, f, t, stop, p, ratio = 1, detune = 0) {
 	o.stop(stop)
 	return o
 }
-// sustained envelope; returns time when the voice is silent
 function adsr(param, t, d, { a = 0.01, dc = 0.1, s = 1, r = 0.1, peak = 1 }) {
 	const tOn = t + a,
 		tOff = Math.max(t + d, tOn + 0.003)
@@ -53,7 +49,6 @@ function adsr(param, t, d, { a = 0.01, dc = 0.1, s = 1, r = 0.1, peak = 1 }) {
 	param.setTargetAtTime(0, tOff, Math.max(0.002, r / 4))
 	return tOff + r * 1.8 + 0.03
 }
-// struck envelope; optional damping time
 function perc(param, t, { a = 0.002, tau = 0.3, peak = 1, damp = null, dampTau = 0.06 }) {
 	param.setValueAtTime(0, t)
 	param.linearRampToValueAtTime(peak, t + a)
@@ -106,7 +101,6 @@ function vibrato(S, t, stop, targets, { rate = 5, depth = 10, delay = 0.2, rise 
 	lfo.stop(stop)
 }
 
-/* -------------------------------------------------------------- waveforms */
 const WAVES = {
 	organ: [1, 0.8, 0.5, 0.42, 0, 0.25, 0, 0.2],
 }
@@ -123,7 +117,6 @@ function wave(S, name) {
 	}
 	return S.waves[name]
 }
-/* -------------------------------------------- plucked strings (Karplus-Strong) */
 function ks(S, f, cfg) {
 	const sr = S.ctx.sampleRate
 	const N = Math.max(2, Math.floor(sr / f - cfg.b))
@@ -182,7 +175,6 @@ const PLUCK = {
 	harp: { id: 'harp', b: 0.45, decay: 0.9985, color: 0.55, dur: 2.8, hang: 1.4, dampTau: 0.25 },
 	upright: { id: 'upr', b: 0.5, decay: 0.996, color: 0.7, dur: 1.7, hang: 0.04, dampTau: 0.07 },
 }
-// a soft clip, for the 808
 function saturate(S) {
 	if (!S.curve) {
 		S.curve = new Float32Array(1024)
@@ -192,7 +184,6 @@ function saturate(S) {
 	w.curve = S.curve
 	return w
 }
-
 
 // play(S, out, t, dur, freq, vel, p) ; p = {from, glide, bright, att, rel, drive}
 const INST = {
@@ -207,8 +198,6 @@ const INST = {
 			noise(S, out, t, { f: f * 2.5, q: 1.2, tau: 0.004, peak: v * 0.06 })
 		},
 	},
-	// Tine electric piano: FM bark on the attack that mellows into a sine, a bell
-	// ping from the tine, and a slow tremolo. Play it harder and it growls.
 	rhodes: {
 		rev: 0.25,
 		level: 0.9,
@@ -299,8 +288,6 @@ const INST = {
 			noise(S, out, t, { type: 'lowpass', f: 900, q: 0.5, tau: 0.01, peak: v * 0.12 })
 		},
 	},
-	// Electric bass played with a pick: a bright string, a round sine under it
-	// for the weight, and the click of the plectrum.
 	808: {
 		rev: 0.04,
 		level: 1.1,
@@ -322,9 +309,6 @@ const INST = {
 			o.connect(pre)
 		},
 	},
-	// Amapiano log drum: a hollow, woody bass hit that falls into its pitch.
-	// A triangle (odd harmonics, the hollow) over a sine, a knock in the mids
-	// from the stick, a short tail damped at the end of the note.
 	logdrum: {
 		rev: 0.06,
 		level: 1.15,
@@ -354,9 +338,7 @@ const INST = {
 			noise(S, out, t, { f: clamp(f * 6, 600, 2400), q: 1.5, tau: 0.006, peak: v * 0.12 })
 		},
 	},
-	// The TR-808 cowbell, played as notes: two squares 540 and 800 Hz apart
-	// in the stock bell, so C#5 is where Memphis tapes have it. A clack that
-	// falls into a short ring, through the 808's bandpass. The drift-phonk riff.
+	// TR-808 cowbell as notes: squares at 540 and 800 Hz; C#5 is where Memphis tapes have it.
 	synbass: {
 		rev: 0.08,
 		level: 0.76,
@@ -387,7 +369,6 @@ const INST = {
 	},
 }
 
-/* ------------------------------------------------------------- the jam's side */
 // one synth state per AudioContext (noise buffer, plucked-string and waveform caches)
 const states = new WeakMap()
 function state(ac) {
@@ -401,7 +382,6 @@ function state(ac) {
 	states.set(ac, S)
 	return S
 }
-// each voice's level, trimmed (dB) to sit where the jam's own voices sat, through one gain per seat and voice
 const trims = new WeakMap()
 function input(S, out, name, trim) {
 	let m = trims.get(out)

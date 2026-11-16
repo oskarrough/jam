@@ -1,9 +1,4 @@
 // Souvenirs: record 8 bars of the jam, store them, replay them read-only at /r/<id>.
-//
-// A recording is what this tab actually played: at every bar boundary it snapshots each seat's
-// {instrument, state, params} plus who sat there, and logs cursors (yours, peers', robots') in between.
-// It starts on a loop boundary and covers whole loops (at least 8 bars), so the replay loops seamlessly.
-//
 //   rec = { v: 1, loop: {bpm, beatsPerBar, bars}, bars: N, seats: [name|null ×seats],
 //           frames: [{seat: data} ×N],   // seat data per bar; a seat is omitted if unchanged since the bar before
 //           cursors: [[ms, seatIndex, x, y, down, name], …], room, at }
@@ -21,7 +16,6 @@ export function createRecorder({ engine, transport, seatName }) {
 	const snap = (L) => ({ instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } })
 	const same = (a, b) => a && b && JSON.stringify(a) === JSON.stringify(b)
 
-	// cursors: remote via the transport, local (you and robots) by wrapping transport.cursor
 	const lastCursor = new Map()
 	function logCursor(seat, x, y, down, name) {
 		if (!cur?.running) return
@@ -37,7 +31,7 @@ export function createRecorder({ engine, transport, seatName }) {
 	const sendCursor = transport.cursor
 	transport.cursor = (x, y, down, seat, name) => { logCursor(seat, x, y, down, name || seatName(seats.findIndex((L) => L.id === seat))); return sendCursor(x, y, down, seat, name) }
 
-	/** Arm: starts at the next loop boundary. onProgress({state, p}) with state armed | rec. Resolves with the recording. */
+	/** onProgress({state, p}), state armed | rec. Resolves with the recording. */
 	function record(onProgress = () => {}) {
 		if (cur) return cur.promise
 		const l = clock.loopAt()
@@ -54,7 +48,6 @@ export function createRecorder({ engine, transport, seatName }) {
 			const now = clock.now()
 			if (now < start) { onProgress({ state: 'armed', p: 1 - (start - now) / clock.loopMs(l), inMs: start - now }); return }
 			cur.running = true
-			// snapshot bars as their boundary passes (a few ms in, so edits landing on the bar are applied)
 			while (bar < bars && now >= start + bar * barMs + 30) {
 				const f = {}
 				seats.forEach((L) => { const d = snap(L); if (!same(d, prev[L.id])) f[L.id] = prev[L.id] = d })
@@ -77,7 +70,6 @@ export function createRecorder({ engine, transport, seatName }) {
 	return { record, get busy() { return !!cur } }
 }
 
-/** POST a recording, get its id. */
 export async function saveRecording(rec) {
 	const r = await fetch('/api/r', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rec) })
 	if (!r.ok) throw new Error(`save failed: ${r.status} ${await r.text()}`)
@@ -90,10 +82,7 @@ export async function loadRecording(id) {
 	return r.json()
 }
 
-/**
- * A transport that plays a recording on a loop. Same API as sync.js / local.js, but read-only:
- * edits and loop changes are ignored, seat data arrives at each recorded bar, cursors replay on time.
- */
+/** Plays a recording on a loop: read-only, same API as sync.js. */
 export function createReplayTransport(rec, { seatIds, onCursor }) {
 	const clock = createClock()
 	const listeners = {}
@@ -105,10 +94,8 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 	clock.setLoop(loop)
 	const barMs = clock.barMs(loop), totalMs = rec.bars * barMs
 
-	// full seat state at each bar (frames only hold changes)
 	const full = []
 	rec.frames.forEach((f, b) => (full[b] = { ...(full[b - 1] || {}), ...f }))
-	// wrapping round to bar 0 needs every seat, so fold the last bar's seats into bar 0's starting point
 	const first = { ...full.at(-1), ...full[0] }
 	const atBar = (b) => (b === 0 ? first : full[b])
 
@@ -118,14 +105,12 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 		const t = clock.now() - origin
 		if (t < -150) return
 		const pass = Math.floor(Math.max(0, t) / totalMs), inPass = Math.max(0, t) - pass * totalMs
-		// seat data: emit a bar's seats slightly ahead, like the network transport's lookahead
 		const b = Math.floor((inPass + 120) / barMs) % rec.bars
 		if (b !== bar) {
 			bar = b
 			const seats = b === 0 ? atBar(0) : rec.frames[b]
 			for (const [seat, data] of Object.entries(seats)) emit('apply', { seat, data, at: origin + pass * totalMs + b * barMs })
 		}
-		// cursors in order through each pass
 		if (pass !== lastPass) { lastPass = pass; cursorIdx = 0 }
 		while (cursorIdx < rec.cursors.length && rec.cursors[cursorIdx][0] <= inPass) {
 			const [, i, x, y, down, name] = rec.cursors[cursorIdx++]

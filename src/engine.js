@@ -19,13 +19,11 @@ export function createEngine(transport, { seatIds, instruments }) {
 	const on = (ev, fn) => (listeners[ev] ||= []).push(fn)
 
 
-	// master chain: seats -> master -> compressor -> limiter -> analyser -> out; seats also send to a shared room
 	const master = audio.createGain()
 	master.gain.value = 0
 	const comp = audio.createDynamicsCompressor()
 	comp.threshold.value = -14
 	comp.ratio.value = 3
-	// a brick wall just under 0 dBFS: a full machine of seats summed past the compressor and clipped
 	const limiter = audio.createDynamicsCompressor()
 	limiter.threshold.value = -3
 	limiter.knee.value = 0
@@ -43,11 +41,10 @@ export function createEngine(transport, { seatIds, instruments }) {
 	roomIn.connect(room).connect(wet).connect(master)
 
 	const loop = () => clock.loopAt()
-	kit(audio).follow(loop) // key and chords ride along with the loop, so every instrument hears the same harmony
+	kit(audio).follow(loop)
 	const steps = () => { const l = loop(); return l.bars * l.beatsPerBar * 4 }
 	const stepMs = (l = loop()) => clock.beatMs(l) / 4
 
-	// what instruments see as ctx.clock
 	const iclock = {
 		get bpm() { return loop().bpm },
 		get steps() { return steps() },
@@ -90,19 +87,16 @@ export function createEngine(transport, { seatIds, instruments }) {
 		setInstrument(L, id, { state: mod?.sample?.(steps()) })
 	})
 
-	// network: seat data is {instrument, state, params}
 	const seatById = (id) => seats.find((L) => L.id === id)
 	const lastSent = new Map()
 	function push(L, { now = false } = {}) {
 		const data = { instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } }
-		// a robot riffing on someone's motif carries it along, so any tab can take over driving it
 		if (L.riff) data.riff = L.riff
 		lastSent.set(L.id, performance.now())
 		return transport.edit(L.id, data, { now })
 	}
 	const timers = new Map()
 	function pushSoon(L) {
-		// throttle to ~10/s while drawing, always send the trailing edit
 		const since = performance.now() - (lastSent.get(L.id) || 0)
 		clearTimeout(timers.get(L.id))
 		if (since > 100) push(L)
@@ -117,11 +111,9 @@ export function createEngine(transport, { seatIds, instruments }) {
 		emit('apply', L)
 	})
 	transport.on('welcome', ({ seats: snap }) => {
-		// first in the room: publish our starting seats so later joiners get them
 		for (const L of seats) if (!snap || !snap[L.id]) push(L, { now: true })
 	})
 
-	// scheduler: walk 16ths on the shared timeline, hand each to every seat ahead of time
 	let nextT = null
 	function tick() {
 		if (!soundOn) return
@@ -142,7 +134,6 @@ export function createEngine(transport, { seatIds, instruments }) {
 			// a few ms late still sounds; much later would land off the beat, so drop it
 			if (late <= 30) for (const L of seats) { try { L.instance.step(i, Math.max(at, audio.currentTime), sm / 1000) } catch (e) { console.error(L.module.id, e) } }
 			stats.scheduled++
-			// a loop change re-anchors the grid at its own origin
 			const next = nextT + sm, ln = clock.loopAt(next)
 			nextT = ln === l ? next : ln.origin + Math.ceil((next - ln.origin) / stepMs(ln)) * stepMs(ln)
 		}

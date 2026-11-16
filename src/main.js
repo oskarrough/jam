@@ -16,15 +16,14 @@ const SEAT_IDS = ['seat1', 'seat2', 'seat3', 'seat4']
 const START = ['bass', 'keys', 'bell', 'drums']
 
 const q = new URLSearchParams(location.search)
-// Jam: everyone lands in the one open jam at /. Your own lives at /j/<name> (root paths stay reserved); ?room= also works.
+// everyone lands in the open jam at /; your own is /j/<name>; ?room= also works
 const replayId = location.pathname.match(/\/r\/([\w-]{4,32})\/?$/)?.[1]
 const pathJam = decodeURIComponent(location.pathname.match(/\/j\/([\w-]{1,48})\/?$/)?.[1] || '')
 const room = (q.get('room') || pathJam || 'open').toLowerCase().slice(0, 48)
-// no invented names: you are 'you', others are 'player N' by seat unless they set ?name=
+// no invented names: 'player N' by seat unless ?name=
 const name = q.get('name') || ''
 
-// Transport is the swappable part. Network when there's a relay: ?ws=url, the deployed site (jam.0sk.ar),
-// or any same-origin relay that answers /sync/relay (sync/server.js locally). Otherwise tabs in this browser; ?ws=off forces that.
+// Network if there's a relay (?ws=url, jam.0sk.ar, or same-origin /sync/relay); otherwise tabs in this browser. ?ws=off forces tabs.
 const sameOrigin = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/`
 async function relayUrl() {
 	if (q.get('ws') === 'off' || !/^https?:$/.test(location.protocol)) return null
@@ -51,7 +50,7 @@ async function makeTransport() {
 	return createLocalTransport({ room, name })
 }
 
-// /r/<id>: a recorded souvenir, replayed read-only in the full machine
+// /r/<id>: read-only replay
 let rec = null
 if (replayId) try { rec = await loadRecording(replayId) } catch (e) { console.warn(e) }
 let view = null
@@ -71,7 +70,6 @@ const occupant = (i) => {
 	if (p && p.id === transport.id) return { name: 'you', label: 'you', initial: me.name ? me.name[0] : 'Y', me: true, human: true }
 	if (p) return { name: p.name || playerName(i), label: p.name || playerName(i), initial: p.name ? p.name[0] : String(i + 1), human: true }
 	if (bots?.opts.on && seats[i].module.generate) {
-		// a robot riffing on someone's motif says so: "Robot B · inverts you"
 		const r = seats[i].riff
 		const riff = r && { color: r.color, label: r.label || 'echoes', who: riffWho(r) }
 		return { name: botName(i), label: riff ? `${botName(i)} · ${riff.label} ${riff.who}` : botName(i), initial: botName(i).slice(-1), bot: true, riff }
@@ -92,7 +90,7 @@ function sit(i) {
 	const p = humanAt(i)
 	if (p && p.id !== transport.id) return
 	me.seat = i
-	seats[i].riff = null // a person taking the seat ends any robot riff there
+	seats[i].riff = null // a person taking the seat ends a robot riff
 	if (view?.focus.on) view.setFocus(i)
 	transport.setMe({ seat: seats[i].id, name: me.name })
 	renderSeats()
@@ -102,7 +100,6 @@ view = createView(document.getElementById('c'), engine, {
 	occupant,
 	canDraw,
 	onSit: (i) => (i === me.seat ? toggleFocus() : sit(i)),
-	// drag your own badge onto a robot's: it takes your motif and improvises on it
 	onHand(from, to) {
 		if (from !== me.seat || !occupant(to).bot) return false
 		const ok = bots.hand(from, to)
@@ -113,14 +110,14 @@ view = createView(document.getElementById('c'), engine, {
 	onWipe: () => wipe(),
 	onPointer(i, e) {
 		const L = seats[i]
-		if (e.type === 'down') ghost?.stop() // your own hand takes over
+		if (e.type === 'down') ghost?.stop()
 		if (me.erase) e.alt = true
 		e.shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
 		if (e.type === 'down') undo.remember(i)
 		L.instance.pointer(e)
 		engine.pushSoon(L)
 		view.showCursor('me', i, e.x, e.y, '')
-		heart.glance?.(i, 1400) // the eye settles on you while you draw
+		heart.glance?.(i, 1400)
 		transport.cursor(e.x, e.y, e.type !== 'up', L.id)
 	},
 })
@@ -135,9 +132,7 @@ transport.on('cursor', (c) => {
 })
 transport.on('peers', renderSeats)
 transport.on('welcome', () => {
-	// take the first seat nobody is sitting at, keys first
 	if (me.seat < 0) for (const i of [1, 2, 0, 3]) if (!humanAt(i)) { sit(i); break }
-	// ?instrument=strum: put that instrument in your ring and open it up
 	const want = registry.get(q.get('instrument'))
 	if (want && me.seat >= 0) {
 		const L = seats[me.seat]
@@ -148,18 +143,14 @@ transport.on('welcome', () => {
 	renderSeats()
 })
 engine.on('seats', renderSeats)
-// robots' riff captions change with each turn; re-list seats when they do
 let riffSig = ''
 setInterval(() => {
 	const sig = seats.map((L) => (L.riff ? L.riff.id + L.riff.turn : '')).join('|')
 	if (sig !== riffSig) { riffSig = sig; renderSeats() }
 }, 300)
 
-/* ───────── DOM chrome ───────── */
 const $ = (id) => document.getElementById(id)
 
-// Jams: the open one at /, your own at /j/<words>. Top left, as words: in the open jam 'start your own';
-// in your own, its name (tap to copy the link), 'leave' back to the open jam, and 'another' for a fresh one.
 const JAM_A = ['dusk', 'amber', 'moss', 'salt', 'velvet', 'copper', 'hollow', 'paper', 'lantern', 'violet']
 const JAM_B = ['moth', 'heron', 'fern', 'kettle', 'orchard', 'tide', 'comet', 'wren', 'ember', 'quarry']
 const pick = (a) => a[Math.floor(Math.random() * a.length)]
@@ -185,7 +176,7 @@ else if (transport.kind === 'ws') {
 		jamline.append(b, ' · ', out, ' · ', fresh('another'))
 	}
 }
-// seats live on the dial (view.js draws them from occupant(i) every frame); this only keeps the peers line current
+// seats are drawn by view.js; this only keeps the peers line current
 function renderSeats() {
 	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name || playerName(seats.findIndex((L) => L.id === p.seat))))
 	$('peers').textContent = names.length > 1 ? names.join(', ').replace(/, ([^,]*)$/, ' & $1') : ''
@@ -195,17 +186,16 @@ $('sound').onclick = () => {
 	engine.setSound(!engine.soundOn)
 	$('sound').setAttribute('aria-pressed', engine.soundOn)
 }
-// the first touch on the machine wakes the sound, so nobody draws in silence; after that the speaker token is theirs
+// first touch wakes the sound; after that the speaker token is theirs
 $('c').addEventListener('pointerdown', () => { if (!engine.soundOn) $('sound').click() }, { once: true, capture: true })
-// on glass: a two-finger tap undoes, a three-finger tap redoes. The first finger has already drawn by the
-// time the second lands, so the tap first quietly puts back what that finger did.
+// two-finger tap undoes, three redoes. The first finger has already drawn, so the tap first puts that back.
 {
 	const c = $('c'), touches = new Map()
 	let tap = null
 	c.addEventListener('pointerdown', (e) => {
 		if (e.pointerType !== 'touch') return
 		touches.set(e.pointerId, [e.clientX, e.clientY])
-		const now = e.timeStamp // event time, not handling time: a busy frame mustn't spoil a quick tap
+		const now = e.timeStamp // event time: a busy frame mustn't spoil a quick tap
 		if (touches.size === 1) tap = { t: now, n: 1, moved: false, mark: me.seat >= 0 ? undo.mark(me.seat) : null }
 		else if (tap && now - tap.t < 300) tap.n = Math.max(tap.n, touches.size)
 		else tap = null
@@ -231,8 +221,7 @@ const setErase = (on) => {
 	document.body.classList.toggle('erasing', on)
 }
 $('erase').onclick = () => setErase(!me.erase)
-// Tempo lands on the next loop for everyone. Taps add up from the tempo already on its way, and the number
-// shows what you asked for straight away, before the relay has echoed it back (want, kept up to 2 s).
+// tempo lands on the next loop; `want` shows your ask before the relay echoes it (kept up to 2 s)
 let want = null // { bpm, t }
 const heading = () => {
 	const next = transport.clock.pending?.().at(-1)?.bpm ?? transport.clock.loopAt().bpm
@@ -247,9 +236,7 @@ const tempo = (d) => {
 }
 $('slower').onclick = () => tempo(-4)
 $('faster').onclick = () => tempo(4)
-// The broom beside your badge (view.js draws it) wipes your ring; undo brings it back. Tap it again straight
-// away for a clean slate: it sweeps every ring no other person sits at too (empty seats, robots). The rings it
-// would take glow in between. Other people's rings are theirs.
+// broom: wipes your ring (undo restores); a second tap also sweeps rings no other person sits at
 const SWEEP_AGAIN_MS = 1600
 let swept = 0
 function wipe() {
@@ -265,7 +252,7 @@ function wipe() {
 	swept = again ? 0 : performance.now()
 	view.offerSweep(again ? [] : rest, SWEEP_AGAIN_MS)
 }
-// robots are off unless someone in the jam turns them on; the choice rides on the loop so everyone shares it
+// the choice rides on the loop so everyone shares it
 function setRobots(on) {
 	bots.opts.on = !!on && !replay
 	$('bots').setAttribute('aria-pressed', bots.opts.on)
@@ -302,18 +289,15 @@ function showTempo() {
 }
 setInterval(showTempo, 200)
 
-// the panel loads lazily; the jam plays without it
 let debug = { toggle() {} }
 import('./debug.js')
 	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart })))
 	.catch((e) => console.warn('debug panel unavailable', e))
 renderSeats()
 
-// paper tokens give where you press them
 document.querySelectorAll('.token').forEach((el) => jellify(el))
 jellify(document.querySelector('.tempo'), { amount: 0.08 })
 
-/* ───────── zoom: tap your badge and your instrument opens big, in its own form; the machine shrinks beside it ───────── */
 const sheetbar = $('sheetbar')
 const strip = createStrip({ engine, registry, me, el: sheetbar, before: () => undo.remember(me.seat), chosen: () => ghost.play() })
 function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.seat) }
@@ -328,7 +312,7 @@ addEventListener('zoom', (e) => {
 	}
 	rideSheet()
 })
-// the strip is pinned to the sheet: it slides in and out with it, frame for frame
+// pinned to the sheet, frame for frame
 let riding = 0
 function rideSheet() {
 	if (riding) return
@@ -342,8 +326,6 @@ function rideSheet() {
 }
 engine.on('seats', () => view.focus.on && strip.paint())
 
-// j / k (or ← / →) cycle your instrument from anywhere. On the dial a glyph token pops up by your badge
-// with the name under it, so you see what you landed on; zoomed in, the strip shows it.
 const flash = document.createElement('div')
 flash.className = 'flash'
 flash.hidden = true
@@ -366,13 +348,12 @@ function cycleInstrument(d) {
 	flashT = setTimeout(() => (flash.hidden = true), 1100)
 }
 
-// handy in the console
 Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart, undo } })
 
-/* ───────── record: 8 bars from the next loop start, stored, a link to replay them at /r/<id> ───────── */
+// records 8 bars from the next loop start
 const recBtn = $('rec')
 if (recBtn && transport.kind === 'ws') {
-	const recorder = createRecorder({ engine, transport, seatName: (i) => { const o = occupant(i); return o.me ? me.name || playerName(i) : o.name || null } }) // a recording is for others: 'you' becomes your name or seat
+	const recorder = createRecorder({ engine, transport, seatName: (i) => { const o = occupant(i); return o.me ? me.name || playerName(i) : o.name || null } }) // 'you' becomes your name or seat
 	const recline = $('recline')
 	const setRec = (state, p = 0) => { recBtn.dataset.state = state; recBtn.style.setProperty('--p', p.toFixed(3)) }
 	setRec('idle')

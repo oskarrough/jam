@@ -1,4 +1,4 @@
-// Keys: draw a line; height is pitch. Five voices: rhodes, its own soft detuned triangles, organ, harp, chip.
+// Keys: draw a line; height is pitch. Voices: rhodes, soft triangles, organ, harp, chip.
 
 import { stepline } from './lib/stepline.js'
 import { voice as jukebox } from './lib/voices.js'
@@ -11,7 +11,6 @@ function gen() {
 	return a
 }
 
-// the keys' own voice, from before the jukebox voices
 function triangles({ audio: ac, out, params }, m, t) {
 	const f = mtof(m), g = ac.createGain(), lp = ac.createBiquadFilter()
 	lp.type = 'lowpass'; lp.frequency.value = 2600
@@ -29,6 +28,5 @@ export default stepline({
 	params: { decay: { value: 0.8, min: 0.1, max: 3, step: 0.05 } },
 	voices: [['rhodes', jukebox('rhodes', -9.0)], ['triangles', triangles], ['organ', jukebox('organ', -3.9)], ['harp', jukebox('harp', -4.4)], ['chip', jukebox('chip', -3.7)]],
 	generate: gen,
-	// the stab, 3-3-2 like the bass, one chord tone per hit
 	sample: [3, -1, -1, 3, -1, -1, 1, -1, 3, -1, -1, 3, -1, -1, 5, -1, 4, -1, -1, 4, -1, -1, 3, -1, 4, -1, -1, 4, -1, -1, 6, -1, 4, -1, -1, 4, -1, -1, 2, -1, 4, -1, -1, 4, -1, -1, 6, -1, 3, -1, -1, 3, -1, -1, 5, -1, 3, -1, 3, -1, 2, -1, 3, -1],
 })

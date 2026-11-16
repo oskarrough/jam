@@ -1,4 +1,4 @@
-// The machine's panel (lil-gui). Press d to open or fold it. Every knob changes the jam live, for everyone in it.
+// The machine's panel (lil-gui). d opens or folds it. Knobs change the jam live, for everyone.
 
 import GUI from './vendor/lil-gui.esm.min.js'
 import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/kit.js'
@@ -6,9 +6,8 @@ import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/
 export function createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart }) {
 	const { clock } = transport
 	const gui = new GUI({ title: 'controls  (d)', width: 280 })
-	gui.close() // folded by default so the dial is whole; d opens it
+	gui.close()
 
-	// ── me
 	const meF = gui.addFolder('me')
 	const meState = {
 		get name() { return me.name },
@@ -19,16 +18,16 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	meF.add(meState, 'name')
 	meF.add(meState, 'seat', engine.seats.map((L) => L.id)).listen()
 
-	// ── loop (changes land on the next loop boundary, for everyone)
 	const loopF = gui.addFolder('loop')
 	const cur = () => clock.loopAt()
-	// chords are typed as numerals, one per bar: 'i III iv v'. Case is decoration; the key decides each chord's quality.
+	// chords as numerals, one per bar: 'i III iv v'; the key decides each chord's quality
 	const numerals = (a) => (a?.length ? a : CHORDS).map((d) => NUMERALS[d]).join(' ')
 	const fromLoop = (l) => ({ bpm: l.bpm, bars: l.bars, beatsPerBar: l.beatsPerBar, root: l.root ?? 'A', scale: l.scale ?? 'minor pent', chords: numerals(l.chords) })
 	const loopEdit = fromLoop(cur())
 	const commit = () => {
 		const chords = parseChords(loopEdit.chords)
-		const { chords: _, ...rest } = loopEdit
+		const rest = { ...loopEdit }
+		delete rest.chords
 		transport.setLoop({ ...rest, ...(chords.length ? { chords } : {}) })
 	}
 	loopF.add(loopEdit, 'bpm', 50, 180, 1).onFinishChange(commit)
@@ -39,7 +38,6 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	loopF.add(loopEdit, 'chords').name('chords, one a bar').onFinishChange(commit)
 	transport.on('loop', ({ loop }) => { Object.assign(loopEdit, fromLoop(loop)); loopF.controllersRecursive().forEach((c) => c.updateDisplay()) })
 
-	// ── seats: instrument per seat, mix, and the instrument's own params
 	const seatsF = gui.addFolder('seats')
 	const ids = [...registry.keys()]
 	engine.seats.forEach((L) => {
@@ -66,7 +64,6 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 		engine.on('seats', () => { if (pf && pf._title !== `${L.module.name} params`) buildParams() })
 	})
 
-	// ── network
 	const netF = gui.addFolder('network')
 	const info = { get transport() { return transport.kind || 'ws' } }
 	netF.add(info, 'transport').disable().listen()
@@ -80,14 +77,12 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	const keys = ['connected', 'peers', 'rtt', 'jitter', 'offset', 'drift', 'pending', 'lateMs']
 	keys.forEach((k) => { nd[k] = ''; netF.add(nd, k).disable().listen() })
 
-	// ── clock + scheduler
 	const clkF = gui.addFolder('clock')
 	const cd = { shared: '', 'bar.beat': '', phase: '', audio: '', 'audio state': '', 'out latency': '', scheduled: 0, 'late steps': 0 }
 	Object.keys(cd).forEach((k) => clkF.add(cd, k).disable().listen())
 	clkF.add(engine.cfg, 'lookaheadMs', 20, 500, 5).name('lookahead ms')
 	clkF.add({ tick: engine.cfg.tickMs }, 'tick', 5, 100, 1).name('tick ms').onChange((v) => engine.setTick(v))
 
-	// ── view + bots
 	const viewF = gui.addFolder('view')
 	viewF.add(view.opts, 'mode', ['dial', 'strips']).onChange((m) => view.setMode(m))
 	viewF.add(view.opts, 'ground', ['flamingo', 'nortel', 'vallotton', 'sand', 'cycle']).onChange((g) => view.setGround(g))
@@ -95,7 +90,6 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	viewF.add(view.opts, 'slices', 32, 512, 1).name('ring slices')
 	heart?.addGui(gui)
 
-	// ── zoom: every knob of the badge → sheet transition, live, kept in this browser
 	const zF = gui.addFolder('zoom').close()
 	const Z = view.zoom, zc = () => view.zoomChanged()
 	zF.add(Z, 'inMs', 100, 2000, 10).name('in ms').onChange(zc)
@@ -127,7 +121,6 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 		setTimeout(() => copyCtl.name('copy values'), 1500)
 	} }, 'copy').name('copy values')
 	zF.add({ reset() { Object.assign(Z, view.zoomDefaults); zc(); zF.controllersRecursive().forEach((c) => c.updateDisplay()) } }, 'reset').name('reset')
-	// ── intro: the opening's beats in ms from the first frame, kept in this browser; 'play' runs it again
 	const iF = gui.addFolder('intro').close()
 	const I = view.intro, ic = () => view.introChanged()
 	const beats = { capMs: 'hold for fonts, at most', land: 'land fades up at', landMs: '… over', dial: 'dial lands at', dialMs: '… over', rings: 'first ring at', ringMs: '… each over', ringGap: '… then every', seatMs: 'each player pops over', menu: 'deck at', menuGap: '… a token every', hand: 'hand at', handMs: '… over' }

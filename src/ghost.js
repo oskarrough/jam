@@ -1,8 +1,5 @@
-// Ghost hand: when you switch instruments, a cursor in your colour plays that instrument's gesture once on
-// your seat (the sheet when you're zoomed in, your ring when not), using the same cursor and trail as robots
-// and other players. No words. It only moves a cursor; your drawing is untouched. Each instrument's
-// gesture is its `demo` (see src/instruments/lib/demo.js). After two showings per instrument it rests,
-// and it stops the moment you touch your seat.
+// Ghost hand: on an instrument switch, a cursor in your colour plays that instrument's `demo` gesture once on your seat
+// (src/instruments/lib/demo.js). Rests after two showings per instrument, and stops the moment you touch your seat.
 
 export function createGhost({ engine, view, me, times = 2 }) {
 	let run = null
@@ -19,13 +16,12 @@ export function createGhost({ engine, view, me, times = 2 }) {
 		if (!demo || reduce || (!force && seen(L.module.id) >= times)) return false
 		const id = L.module.id
 		const r = (run = { raf: 0, wait: 0 })
-		// a beat's wait, so cycling quickly through instruments doesn't flicker ghosts (and a zoom can settle)
+		// a beat's wait so cycling quickly doesn't flicker ghosts
 		r.wait = setTimeout(() => {
 			const shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
 			const aspect = L.canvas.width / Math.max(1, L.canvas.height)
 			const strokes = (typeof demo === 'function' ? demo(shape, aspect) : demo).filter((s) => s.length)
 			if (!strokes.length) return (run = null)
-			// one timeline: each stroke takes its time, taps are short, a breath between strokes
 			const plan = []
 			let t = 0
 			for (const s of strokes) {

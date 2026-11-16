@@ -1,5 +1,5 @@
-// The instruments. Each one is a single file in this folder; see README.md here for the contract,
-// or run `npm run new-instrument <name>` to start one. Order here is the order in the picker.
+// The instruments, one file each; README.md here has the contract.
+// `npm run new-instrument <name>` starts one. Order here is picker order.
 
 import bass from './bass.js'
 import keys from './keys.js'
@@ -23,8 +23,7 @@ export const registry = new Map()
 export function register(mod) {
 	for (const k of ['id', 'name', 'create']) if (!mod[k]) throw new Error(`instrument is missing ${k}`)
 	const create = mod.create
-	// A state meant for something else (a bot's part generated just before the seat switched
-	// instruments, a peer on an older version) must not break the seat: keep the old state instead.
+	// Foreign state (bot part, older peer) must not break the seat: keep the old one.
 	mod.create = (ctx) => {
 		const inst = create.call(mod, ctx)
 		const setState = inst.setState

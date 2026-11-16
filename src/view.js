@@ -1,9 +1,5 @@
-// View: draws the machine (or plain strips) and turns pointer input into seat-local {x, y}.
-// Each seat renders into its own offscreen canvas; the dial view wraps it round a ring.
-//
-// The look: a dusk landscape painted once into a backdrop layer (flat sky, violet hills, ochre field,
-// a wandering ink line), and the machine on top: a paper dial pasted on with a flat offset shadow,
-// one ring per player, ink on paper. The centre is left bare for src/heart.js.
+// Draws the machine (or plain strips); pointer input becomes seat-local {x, y}.
+// Each seat renders offscreen; the dial view wraps it round a ring.
 
 import { rgba, playhead } from './instruments/lib/util.js'
 import { INK, SERIF, GROUNDS } from './palette.js'
@@ -15,7 +11,6 @@ const TAU = Math.PI * 2
 const BROOM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="96" height="96" fill="none" stroke="${INK}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 3l-4.6 10.4"/><path d="M14.5 11.6l8.6 3.6"/><path d="M14.5 11.6C11 15 8 19.5 6.3 24.5c4.6 2.4 10.4 3.7 15.4 3.7 1.2-4.6 1.5-9 1.4-13"/><path d="M17.3 12.8l-5.2 13.4M20.3 14l-2.3 13.8"/><circle fill="${INK}" cx="26" cy="28" r=".9"/><circle fill="${INK}" cx="28.6" cy="25.6" r=".7"/></svg>`
 const VERMILION = '#d64a28'
 const ORDER = ['flamingo', 'nortel', 'vallotton', 'sand']
-// hex lerp for the paper while grounds cross-fade
 const mixHex = (a, b, t) => '#' + [0, 2, 4].map((i) => Math.round(parseInt(a.substr(1 + i, 2), 16) * (1 - t) + parseInt(b.substr(1 + i, 2), 16) * t).toString(16).padStart(2, '0')).join('')
 const ink = (a) => rgba(INK, a)
 const serif = (px, w = 400, italic = true) => `${italic ? 'italic ' : ''}${w} ${Math.round(px)}px ${SERIF}`
@@ -34,14 +29,12 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	let W, H, S, CX, CY, DPR
 	// zoom: the overview geometry (S0, CX0, CY0), the focus geometry (SF, CXF, CYF, sheet) and zt easing between them.
-	// In focus your instrument opens big and unwrapped on a sheet; the machine shrinks beside it, still live.
 	let S0, CX0, CY0, SF, CXF, CYF, sheet = null, zt = 0, moving = false
 	const focus = { on: false, seat: -1 }
 	let bg = document.createElement('canvas'), bg2 = document.createElement('canvas')
 	// ground state: current G, and while cycling an incoming one fading in
 	let G = GROUNDS.vallotton, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
 	const cursors = new Map() // key -> {seat, x, y, name, until}
-	// Ghost trail of the last loop, so someone arriving can read the jam:
 	//  - trails: every pen stroke (yours and everyone's) stays on its ring as thin ink, fading out over one loop
 	//  - ghosts: when a ring changed during the loop, what it held before lingers faintly through the next one
 	const trails = new Map() // key -> [{seat, pts: [{x, y, t}]}]
@@ -50,7 +43,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	// handing your part to a robot: press your own badge, drag the thread onto theirs
 	let handing = null // {from, id, x, y, x0, y0, moved}
 	const seatUnder = (px, py) => seats.findIndex((_, i) => { const [x, y] = seatPos(i); return Math.hypot(px - x, py - y) < seatR() + 6 })
-	// jelly: each ring and seat has a spring; pressing dents it where you pressed, release wobbles it back
 	const ringJelly = seats.map(() => ({ s: spring({ k: 420, c: 9 }), a: 0 }))
 	const seatJelly = seats.map(() => ({ s: spring({ k: 700, c: 10 }), a: 0 }))
 	const press = (j, a) => { j.a = a; j.s.target = 1 }
@@ -62,18 +54,16 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		H = innerHeight
 		canvas.width = W * DPR
 		canvas.height = H * DPR
-		const narrow = W < 640, top = narrow ? 44 : 24, bottom = narrow ? 96 : 84, STRIP = 58 // room above the zoomed sheet for the instrument strip
+		const narrow = W < 640, top = narrow ? 44 : 24, bottom = narrow ? 96 : 84, STRIP = 58
 		S0 = Math.max(240, Math.min(W - 24, H - top - bottom))
 		CX0 = W / 2
 		CY0 = top + (H - top - bottom) / 2
 		if (narrow) {
-			// phone: a small live medallion bottom-left above the deck, the sheet fills the middle
 			SF = Math.min(180, W * 0.46)
 			CXF = 8 + SF / 2
 			CYF = H - bottom - SF / 2 + 6
 			sheet = { x: 12, y: 8 + STRIP, w: W - 24, h: Math.max(160, H - bottom - SF - STRIP - 16) }
 		} else {
-			// wide: the machine bottom-left, the sheet to its right
 			SF = Math.max(220, Math.min(W * 0.34, H - bottom - 120, 520))
 			CXF = 20 + SF / 2
 			CYF = H - bottom - SF / 2 - 4
@@ -87,9 +77,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		if (G2) paintBackdrop(bg2, G2)
 	}
 
-	// the zoom is one move in two beats, with no cross-fade: first the machine slides and shrinks into its corner,
-	// then the sheet slides in from the right edge, opaque. Zooming out plays it backwards.
-	// Every timing knob lives in Z, tunable live from the debug panel (zoom folder) and kept in localStorage.
 	const ZOOM_DEFAULTS = { inMs: 550, outMs: 550, machineEnd: 0.6, outMachineEnd: 1, sheetStart: 0.27, machineEase: 'smooth', sheetEase: 'smooth', machineBezier: '0.4, 0, 0.2, 1', sheetBezier: '0.2, 0.8, 0.3, 1', slide: 1, slidePad: 24, scale: 1, dx: 0, dy: 0, barLag: 0 }
 	const Z = { ...ZOOM_DEFAULTS }
 	try { Object.assign(Z, JSON.parse(localStorage.getItem('roughjam.zoom') || '{}')) } catch {}
@@ -122,7 +109,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	const eMachine = () => easeOf(Z.machineEase, Z.machineBezier)(clamp01(zt / Math.max(0.01, focus.on ? Z.machineEnd : Z.outMachineEnd)))
 	const sheetP = () => clamp01((zt - Z.sheetStart) / Math.max(0.01, 1 - Z.sheetStart))
 	const eSheet = () => easeOf(Z.sheetEase, Z.sheetBezier)(sheetP())
-	// the strip above the sheet can trail it a little (barLag of the sheet's own move)
 	const eBar = () => easeOf(Z.sheetEase, Z.sheetBezier)(clamp01((sheetP() - Z.barLag) / Math.max(0.01, 1 - Z.barLag)))
 	const slideDist = () => (W - sheet.x + Z.slidePad) * Z.slide
 	let sheetSeat = -1 // the seat whose canvas is sized to the sheet (lags focus on the way out)
@@ -132,13 +118,10 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		CX = CX0 + (CXF + Z.dx - CX0) * e
 		CY = CY0 + (CYF + Z.dy - CY0) * e
 	}
-	const small = () => S < 330 // below this the dial drops its captions and numerals
+	const small = () => S < 330
 
-	// the opening, on our clock rather than the network's: the eye alone on the sky, then the land fades up, the dial
-	// lands, each ring sweeps round and each player's badge pops as the outer sweep reaches it, the deck rises,
-	// and last the hand starts going round. It plays for everyone, reduced motion or not: it's under a second.
-	// Times are ms from the first frame once the fonts are in (or capMs, whichever comes first); tunable in the
-	// debug panel's intro folder. Reduced motion and automated browsers (check, shots) get the settled machine.
+	// Under a second, so it plays for everyone, reduced motion or not; automated browsers get the settled machine.
+	// Times are ms from the first frame once the fonts are in (or capMs, whichever comes first).
 	const INTRO_DEFAULTS = { capMs: 350, land: 60, landMs: 220, dial: 140, dialMs: 260, rings: 230, ringMs: 220, ringGap: 55, seatMs: 220, menu: 620, menuGap: 25, hand: 700, handMs: 240 }
 	const INTRO = { ...INTRO_DEFAULTS }
 	try { Object.assign(INTRO, JSON.parse(localStorage.getItem('roughjam.intro') || '{}')) } catch {}
@@ -154,20 +137,17 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			document.body.classList.remove('intro')
 		}
 	}
-	// scale the canvas by k about (x, y) for the duration of fn
 	function around(x, y, k, fn) {
 		if (k === 1) return fn()
 		g.save(); g.translate(x, y); g.scale(k, k); g.translate(-x, -y); fn(); g.restore()
 	}
 
-	// ring geometry, inner seat first
 	const n = () => seats.length
 	const band = () => (S * 0.26) / n()
 	const ringIn = (i) => S * 0.16 + i * band()
 	const ringT = () => band() * 0.82
 	const porthole = () => ringIn(0) - S * 0.014
 	const medallion = () => S * 0.475
-	// strip geometry
 	const stripRect = (i) => {
 		const top = W < 640 ? 160 : 90, bottom = W < 640 ? 110 : 100
 		const h = Math.min(120, (H - top - bottom) / n() - 10)
@@ -192,12 +172,11 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 
 	const angOf = (phase) => -Math.PI / 2 + phase * TAU
 	const polar = (a, r) => [CX + Math.cos(a) * r, CY + Math.sin(a) * r]
-	const seatAngles = () => seats.map((_, i) => Math.PI * 0.75 - (i * TAU) / seats.length) // first seat bottom-left
+	const seatAngles = () => seats.map((_, i) => Math.PI * 0.75 - (i * TAU) / seats.length)
 	const seatPos = (i) => (opts.mode === 'dial' ? polar(seatAngles()[i], S * 0.505) : [stripRect(i).x - 2, stripRect(i).y + 16])
 	const seatR = () => Math.max(12, S * 0.028)
 	// a point on the badges' rim, k badge-widths round from seat i (positive is clockwise)
 	const rimFrom = (i, k) => polar(seatAngles()[i] + (k * seatR() * 2.3) / (S * 0.505), S * 0.505)
-	// your ring's broom: a small token just clockwise of your own badge, on the overview only
 	const wipeAt = () => { const i = seats.findIndex((_, j) => canDraw(j)); return i < 0 || focus.on || zt > 0 || opts.mode !== 'dial' ? null : { i, xy: rimFrom(i, 1), r: seatR() * 0.72 } }
 	const wipeJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
 
@@ -250,12 +229,11 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 				return onSit(i)
 			}
 		}
-		// in focus the shrunken machine is for looking: a tap anywhere off the sheet (the machine, the sky beside it) zooms back out
 		if (focus.on) { if (!inSheet(e.clientX, e.clientY)) setFocus(-1); return }
 		const h = hit(e.clientX, e.clientY)
 		if (h && opts.mode === 'dial') {
 			press(ringJelly[h.seat], Math.atan2(e.clientY - CY, e.clientX - CX))
-			if (!canDraw(h.seat)) setTimeout(() => release(ringJelly[h.seat]), 120) // a poke at someone else's ring
+			if (!canDraw(h.seat)) setTimeout(() => release(ringJelly[h.seat]), 120)
 		}
 		if (!h || !canDraw(h.seat)) return
 		canvas.setPointerCapture(e.pointerId)
@@ -277,7 +255,7 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		if (!drag || e.pointerId !== drag.id) return
 		if (drag.sheet) return onPointer(drag.seat, { type: 'move', ...sheetXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: drag.button })
 		const h = hit(e.clientX, e.clientY, drag.seat)
-		ringJelly[drag.seat].a = Math.atan2(e.clientY - CY, e.clientX - CX) // the dent follows the pen
+		ringJelly[drag.seat].a = Math.atan2(e.clientY - CY, e.clientX - CX)
 		onPointer(drag.seat, { type: 'move', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
 	})
 	const up = (e) => {
@@ -304,7 +282,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	canvas.addEventListener('pointerup', up)
 	canvas.addEventListener('pointercancel', (e) => { if (handing && e.pointerId === handing.id) up(e) })
 
-	// zoom into a seat (your own), or out with -1
 	function setFocus(i) {
 		if (drag) return
 		const on = i >= 0 && opts.mode === 'dial'
@@ -325,12 +302,10 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		if (!segs) trails.set(key, (segs = []))
 		let seg = segs[segs.length - 1]
 		const last = seg?.pts[seg.pts.length - 1]
-		// a new segment after a pause, a seat change, or a jump across the seam
 		if (!seg || seg.seat !== seat || now - last.t > 250 || Math.abs(x - last.x) > 0.5) segs.push((seg = { seat, pts: [] }))
 		if (!last || seg.pts.length === 0 || Math.hypot(x - last.x, y - last.y) > 0.002) seg.pts.push({ x, y, t: now })
 		if (seg.pts.length > 800) seg.pts.splice(0, 200)
 	}
-	// where a seat point lands on screen right now
 	function seatPoint(seat, x, y) {
 		if (opts.mode === 'dial' && focus.on && seat === focus.seat && eSheet() >= 1) return [sheet.x + x * sheet.w, sheet.y + y * sheet.h]
 		if (opts.mode === 'dial') return polar(angOf(x), ringIn(seat) + (1 - y) * ringT())
@@ -353,7 +328,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 				for (let i = 1; i < seg.pts.length; i++) {
 					const a = seg.pts[i - 1], b = seg.pts[i], age = (now - b.t) / life
 					g.globalAlpha = 0.55 * (1 - age) ** 1.5
-					// follow the ring between samples instead of cutting a chord across the dial
 					const n = onSheet ? 1 : Math.max(1, Math.ceil(Math.abs(b.x - a.x) / 0.008))
 					g.beginPath(); g.moveTo(...seatPoint(seg.seat, a.x, a.y))
 					for (let j = 1; j <= n; j++) g.lineTo(...seatPoint(seg.seat, a.x + ((b.x - a.x) * j) / n, a.y + ((b.y - a.y) * j) / n))
@@ -364,7 +338,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		}
 		g.globalAlpha = 1
 	}
-	// at the loop's turn: if a ring changed, keep a picture of what it held, to fade through the next loop
 	const sigOf = (L) => { try { return L.module.id + JSON.stringify(L.instance?.state ?? null) } catch { return L.module.id + Math.random() } }
 	function loopTurned() {
 		for (const L of seats) {
@@ -378,9 +351,7 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		}
 	}
 
-	/* ───────── backdrop: painted once per resize ───────── */
 
-	// a hand-drawn closed circle: radius wobbles a little, the same way every frame
 	// dent: optional { a, depth, w } pushes the outline in (depth > 0) or out around angle a; that's the jelly
 	function wobble(c, cx, cy, r, seed, amp = 0.8, dent = null) {
 		const p = [(seed * 1.7) % TAU, (seed * 2.9) % TAU, (seed * 4.3) % TAU]
@@ -399,18 +370,16 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		cv.frost = null
 		cv.width = W * DPR
 		cv.height = H * DPR
-		const c = cv.getContext('2d'), R = rng(7)
+		const c = cv.getContext('2d')
 		c.setTransform(DPR, 0, 0, DPR, 0, 0)
-		const hy = Math.round(Math.max(H * 0.5, Math.min(H * 0.68, CY + S * 0.06))) // horizon
+		const hy = Math.round(Math.max(H * 0.5, Math.min(H * 0.68, CY + S * 0.06)))
 
-		// sky
 		const sk = c.createLinearGradient(0, 0, 0, hy)
 		sk.addColorStop(0, G.sky[0]); sk.addColorStop(0.75, G.sky[1]); sk.addColorStop(1, G.sky[2])
 		c.fillStyle = sk
 		c.fillRect(0, 0, W, H)
 		if (!opts.landscape) { c.fillStyle = G.paper; c.fillRect(0, 0, W, H); paintGrain(c); return }
 
-		// the landscape itself is painted in the heart's hand: see backdrop.js
 		paintLandscape(cv, { W, H, DPR, hy, G, dial: { x: CX0, y: CY0, r: S0 * 0.475 } })
 	}
 
@@ -426,7 +395,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		c.fillRect(0, 0, W, H)
 	}
 
-	// hatch patterns per colour, made on demand
 	const hatches = new Map()
 	function hatch(color, a = 0.35) {
 		const key = color + a
@@ -441,7 +409,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		return hatches.get(key)
 	}
 
-	// draw one seat's instrument into its offscreen canvas
 	function renderSeat(L) {
 		const lg = L.g
 		lg.setTransform(1, 0, 0, 1, 0, 0)
@@ -453,7 +420,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		lg.restore()
 	}
 
-	// wrap a seat strip onto the annulus [r0, r1] as thin rotated slices
 	function warp(L, r0, r1, src = L.canvas) {
 		const N = moving ? 48 : opts.slices, sw = src.width / N, dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
 		for (let k = 0; k < N; k++) {
@@ -488,7 +454,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		for (const j of seatJelly) j.s.step(dt)
 		wipeJelly.s.step(dt)
 
-		// cycling grounds: every few loops the next one fades in over a couple of seconds
 		if (opts.ground === 'cycle' && p) {
 			const ln = Math.floor(p.loops ?? p.beats / ((loop?.bars || 2) * (loop?.beatsPerBar || 4)))
 			if (lastLoopN >= 0 && ln !== lastLoopN && ln % opts.cycleLoops === 0 && !G2) startFade(GROUNDS[ORDER[(ORDER.indexOf(groundName()) + 1) % ORDER.length]])
@@ -527,7 +492,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		paintBackdrop(bg2, G2)
 		applyCss(G2)
 	}
-	// the DOM chrome follows the ground: page background, paper tokens, title colour
 	function applyCss(g0 = G) {
 		const r = document.documentElement.style
 		r.setProperty('--paper', g0.paper)
@@ -543,7 +507,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		paintBackdrop(bg, G); applyCss()
 	}
 
-	// squiggles adrift in the sky, slow as weather; they keep clear of the dial. Sprites from backdrop.js, remade per ground.
 	const drifters = Array.from({ length: 5 }, (_, k) => ({ u: (k * 0.23 + 0.07) % 1, v: 0.08 + ((k * 0.37) % 0.3), s: 0.6 + ((k * 0.61) % 0.8), sp: 0.4 + ((k * 0.29) % 0.6), rot: k * 1.3 }))
 	let wisps = null, wispsFor = null
 	function drawDrifters(t) {
@@ -553,7 +516,7 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		drifters.forEach((d, k) => {
 			const x = ((d.u + T * 0.004 * d.sp) % 1.1) * (W + 60) - 30, y = d.v * H + Math.sin(T * 0.3 * d.sp + d.rot) * 8
 			if (opts.mode === 'dial' && Math.hypot(x - CX, y - CY) < medallion() + 50) return
-			if (x < 260 && y < 200) return // not over the title
+			if (x < 260 && y < 200) return
 			const set = wisps[k % wisps.length], im = set[Math.floor(T * 3 * d.sp + k) % set.length], z = 2 * (0.8 + d.s * 0.4)
 			g.drawImage(im, Math.round(x - im.width * z), Math.round(y - (im.height * z) / 2), Math.round(im.width * z), Math.round(im.height * z))
 		})
@@ -561,7 +524,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	}
 
 
-	// the sheet your instrument plays on in focus: paper, ink edge, flat shadow, beat ticks along the top
 	const CHAMBER = '#1b1529', PALE = '#efe6f4'
 	let filterOK = null
 	function canFilter() {
@@ -581,7 +543,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		g.translate((1 - e) * slideDist(), 0) // slides in from the right edge, never translucent
 		g.fillStyle = 'rgba(42,28,72,.5)'
 		g.fillRect(x + 6, y + 8, w, h)
-		// the sheet is the eye's chamber: a deep ink ground, the instrument drawn on it as scratchboard. The seat
 		// canvas is drawn in ink for the paper rings, so here it goes through invert + half-turn hue: ink turns pale,
 		// pigments keep their hue and come up bright. Browsers without canvas filters keep a paper sheet.
 		const dark = canFilter()
@@ -645,8 +606,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		return null
 	}
 
-	// Your badge wears your instrument's glyph; until you've opened it once, it now and then wobbles and fans out a
-	// few other instruments' glyphs for a moment: tap here to change what you play. Kept off for good after that.
 	let nudge = null, nudgeOff = false
 	try { nudgeOff = localStorage.getItem('roughjam.opened') === 'yes' } catch {}
 	function opened() { nudge = null; if (!nudgeOff) { nudgeOff = true; try { localStorage.setItem('roughjam.opened', 'yes') } catch {} } }
@@ -662,7 +621,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		const t = (performance.now() - nudge.t0) / 1000
 		if (t > 1.9 || focus.on || !canDraw(nudge.seat)) { nudge = null; return }
 		const [x, y] = seatPos(nudge.seat), r = seatR()
-		// out on a spring, hold, then tuck back in
 		const out = t < 1.3 ? EASES['out back'](clamp01(t / 0.45)) : 1 - EASES.smooth(clamp01((t - 1.3) / 0.5))
 		nudge.ids.forEach((id, k) => {
 			// along the rim, counter-clockwise (the broom sits the other side), each a step further
@@ -684,14 +642,12 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		const L = seats[i], st = occupant(i), r = seatR()
 		if (st.me) {
 			g.fillStyle = 'rgba(40,25,60,.45)'; g.beginPath(); g.arc(x + 3, y + 4, r, 0, TAU); g.fill()
-			// a slow dashed halo says: this one is yours, touch it to change instrument
 			g.save()
 			g.strokeStyle = INK; g.lineWidth = 1; g.setLineDash([3, 4]); g.lineDashOffset = reduce ? 0 : -performance.now() / 120
 			wobble(g, x, y, r + 6, i * 7 + 3, 0.8); g.stroke()
 			g.restore()
 		}
 		if (st.riff) {
-			// a robot riffing on someone wears a thin ring in the giver's colour
 			g.strokeStyle = st.riff.color; g.lineWidth = 2.4
 			wobble(g, x, y, r + 5, i * 9 + 4, 0.7); g.stroke()
 			g.strokeStyle = ink(0.55); g.lineWidth = 0.7
@@ -719,7 +675,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	// on the top half letters run clockwise with their feet on the rim, on the bottom half anticlockwise.
 	function arcCaption(text, a, R, px, strong) {
 		g.save()
-		// set like dial lettering: wide grotesque capitals, tracked out
 		g.font = `${strong ? 700 : 600} ${Math.round(px)}px Syne, "Bricolage Grotesque", sans-serif`
 		g.textAlign = 'center'; g.textBaseline = 'middle'
 		const chars = [...text.toUpperCase()]
@@ -728,7 +683,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		const bottom = Math.sin(a) > 0, dir = bottom ? -1 : 1
 		let t = a - (dir * total) / R / 2
 		const col = G.dark ? G.paper : INK
-		// a soft halo in the sky colour keeps it legible over hills and crescents
 		g.lineJoin = 'round'
 		g.lineWidth = Math.max(2.5, px * 0.28)
 		g.strokeStyle = rgba(G.sky[G.dark ? 0 : 2], 0.85)
@@ -762,10 +716,8 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 
 	function drawDial(t, dt, phase, loop) {
 		const outer = ringIn(seats.length - 1) + ringT() + 8, inner = ringIn(0) - 6, M = medallion()
-		// the opening's beats (all 1 once it has played)
 		const dialP = ip(INTRO.dial, INTRO.dialMs), handP = EASES['out cubic'](ip(INTRO.hand, INTRO.handMs))
 		const ringP = (i) => EASES['out cubic'](ip(INTRO.rings + i * INTRO.ringGap, INTRO.ringMs))
-		// a badge pops once the outermost ring's sweep has passed it; seatsAt keeps when that happened
 		const sweep = ringP(seats.length - 1)
 		const seatP = (i) => {
 			if (introT0 === null) return 0
@@ -778,8 +730,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		const dk = 0.86 + 0.14 * EASES['out back'](dialP)
 		if (dk !== 1) { g.translate(CX, CY); g.scale(dk, dk); g.translate(-CX, -CY) }
 
-		// the medallion: frosted paper in the ground's own tint. Mostly opaque; the land behind survives only as
-		// soft colour (a heavily blurred copy of the backdrop), never as a line crossing the rings.
 		g.fillStyle = 'rgba(30,20,60,.35)'
 		g.beginPath(); g.arc(CX + S * 0.012, CY + S * 0.016, M, 0, TAU); g.fill()
 		g.save()
@@ -792,14 +742,12 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		g.strokeStyle = ink(0.75); g.lineWidth = 1.2; g.stroke()
 		g.lineWidth = 0.5; g.strokeStyle = ink(0.22)
 		wobble(g, CX, CY, M - 5, 2, 1); g.stroke()
-		// four rivets at the quarters, nothing more
 		g.fillStyle = ink(0.45)
 		for (let k = 0; k < 4; k++) {
 			const [x, y] = polar(angOf(k / 4 + 1 / 8), M - S * 0.012)
 			g.beginPath(); g.arc(x, y, Math.max(1.2, S * 0.0024), 0, TAU); g.fill()
 		}
 
-		// shadow wedge trailing the hand, like the flat shadow planes on a dusk field
 		const pa = angOf(phase)
 		if (handP > 0) {
 			g.globalAlpha *= handP
@@ -808,7 +756,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			g.globalAlpha /= handP
 		}
 
-		// beat and bar marks: hairlines, bars a touch longer. Numbers are left to the ear.
 		const beats = loop ? loop.bars * loop.beatsPerBar : 8, bpb = loop?.beatsPerBar || 4
 		g.lineWidth = 0.5
 		for (let b = 0; b < beats; b++) {
@@ -817,7 +764,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			g.strokeStyle = bar ? ink(0.16) : ink(0.05)
 			g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke()
 		}
-		// 16th ticks on the outer rim, only the beats get a mark you'd notice
 		const steps = engine.steps()
 		g.lineWidth = 0.5
 		for (let s = 0; s < steps; s++) {
@@ -829,7 +775,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		seats.forEach((L, i) => {
 			const r0 = ringIn(i), r1 = r0 + ringT(), own = canDraw(i), rp = ringP(i)
 			if (rp === 0) return
-			// in the opening each ring sweeps round from the top, inside out
 			g.save()
 			if (rp < 1) { g.beginPath(); g.moveTo(CX, CY); g.arc(CX, CY, r1 + S * 0.05, angOf(0) - 0.05, angOf(rp) + 0.05); g.closePath(); g.clip() }
 			g.beginPath(); g.arc(CX, CY, r1, 0, TAU); g.arc(CX, CY, r0, 0, TAU, true)
@@ -837,7 +782,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			if (own) { g.fillStyle = hatch(L.color, 0.3); g.fill() }
 			g.strokeStyle = ink(own ? 0.75 : 0.2)
 			g.lineWidth = own ? 1.1 : 0.6
-			// pressed: the band pinches where you press, outer edge in, inner edge out
 			const J = ringJelly[i], depth = J.s.x * ringT() * 0.28
 			wobble(g, CX, CY, r0, i * 3 + 11, own ? 0.9 : 0.6, { a: J.a, depth: -depth * 0.6, w: 0.3 }); g.stroke()
 			wobble(g, CX, CY, r1, i * 3 + 12, own ? 0.9 : 0.6, { a: J.a, depth, w: 0.32 }); g.stroke()
@@ -846,7 +790,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 				g.fillStyle = rgba(L.color, 0.28)
 				g.beginPath(); g.arc(CX, CY, r1, a0, a1); g.arc(CX, CY, r0, a1, a0, true); g.fill()
 			}
-			// what this ring held last loop, fading out as the hand comes round again
 			if (L.ghost && !moving) { g.globalAlpha = 0.3 * (1 - phase) ** 1.2; warp(L, r0, r1, L.ghost); g.globalAlpha = 1 }
 			warp(L, r0, r1)
 			if (!small()) {
@@ -860,7 +803,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			g.restore()
 		})
 
-		// hand: an ink needle with a vermilion bead; in the opening it grows out from the centre, last of all
 		if (handP > 0) {
 			const [x1, y1] = polar(pa, inner - 2), [x2, y2] = polar(pa, inner - 2 + (outer + 10 - inner) * handP)
 			g.strokeStyle = INK; g.lineWidth = 1.4; g.lineCap = 'round'
@@ -870,7 +812,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			g.strokeStyle = INK; g.lineWidth = 1; g.stroke()
 		}
 
-		// the centre stays bare paper with an etched rim; src/heart.js draws the machine's heart above it on its own canvas
 		g.strokeStyle = ink(0.8); g.lineWidth = 1.1
 		wobble(g, CX, CY, porthole(), 21, 0.8); g.stroke()
 		g.strokeStyle = ink(0.15); g.lineWidth = 0.5
@@ -878,7 +819,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 
 		g.restore()
 
-		// the players arrive one after another, each badge popping in on a spring
 		seats.forEach((L, i) => {
 			const sp = seatP(i)
 			if (sp === 0) return
@@ -901,8 +841,7 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		if (img.complete && img.naturalWidth) g.drawImage(img, x - r * 0.72, y - r * 0.72, r * 1.44, r * 1.44)
 	}
 	let broom = null
-	// after one sweep of your own ring, the rings a second sweep would take glow for a moment
-	let offer = null // { seats, t0, ms }
+	let offer = null
 	function drawOffer() {
 		if (!offer) return
 		const t = (performance.now() - offer.t0) / offer.ms
@@ -920,9 +859,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		g.restore()
 	}
 
-	// the thread you pull from your badge while handing your part over; robots that can take it ring dashed
-	// A hint, no words: now and then a ghost of the gesture plays itself. A small token in your colour slides
-	// from your badge to a robot's on a slack dashed thread, the robot's badge rings, and it all fades.
 	// Twice a session at most, and never again once you've handed a part over yourself.
 	let hint = null, hintsShown = 0, loopsSeated = 0
 	let hintOff = false
@@ -937,7 +873,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		if (loopsSeated !== 3 && loopsSeated !== 12) return
 		const targets = seats.map((_, j) => j).filter((j) => canHand?.(mine, j))
 		if (!targets.length) return
-		// the nearest robot round the dial
 		const [mx, my] = seatPos(mine)
 		const to = targets.sort((a, b) => Math.hypot(seatPos(a)[0] - mx, seatPos(a)[1] - my) - Math.hypot(seatPos(b)[0] - mx, seatPos(b)[1] - my))[0]
 		hint = { from: mine, to, t0: performance.now() }
@@ -951,7 +886,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		const go = Math.min(1, t / 1.3), e = go * go * (3 - 2 * go)
 		const fade = t < 2.2 ? 1 : 1 - (t - 2.2) / 1
 		const x = sx + (tx - sx) * e, y = sy + (ty - sy) * e, d = Math.hypot(x - sx, y - sy)
-		// the thread bows outward, away from the dial, like it's carried round the rim
 		const mx = (sx + x) / 2, my = (sy + y) / 2, om = Math.hypot(mx - CX, my - CY) || 1, bow = d * 0.22
 		g.save()
 		g.globalAlpha = 0.75 * fade
@@ -980,14 +914,12 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			wobble(g, x, y, r + 9, j * 11 + 5, 0.8); g.stroke()
 			g.setLineDash([])
 		})
-		// a slack ink thread that tightens as you pull
 		const dx = handing.x - sx, dy = handing.y - sy, d = Math.hypot(dx, dy)
 		const sag = Math.max(0, 40 - d * 0.12)
 		g.strokeStyle = INK; g.lineWidth = 1.3; g.lineCap = 'round'
 		g.beginPath(); g.moveTo(sx, sy)
 		g.quadraticCurveTo(sx + dx / 2, sy + dy / 2 + sag, handing.x, handing.y)
 		g.stroke()
-		// your colour, as a small paper token on the end of the thread
 		g.fillStyle = L.color
 		g.beginPath(); g.arc(handing.x, handing.y, r * 0.45, 0, TAU); g.fill()
 		g.strokeStyle = INK; g.lineWidth = 1.2; g.stroke()
@@ -1006,7 +938,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			// on the dark sheet a cursor is drawn pale, or it vanishes into the chamber
 			const pale = opts.mode === 'dial' && focus.on && c.seat === focus.seat && canFilter()
 			if (key === 'ghost') {
-				// the ghost hand showing an instrument's gesture: a soft fingertip, larger than a cursor
 				const r = Math.max(9, (S || 600) * 0.016)
 				g.globalAlpha = 0.35; g.fillStyle = L.color
 				g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill()
@@ -1027,7 +958,6 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		}
 	}
 
-	// canvas text needs the faces loaded; repaint once they are
 	document.fonts?.load(serif(16)).then(() => document.fonts.load(serif(16, 600, false))).then(() => document.fonts.load('600 16px Syne')).catch(() => {}).finally(() => (fontsIn = true))
 
 	addEventListener('resize', resize)
@@ -1042,17 +972,13 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		repaint: () => paintBackdrop(bg, G),
 		setGround,
 		setFocus,
-		// true while zooming in or out; a cue for anything expensive to rest for half a second
 		get moving() { return moving },
 		get handHint() { return hint },
-		// glow these rings for ms: what a second tap of the broom would sweep
 		offerSweep: (list, ms) => (offer = list.length ? { seats: list, t0: performance.now(), ms } : null),
-		nudge: () => { const i = seats.findIndex((_, j) => canDraw(j)); if (i >= 0) { nudge = null; nudgeOff = false; loopsSeated = 2; maybeNudge(i) } }, // play the badge nudge now (debug) // the wordless drag-to-robot hint while it plays (tests)
+		nudge: () => { const i = seats.findIndex((_, j) => canDraw(j)); if (i >= 0) { nudge = null; nudgeOff = false; loopsSeated = 2; maybeNudge(i) } },
 		// how far the sheet is still off to the right, in px (0 when it has arrived); DOM chrome on the sheet rides with it
 		get sheetShift() { return sheetSeat < 0 ? Infinity : (1 - eBar()) * slideDist() },
-		// zoom tuning (debug panel): the live knobs, their defaults, and a hook to apply a change
 		zoom: Z, zoomDefaults: ZOOM_DEFAULTS, easeNames: [...Object.keys(EASES), 'custom'],
-		// the opening's timings (debug panel): live knobs, defaults, a way to save them and to watch it again
 		intro: INTRO, introDefaults: INTRO_DEFAULTS,
 		introChanged() { try { localStorage.setItem('roughjam.intro', JSON.stringify(INTRO)) } catch {} },
 		replayIntro() { introT0 = performance.now(); seatsAt = []; menuUp = false; document.body.classList.add('intro') },
@@ -1060,10 +986,10 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		get focus() { return { ...focus, sheet: focus.on ? { ...sheet } : null } },
 		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
 		ground: () => ({ ...(G2 || G) }),
-		// the bare disc inside the innermost ring, CSS px; null in strips mode
 		heat: () => heat,
 		// a seat badge on screen, CSS px
 		seatAt: (i) => { const [x, y] = seatPos(i); return { x, y, r: seatR() } },
+		// the bare disc inside the innermost ring, CSS px; null in strips mode
 		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER } : null),
 		resize,
 	}

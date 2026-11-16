@@ -1,21 +1,5 @@
-// Heart: the machine's centrepiece. A Möbius band of Gaussian splats turning round a stippled eye.
-//
-// Self-contained: owns a WebGL2 canvas layered over the view, reads only the shared clock and the seats' audio.
-//   const heart = createHeart({ engine, geom: () => view.center() })   // geom -> {x, y, r} in CSS px, or null to hide
-//   heart.addGui(gui)                                                   // lil-gui folder
-//   heart.setGround('#2b2142')                                          // or return {ground} from geom: adapts ink, highlight, blend
-//
-// What moves and why:
-//   comet    rides the band once per loop. The band has one side, so it comes home every second loop.
-//   band     breathes on the beat, ripples on the downbeat; hatching follows the light as it turns.
-//   motes    thrown off the comet whenever a seat sounds, in that seat's colour.
-//   chamber  a dark engraved well under the eye, so its light has something to glow against.
-//   eye      the core swells with the mix; its ink pupil tightens on low end. It looks at whoever just
-//            played (glance(seat, holdMs)), and holds on you while you draw.
-// Rotation and the comet come from the shared clock, so every seat sees the same heart.
-//
-// Splats are flat 3D Gaussians (centre + two tangent axes), projected to a 2D covariance in the vertex shader,
-// sorted back to front, and blended premultiplied so ink (over) and light (additive) share one pass.
+// Heart: a Möbius band of Gaussian splats turning round a stippled eye, on its own WebGL2 canvas.
+// geom() -> {x, y, r} in CSS px or null to hide. The comet comes home every second loop (one-sided band).
 
 const VS = `#version 300 es
 precision highp float;
@@ -79,27 +63,20 @@ const randn = () => (Math.random() + Math.random() + Math.random() + Math.random
 export function createHeart({ engine, geom, after = document.querySelector('canvas') }) {
 	const opts = {
 		on: true,
-		// placement and raster
 		scale: 0.86, reach: 2.2, pixel: 1.5, levels: 3, dither: 0.85,
 		// blend: 0 = pigment laid over the ground (paper), 1 = light added to it (dusk)
 		additive: 0,
-		// motion
 		spin: 0.22, tilt: 0.8, breathe: 0.22, ripple: 0.05,
-		// band
 		radius: 0.62, width: 0.26, hatch: 0.8, outline: 0.9, body: 0.6,
-		// reaction
 		sensitivity: 1, burst: 26, fling: 1, moteLife: 2, moteSize: 1, eye: 1, gaze: 0.17, shadow: 0.35,
-		// palette
 		ochre: '#e0a63a', rose: '#cf6f9a', violet: '#5a3f8e', cream: '#f3e8cf', ink: '#211a2e', shade: '#211a2e', comet: '#d24b2a', scratch: false,
-		// chamber: the heart's own ground, a dark engraved well that the eye glows in. Off = sit on the view's ground.
+		// chamber off = sit on the view's ground
 		chamber: true, well: '#211943', engrave: 0.2,
-		// counts (rebuild)
+		// counts: changing them rebuilds
 		nBody: 2400, nHatch: 1500, nEdge: 800, nComet: 220, nCore: 260, nMotes: 1400,
 	}
 	const stats = { splats: 0, ms: 0 }
 
-	// Tell the heart what it sits on and it picks its own line, highlight and blend.
-	// Light ground: dark ink laid over, highlights lift toward the ground. Dark ground: pale line, light added.
 	let ground = ''
 	function setGround(h, { ink = '#211a2e', pale = '#f3e8cf' } = {}) {
 		if (!/^#[0-9a-f]{6}$/i.test(h || '') || h === ground) return
@@ -109,7 +86,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		opts.ink = dark ? pale : ink
 		opts.cream = dark ? pale : mixHex(h, '#ffffff', 0.55)
 		opts.additive = dark ? 0.55 : 0
-		opts.scratch = dark // pale line on dark: hatch the lit side, like scratchboard
+		opts.scratch = dark
 		opts.shadow = dark ? 0.18 : 0.35
 		opts.shade = dark ? mixHex(h, '#000000', 0.35) : ink
 		gui?.controllersRecursive().forEach((c) => c.updateDisplay())
@@ -134,9 +111,9 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		wellKey = key
 		const pale = 'rgba(243,232,207,'
 		well.style.background = [
-			'radial-gradient(circle at 50% 47%, rgba(255,205,140,.20), rgba(255,205,140,0) 38%)', // warmth behind the iris
-			`repeating-radial-gradient(circle, ${pale}${(0.06 * e).toFixed(4)}) 0 1px, ${pale}0) 1px 6px)`, // engraved rings
-			`repeating-conic-gradient(${pale}${(0.045 * e).toFixed(4)}) 0 1deg, ${pale}0) 1deg 5deg)`, // and rays: guilloché
+			'radial-gradient(circle at 50% 47%, rgba(255,205,140,.20), rgba(255,205,140,0) 38%)',
+			`repeating-radial-gradient(circle, ${pale}${(0.06 * e).toFixed(4)}) 0 1px, ${pale}0) 1px 6px)`,
+			`repeating-conic-gradient(${pale}${(0.045 * e).toFixed(4)}) 0 1deg, ${pale}0) 1deg 5deg)`,
 			`radial-gradient(circle, ${mixHex(opts.well, '#ffffff', 0.14)} 0%, ${opts.well} 50%, ${mixHex(opts.well, '#000000', 0.55)} 100%)`,
 		].join(',')
 		well.style.boxShadow = `inset 0 0 0 1.5px ${mixHex(opts.well, '#000000', 0.6)}, inset 0 10px 26px rgba(0,0,0,.55)`
@@ -175,7 +152,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	gl.enable(gl.BLEND)
 	gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
-	/* ───────── static splat sets ───────── */
 	const BODY = 0, HATCH = 1, EDGE = 2
 	let band, comet, core, shade, motes, scratch, sorted, zs, order, cap
 	function build() {
@@ -191,10 +167,8 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			band.rnd[i] = Math.random()
 			band.size[i] = 0.7 + Math.random() * 0.6
 		}
-		// comet: a tail of offsets behind the head, bunched at the front
 		comet = { n: opts.nComet, lag: new Float32Array(opts.nComet), dw: new Float32Array(opts.nComet), rnd: new Float32Array(opts.nComet) }
 		for (let i = 0; i < comet.n; i++) { comet.lag[i] = Math.pow(Math.random(), 2.2) * 1.5; comet.dw[i] = randn() * 0.22; comet.rnd[i] = Math.random() }
-		// core: a Gaussian ball plus an ink pupil
 		const nPupil = Math.round(opts.nCore * 0.16)
 		core = { n: opts.nCore + nPupil, nGlow: opts.nCore, p: new Float32Array((opts.nCore + nPupil) * 3), rnd: new Float32Array(opts.nCore + nPupil) }
 		for (let i = 0; i < core.n; i++) { for (let k = 0; k < 3; k++) core.p[i * 3 + k] = randn(); core.rnd[i] = Math.random() }
@@ -226,7 +200,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		count++
 	}
 
-	/* ───────── listening ───────── */
 	const { clock } = engine.transport
 	const taps = engine.seats.map((L) => {
 		const an = engine.audio.createAnalyser()
@@ -255,13 +228,11 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		thump = Math.max(low * low, thump * Math.pow(0.01, dt))
 	}
 
-	/* ───────── motes ───────── */
 	const head = { p: [0, 0, 0], t: [1, 0, 0], n: [0, 0, 1] }
 
-	// gaze: the eye looks at whoever just played. A glance holds briefly so busy moments read as
-	// looking from one player to the next; after a quiet spell it drifts home.
+	// a glance holds briefly; after a quiet spell the eye drifts home
 	const gaze = { x: 0, y: 0, tx: 0, ty: 0, hold: 0, at: 0 }
-	// screen angle of a seat's seat, matching the view (first seat bottom-left, then round)
+	// matches the view: first seat bottom-left, then round
 	const seatAngle = (i) => (opts.seatAngle ? opts.seatAngle(i) : Math.PI * 0.75 - (i * TAU) / engine.seats.length)
 	function glance(i, holdMs = 280) {
 		const now = performance.now()
@@ -289,13 +260,12 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		}
 	}
 
-	/* ───────── frame ───────── */
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	const M = new Float64Array(9)
 	const LX = -0.45, LY = 0.66, LZ = 0.6
 	let last = performance.now(), raf = 0, side = 0, placed = '', wellU = 1
 
-	// cheap follow: move and scale the elements with CSS only, keeping the backing store and last render
+	// CSS only: keeps the backing store and last render
 	function follow(G) {
 		const size = Math.round(2 * G.r * opts.reach), wr = Math.max(8, Math.round(G.r * 0.9125 - 7))
 		canvas.style.width = canvas.style.height = size + 'px'
@@ -313,14 +283,13 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		canvas.style.transform = `translate(${Math.round(G.x - size / 2)}px, ${Math.round(G.y - size / 2)}px)`
 		if (canvas.width !== px) canvas.width = canvas.height = px
 		side = px
-		// the well sits just inside the dial's inner rims
 		const wr = Math.max(8, Math.round(G.r * 0.9125 - 7))
 		well.style.width = well.style.height = 2 * wr + 'px'
 		well.style.transform = `translate(${Math.round(G.x - wr)}px, ${Math.round(G.y - wr)}px)`
 		wellU = wr / (G.r * opts.scale)
 	}
 
-	// point on the band and its frame, in view space. w runs across the band; th + TAU with -w is the same point.
+	// w runs across the band; th + TAU with -w is the same point
 	const P = new Float64Array(9) // position, along, across
 	function bandAt(c, s, c2, s2, w, R, hw, lift) {
 		const rr = R + w * hw * c2, k = w * hw * 0.5
@@ -339,7 +308,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		const G = opts.on ? geom() : null
 		if (!G || !(G.r > 4)) { canvas.style.display = well.style.display = 'none'; last = now; return }
 		canvas.style.display = ''
-		// mid-zoom (geom.moving): no GL work and no reallocation, just let CSS carry the last frame along
+		// geom.moving: no GL work, let CSS carry the last frame
 		if (G.moving) { follow(G); last = now; return }
 		well.style.display = opts.chamber ? '' : 'none'
 		place(G)
@@ -353,10 +322,9 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		const bpb = pos?.loop.beatsPerBar || 4, total = pos ? bpb * pos.loop.bars : 8
 		const beats = pos ? pos.beats : T * 1.5
 		const beatEnv = Math.exp(-mod(beats, 1) * 5), barEnv = Math.exp(-mod(beats, bpb) * 2.2)
-		const phi = mod(beats / total, 2) * TAU // two loops per lap of the one-sided band
+		const phi = mod(beats / total, 2) * TAU // two loops per lap
 		listen(dt, now)
 
-		// rotation: spin on its own axis, tilted toward us, with a slow nod and roll
 		const slow = reduce ? 0.25 : 1
 		const sp = T * opts.spin * slow, tl = opts.tilt + 0.16 * Math.sin(T * 0.23 * slow), rl = 0.22 * Math.sin(T * 0.17 * slow)
 		const c = Math.cos(sp), s = Math.sin(sp), cb = Math.cos(tl), sb = Math.sin(tl), cr = Math.cos(rl), sr = Math.sin(rl)
@@ -372,14 +340,12 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		const rip = opts.ripple * (0.3 + barEnv + level)
 		count = 0
 
-		// shadow on the ground, drawn first
 		for (let i = 0; i < shade.n && !opts.chamber; i++) {
 			const sc = 0.62 * (1 - bob * 2)
 			put(-99, shade.x[i] * sc, -0.86 + shade.y[i] * 0.05, 0, 0.05 + shade.rnd[i] * 0.09, 0, 0, 0, 0.006, 0, shd[0] * 0.5, shd[1] * 0.5, shd[2] * 0.5, opts.shadow * (0.55 + 0.45 * shade.rnd[i]) * (1 - bob * 6), 0)
 		}
 
-		// band
-		const b = band
+const b = band
 		for (let i = 0; i < b.n; i++) {
 			const th = b.th[i], w = b.w[i], kind = b.kind[i]
 			bandAt(b.c[i], b.s[i], b.c2[i], b.s2[i], w, R, hw, lift)
@@ -388,7 +354,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			const d = rip * Math.sin(2.5 * th - T * 2.4)
 			const px = P[0] + nx * d, py = P[1] + ny * d, pz = P[2] + nz * d
 			const lit = Math.abs(nx * LX + ny * LY + nz * LZ)
-			// how close the comet is: short ahead, long behind, on its side of the band
 			let da = mod(headTh - th + Math.PI, TAU) - Math.PI
 			const near = Math.exp(-(da > 0 ? da * da * 2.2 : da * da * 60)) * Math.exp(-(w - headW) * (w - headW) * 1.6)
 			if (kind === BODY) {
@@ -405,7 +370,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 				const al = opts.hatch * Math.min(1, Math.max(0, (thr - (opts.scratch ? 1 - lit : lit)) * 6)) * (1 - near)
 				if (al < 0.01) continue
 				const len = hw * (0.25 + 0.3 * b.size[i]), tw = 0.0055
-				// strokes run across the band, leaning a little
 				const kx = wx + ax * 0.35, ky = wy + ay * 0.35, kz = wz + az * 0.35
 				put(pz + 0.004, px, py, pz, kx * len, ky * len, kz * len, ax * tw, ay * tw, az * tw, ink[0], ink[1], ink[2], al, 0)
 			} else {
@@ -414,7 +378,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			}
 		}
 
-		// comet, and the frame at its head for throwing motes
 		bandAt(Math.cos(headTh), Math.sin(headTh), Math.cos(headTh / 2), Math.sin(headTh / 2), headW, R, hw, lift)
 		head.p[0] = P[0]; head.p[1] = P[1]; head.p[2] = P[2]
 		head.t[0] = P[3]; head.t[1] = P[4]; head.t[2] = P[5]
@@ -429,7 +392,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 				cometC[0] + (cream[0] - cometC[0]) * m, cometC[1] + (cream[1] - cometC[1]) * m, cometC[2] + (cream[2] - cometC[2]) * m, (0.25 + 0.6 * fade) * (0.7 + 0.3 * comet.rnd[i]), add)
 		}
 
-		// eye: glow ball that swells with the mix, ink pupil that tightens on low end
 		const swell = opts.eye * (1 + 0.55 * level + 0.3 * barEnv)
 		if (now - gaze.at > 2600) { gaze.tx = Math.sin(T * 0.31) * opts.gaze * 0.25; gaze.ty = Math.sin(T * 0.23 + 1) * opts.gaze * 0.15 }
 		const gk = Math.min(1, dt * (now - gaze.at > 2600 ? 1.5 : 11))
@@ -438,7 +400,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			const glow = i < core.nGlow
 			const rad = glow ? 0.105 * swell : 0.034 * opts.eye * (1.25 - 0.7 * thump)
 			const ox = core.p[i * 3] * rad, oy = core.p[i * 3 + 1] * rad, oz = core.p[i * 3 + 2] * rad
-			const gz = glow ? 1 : 1.3 // the pupil leads the iris a little
+			const gz = glow ? 1 : 1.3
 			const x = M[0] * ox + M[1] * oy + M[2] * oz + gaze.x * gz, y = M[3] * ox + M[4] * oy + M[5] * oz + lift + gaze.y * gz, z = M[6] * ox + M[7] * oy + M[8] * oz
 			if (glow) {
 				const fl = 0.75 + 0.25 * Math.sin(T * 3.1 + core.rnd[i] * 40), sz = (0.022 + 0.03 * core.rnd[i]) * swell * fl
@@ -447,7 +409,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			} else put(z + 0.22, x, y, z, 0.018, 0, 0, 0, 0.018, 0, shd[0] * 0.6, shd[1] * 0.6, shd[2] * 0.6, 0.85, 0)
 		}
 
-		// motes: streaks along their velocity, dragging and curling round the axis
 		const m = motes, drag = Math.pow(0.35, dt)
 		for (let i = 0; i < m.n; i++) {
 			if (m.life[i] <= 0) continue
@@ -464,7 +425,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			put(z, x, y, z, (vx / sp) * len, (vy / sp) * len, (vz / sp) * len, -vy * il * th, vx * il * th, 0, m.col[o] + (cream[0] - m.col[o]) * inw, m.col[o + 1] + (cream[1] - m.col[o + 1]) * inw, m.col[o + 2] + (cream[2] - m.col[o + 2]) * inw, Math.min(1, f * 2.2) * 0.9, opts.chamber ? add * (0.15 + 2.4 * inw) : add)
 		}
 
-		// back to front, then one instanced draw
+		// sorted back to front: blending is order dependent
 		const ord = order.subarray(0, count)
 		ord.sort((a, b) => zs[a] - zs[b])
 		for (let k = 0; k < count; k++) {

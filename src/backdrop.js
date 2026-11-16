@@ -1,14 +1,5 @@
-// Backdrop: the landscape, painted in the heart's hand. Same scene as before (sky, sun, two hills, trees,
-// field, grass bank, long shadow) and the same ground palettes, but made the way the eye is made:
-// tones are ordered-dithered between a few pigments, edges grow a fur of short strokes, crests get a
-// thin scratched rim, and light is a Gaussian that breaks into stipple.
-//
-// Everything here runs once per resize or ground change, on a small raster (one cell per `px` CSS pixels)
-// that is scaled up unsmoothed. Nothing here runs per frame; the view just blits the result.
-//
-//   paintLandscape(canvas, { W, H, DPR, hy, G, dial }) fill canvas (W*DPR x H*DPR) for ground G, horizon at hy;
-//                                                      dial {x, y, r} is kept free of strokes
-//   makeWisps(G)                                      -> [[frames...], ...] small squiggle sprites that drift in the sky
+// Backdrop: the landscape, painted in the heart's hand (dithered tones, fur strokes, stipple).
+// Runs per resize or ground change, never per frame, on a small raster (`px` CSS px per cell) scaled up unsmoothed.
 
 const TAU = Math.PI * 2
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16)
@@ -27,7 +18,6 @@ function rng(seed) {
 	return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
 }
 
-// smooth value noise, 0..1
 function noise2(x, y) {
 	const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi
 	const h = (i, j) => { let n = (i * 374761393 + j * 668265263) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296 }
@@ -35,10 +25,10 @@ function noise2(x, y) {
 	return (h(xi, yi) * (1 - u) + h(xi + 1, yi) * u) * (1 - v) + (h(xi, yi + 1) * (1 - u) + h(xi + 1, yi + 1) * u) * v
 }
 
-// A small premultiplied RGBA raster with one tool: the dithered anisotropic Gaussian stroke.
+// Premultiplied RGBA raster.
 function raster(w, h) {
 	const d = new Float32Array(w * h * 4)
-	// centre, direction, sigma along and across, colour, alpha; add = light added instead of pigment laid over
+	// add = light added instead of pigment laid over
 	function stroke(cx, cy, ang, sl, ss, c, alpha, add = false, levels = 3) {
 		sl = Math.max(0.45, sl); ss = Math.max(0.45, ss)
 		const co = Math.cos(ang), si = Math.sin(ang)
@@ -65,7 +55,7 @@ function raster(w, h) {
 		cv.width = w; cv.height = h
 		const im = new ImageData(w, h), p = im.data
 		for (let i = 0; i < w * h; i++) {
-			const a = d[i * 4 + 3], k = a > 0 ? 255 / a : 0 // unpremultiply
+			const a = d[i * 4 + 3], k = a > 0 ? 255 / a : 0
 			p[i * 4] = d[i * 4] * k; p[i * 4 + 1] = d[i * 4 + 1] * k; p[i * 4 + 2] = d[i * 4 + 2] * k; p[i * 4 + 3] = a * 255
 		}
 		cv.getContext('2d').putImageData(im, 0, 0)
@@ -77,7 +67,7 @@ function raster(w, h) {
 export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 	const w = Math.ceil(W / px), h = Math.ceil(H / px), hz = hy / px
 	const r = raster(w, h), d = r.d, R = rng(7)
-	// the dial is a translucent lens: under it the land keeps its tones but drops its strokes, so notes read
+	// under the dial the land keeps its tones but drops its strokes, so notes read
 	if (dial) {
 		const raw = r.stroke, dx = dial.x / px, dy = dial.y / px, dr = dial.r / px
 		r.stroke = (cx, cy, ang, sl, ss, c, alpha, add, levels) => {
@@ -85,14 +75,13 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 			if (q > 0) raw(cx, cy, ang, sl, ss, c, alpha * q * q, add, levels)
 		}
 	}
-	const k = Math.max(0.35, Math.min(2, (w * h) / 256000)) // stroke counts follow the area
+	const k = Math.max(0.35, Math.min(2, (w * h) / 256000))
 	const sky = G.sky.map(col), sun = col(G.sun), far = col(G.far), near = col(G.near), trees = col(G.trees)
 	const field = col(G.field), furrow = col(G.furrow), grass = col(G.grass), grassInk = col(G.grassInk), shadow = col(G.shadow), line = col(G.line)
 	const pale = G.dark ? col(G.paper) : mix(sky[2], [1, 1, 1], 0.6)
-	const rim = G.dark ? mix(pale, sun, 0.3) : trees // the scratched line along a crest: pale on dark grounds, ink on light
+	const rim = G.dark ? mix(pale, sun, 0.3) : trees
 	const sunX = w * 0.86, sunY = hz - h * 0.2, sunR = Math.max(6, Math.min(w, h) * 0.035)
 
-	// the lie of the land, one height per column
 	const bump = (x, b) => b.reduce((y, [cx, bw, bh]) => y - bh * Math.exp(-(((x / w - cx) / bw) ** 2)), 0)
 	const yFar = new Float32Array(w), yNear = new Float32Array(w), yField = new Float32Array(w), yGrass = new Float32Array(w), yShade = new Float32Array(w)
 	const bez = (p0, p1, p2, p3, out, from = -Infinity) => {
@@ -115,7 +104,7 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 	bez([-5, h * 0.84], [w * 0.3, h * 0.8], [w * 0.6, h * 0.9], [w + 5, hz + h * 0.1], yGrass)
 	bez([w * 0.55, h + 5], [w * 0.7, h * 0.9], [w * 0.85, h * 0.86], [w + 5, h * 0.8], yShade, w * 0.55)
 
-	// tone ramps, dark to light; a pixel's tone picks between neighbours through the Bayer matrix
+	// tone ramps, dark to light
 	const ramps = {
 		sky: [sky[0], mix(sky[0], sky[1], 0.5), sky[1], mix(sky[1], sky[2], 0.5), sky[2], mix(sky[2], sun, 0.45)],
 		far: [mix(far, trees, 0.5), mix(far, trees, 0.2), far, mix(far, sky[2], 0.4), mix(far, sun, 0.45)],
@@ -152,14 +141,13 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 	}
 
 	const up = -Math.PI / 2
-	const light = G.dark // on dark grounds glow is added light; on light ones it is pigment
-	// sky: stars, long wisps, and the wandering line dissolving into stipple
+	const light = G.dark // dark grounds: glow is added light, not pigment
 	if (G.dark) for (let i = 0; i < 110 * k; i++) { const x = R() * w, y = R() * R() * hz * 0.8; if (y < yFar[x | 0] - 4) r.stroke(x, y, 0, 0.45, 0.45, pale, 0.25 + R() * 0.5, true, 2) }
 	for (let i = 0; i < 12 * k; i++) {
 		const cx = R() * w, cy = h * 0.04 + R() * (hz - h * 0.28), tilt = (R() - 0.5) * 0.25, c = mix(sky[2], R() < 0.5 ? sun : pale, 0.35 + R() * 0.3)
 		for (let j = 0, n = 10 + R() * 22; j < n; j++) {
 			const x = cx + (R() - 0.5) * 90, y = cy + (x - cx) * tilt * 0.4 + (R() - 0.5) * 9
-			if (x * px < 300 && y * px < 220) continue // keep the title's corner calm
+			if (x * px < 300 && y * px < 220) continue // title's corner
 			if (y < yFar[clamp(x | 0, 0, w - 1)] - 3) r.stroke(x, y, tilt + (R() - 0.5) * 0.15, 5 + R() * 16, 0.5 + R() * 0.4, c, 0.08 + R() * 0.2, light)
 		}
 	}
@@ -177,7 +165,6 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 			if (al > 0.02) r.stroke(x, y, a, 1.1, 0.45, line, al, false, 2)
 		}
 	}
-	// sun: a halo, a core, and lashes, the way the iris is built
 	r.stroke(sunX, sunY, 0, sunR * 2.4, sunR * 2.4, sun, 0.3, light, 4)
 	for (let i = 0; i < 90; i++) {
 		const a = R() * TAU, rr = sunR * (1.15 + R() * 1.5)
@@ -186,7 +173,6 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 	r.stroke(sunX, sunY, 0, sunR * 0.62, sunR * 0.62, sun, 1, false, 4)
 	r.stroke(sunX - sunR * 0.15, sunY - sunR * 0.15, 0, sunR * 0.3, sunR * 0.3, mix(sun, pale, 0.6), 0.7, light, 3)
 
-	// a crest: fur of short strokes standing off it, then the scratched rim along it
 	function crest(ys, x0, x1, body, lift, furA, rimA) {
 		for (let x = x0; x < x1; x += 0.7) {
 			const xi = clamp(x | 0, 1, w - 2), y = ys[xi], tan = Math.atan2(ys[xi + 1] - ys[xi - 1], 2)
@@ -195,7 +181,6 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 			if (rimA && R() < 0.8) r.stroke(x, y, tan, 1.6, 0.45, rim, rimA * (0.5 + 0.5 * noise2(x * 0.05, 1.7)), false, 2)
 		}
 	}
-	// cross-hatching inside a region, where it is in shade
 	function hatch(n, top, bottom, ang, c, a, len) {
 		for (let i = 0; i < n; i++) {
 			const x = R() * w, xi = x | 0, t0 = top[xi], b0 = Math.min(bottom[xi], h)
@@ -209,7 +194,6 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 	crest(yFar, 0, w, far, G.dark ? sky[2] : pale, 0.55, 0.75)
 	hatch(260 * k, yNear, yField, 0.95, trees, 0.45, 3)
 	crest(yNear, 0, w, near, far, 0.5, 0.45)
-	// trees: dark domes with a bristle on top and a lit edge toward the sun
 	for (let i = 0; i < 26; i++) {
 		const x = R() * w, y = hz + h * 0.02 - R() * h * 0.03, rr = (6 + R() * Math.max(10, Math.min(W, H) * 0.03)) / px
 		if (y < yNear[clamp(x | 0, 0, w - 1)] - rr) continue
@@ -220,7 +204,6 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 			r.stroke(x + ex, y + ey, a + (R() - 0.5) * 0.6, 0.8 + R() * 1.8, 0.45, lit ? mix(trees, rim, 0.3) : trees, lit ? 0.5 : 0.8)
 		}
 	}
-	// field: furrows drawn as broken strokes, stubble between them
 	for (let j = 1; j < 14; j++) {
 		const yy = (j * j * 1.6) / px
 		for (let x = -2; x < w + 2; x += 2.2) {
@@ -233,7 +216,6 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 		const x = R() * w, xi = x | 0, y = yField[xi] + R() * (Math.min(yGrass[xi], h) - yField[xi])
 		if (y < yGrass[xi]) r.stroke(x, y, up + (R() - 0.5) * 0.5, 0.8 + R() * 1.2, 0.45, mix(field, R() < 0.5 ? furrow : pale, 0.5), 0.35)
 	}
-	// grass: blades, a furred bank, and the long shadow hatched across it
 	crest(yGrass, 0, w, grass, mix(grass, sun, 0.4), 0.7, 0)
 	for (let i = 0; i < 2600 * k; i++) {
 		const x = R() * w, xi = x | 0, y = yGrass[xi] + R() * (h - yGrass[xi])
@@ -251,8 +233,7 @@ export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 	c.drawImage(r.toCanvas(), 0, 0, w, h, 0, 0, w * px * DPR, h * px * DPR)
 }
 
-// Squiggles for the sky: a soft head and a curling tail of strokes, a few frames each so they wriggle.
-// Low contrast on purpose: they are weather, not objects.
+// Sky squiggles, a few frames each. Low contrast on purpose: weather, not objects.
 export function makeWisps(G, { kinds = 3, frames = 4 } = {}) {
 	const sky = col(G.sky[1]), sun = col(G.sun), mark = col(G.mark), pale = G.dark ? col(G.paper) : mark
 	const body = G.dark ? mix(sky, pale, 0.5) : mix(sky, mark, 0.5), tip = G.dark ? mix(sun, pale, 0.4) : mix(sky, mark, 0.75)

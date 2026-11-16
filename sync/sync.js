@@ -1,12 +1,10 @@
 // roughjam sync client. One module, no deps.
-//
 //   const t = createTransport({ url: 'ws://host:8787', room: 'open', name: 'oskar', seat: 'bass' })
 //   t.on('apply', ({ seat, data, at }) => ...)   // fires LOOKAHEAD ms before `at` (server ms)
 //   const at = t.edit('bass', state)             // quantized to next bar, returns server ms
 //   t.seatAt('bass', serverMs)                   // what an audio scheduler should play at that time
 //   t.clock.now() / toLocal() / toAudio(ctx, t) / pos() / nextBar()
 //   t.debug()                                    // {connected, peers, rtt, offset, drift, jitter, ...}
-//
 // Every timestamp on the wire is server ms. Local time is performance.timeOrigin + performance.now(),
 // which is monotonic, unlike Date.now().
 
@@ -16,29 +14,27 @@ const SAMPLES = 24
 const localNow = () => performance.timeOrigin + performance.now()
 
 export function createClock() {
-	const samples = [] // {rtt, offset, local}
-	let offset = 0 // server - local, slewed
+	const samples = []
+	let offset = 0
 	let locked = false
-	const loops = [] // [{loop, from}] future loop changes queue behind the current one
+	const loops = []
 
 	function addSample(c0, s, c1) {
 		const rtt = c1 - c0
 		const raw = s - (c0 + c1) / 2
 		samples.push({ rtt, offset: raw, local: c1 })
 		if (samples.length > SAMPLES) samples.shift()
-		// Trust the fastest round trips: least queueing, most symmetric.
 		const minRtt = Math.min(...samples.map((x) => x.rtt))
 		const good = samples.filter((x) => x.rtt <= minRtt * 1.25 + 2).map((x) => x.offset).sort((a, b) => a - b)
 		const est = good[good.length >> 1]
 		if (!locked || Math.abs(est - offset) > 30) offset = est
-		else offset += Math.max(-1, Math.min(1, est - offset)) // slew ≤1ms per sample, no audible jumps
+		else offset += Math.max(-1, Math.min(1, est - offset))
 		if (samples.length >= 6) locked = true
 	}
 
 	const now = () => localNow() + offset
-	const toLocal = (serverMs) => serverMs - offset - performance.timeOrigin // -> performance.now() ms
+	const toLocal = (serverMs) => serverMs - offset - performance.timeOrigin
 	const fromLocal = (perfMs) => perfMs + performance.timeOrigin + offset
-	// AudioContext time for a server timestamp. Ignores output latency; instruments can subtract ctx.outputLatency.
 	const toAudio = (ctx, serverMs) => ctx.currentTime + (toLocal(serverMs) - performance.now()) / 1000
 
 	function setLoop(loop, from = -Infinity) {
@@ -48,7 +44,6 @@ export function createClock() {
 	function loopAt(t = now()) {
 		let cur = loops[0]?.loop
 		for (const l of loops) if (l.from <= t) cur = l.loop
-		// prune changes that are fully in the past
 		while (loops.length > 1 && loops[1].from <= t - 60_000) loops.shift()
 		return cur
 	}
@@ -72,8 +67,7 @@ export function createClock() {
 		const rtts = samples.map((x) => x.rtt)
 		const mean = rtts.reduce((a, b) => a + b, 0) / (rtts.length || 1)
 		const jitter = Math.sqrt(rtts.reduce((a, b) => a + (b - mean) ** 2, 0) / (rtts.length || 1))
-		// Drift: slope of raw offset vs local time across the sample window, in ms per minute.
-		// Only low-RTT samples, and only once the window spans 20s; before that jitter dominates the slope.
+		// Drift in ms per minute: slope of raw offset over low-RTT samples; needs a 20 s window or jitter dominates.
 		let drift = null
 		const minRtt = Math.min(...rtts)
 		const good = samples.filter((x) => x.rtt <= minRtt * 1.5 + 5)
@@ -87,7 +81,6 @@ export function createClock() {
 		return { rtt: rtts.length ? Math.min(...rtts) : null, rttLast: rtts.at(-1) ?? null, jitter, offset, drift, locked, samples: samples.length }
 	}
 
-	/** Adapter for the instruments' clock shape: {bpm, steps, startTime, pos()} in performance.now() ms. */
 	function instrumentClock(steps = 16) {
 		return {
 			get bpm() { return loopAt()?.bpm },
@@ -97,7 +90,6 @@ export function createClock() {
 		}
 	}
 
-	/** Loop changes scheduled but not yet in effect. */
 	const pending = (t = now()) => loops.filter((l) => l.from > t).map((l) => l.loop)
 
 	return { addSample, pending, now, toLocal, fromLocal, toAudio, setLoop, loopAt, pos, nextBar, nextLoop, stats, instrumentClock, beatMs, barMs, loopMs }
@@ -107,7 +99,7 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 	const clock = createClock()
 	const listeners = {}
 	const seats = {} // seat -> [{at, data, rev, from}] (short history so seatAt() can answer for near-future times)
-	const pending = new Map() // nonce -> {seat, data, at}
+	const pending = new Map()
 	const timers = new Set()
 	let ws = null, id = null, peers = [], connected = false, retry = 0, pingTimer = null, closed = false
 	let me = { name, seat, color }
@@ -117,7 +109,6 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 	const on = (ev, fn) => ((listeners[ev] ||= []).push(fn), () => (listeners[ev] = listeners[ev].filter((f) => f !== fn)))
 	const tx = (m) => { if (ws?.readyState === 1) { ws.send(JSON.stringify(m)); sent++ } }
 
-	// Solo default until the server answers: local clock, default loop.
 	clock.setLoop({ bpm: 96, beatsPerBar: 4, bars: 4, origin: Math.floor(localNow()) })
 
 	function schedule(serverMs, fn) {
@@ -144,13 +135,12 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 	function connect() {
 		if (!url || closed) return
 		const u = new URL(url, location.href)
-		u.searchParams.set('room', room) // the Worker routes rooms to Durable Objects by this
+		u.searchParams.set('room', room)
 		ws = new WebSocket(u)
 		ws.onopen = () => {
 			connected = true
 			retry = 0
 			tx({ t: 'hello', room, ...me })
-			// Burst of pings to lock fast, then a slow trickle to track drift.
 			let n = 0
 			const burst = () => { tx({ t: 'ping', c0: localNow() }); if (++n < 10) pingTimer = setTimeout(burst, 50); else pingTimer = setInterval(() => tx({ t: 'ping', c0: localNow() }), 1500) }
 			burst()
@@ -196,20 +186,18 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 	}
 	connect()
 
-	/** Quantize an edit to the next bar that's safely beyond network latency. Returns server ms. */
 	function edit(seat, data) {
 		const { rtt } = clock.stats()
 		const margin = Math.max(80, (rtt ?? 100) * 1.5 + 40) + LOOKAHEAD
 		const at = clock.nextBar(clock.now() + margin)
 		const nonce = Math.random().toString(36).slice(2)
 		pending.set(nonce, { seat, data, at })
-		record(seat, { at, data, rev: Infinity, from: id || 'me' }) // play our own edit even offline
+		record(seat, { at, data, rev: Infinity, from: id || 'me' })
 		tx({ t: 'edit', seat, data, at, nonce, proposed: at })
 		emit('pending', { seat, data, at })
 		return at
 	}
 
-	/** The seat data in effect at a given server time. Audio schedulers should call this per step. */
 	function seatAt(seat, t = clock.now()) {
 		const h = seats[seat]
 		if (!h) return undefined

@@ -17,18 +17,13 @@ function harmony(m, cur) {
 }
 
 /**
- * @param {object} io
- * @param {() => number} io.now
- * @param {(peerId: string, msg: object) => void} io.send
- * @param {() => Iterable<[string, object]>} io.peers  [peerId, info] pairs currently connected
- * @param {(peerId: string, info: object) => void} io.setPeer  store presence for a peer
- * @param {(state: object) => void} [io.persist]  called after loop/seat changes
+ * @param {object} io  {now, send(peerId, msg), peers() -> [peerId, info], setPeer(peerId, info), persist?(state)}
  * @param {object} [state]  previously persisted {loop, seats, seq}
  */
 export function createRoom(io, state = {}) {
 	const s = {
 		loop: state.loop || { bpm: 96, beatsPerBar: 4, bars: 4, origin: io.now() },
-		seats: state.seats || fromLanes(state.lanes), // seatId -> {owner, data, at, rev}
+		seats: state.seats || fromLanes(state.lanes),
 		seq: state.seq || 0,
 	}
 	const peerList = () => [...io.peers()].filter(([, p]) => p.joined).map(([id, p]) => ({ id, name: p.name, seat: p.seat, color: p.color, joinedAt: p.joinedAt }))
@@ -36,7 +31,6 @@ export function createRoom(io, state = {}) {
 	const save = () => io.persist?.({ loop: s.loop, seats: s.seats, seq: s.seq })
 
 	function message(id, m, info) {
-		// Pong first and fast so server work doesn't inflate RTT.
 		if (m.t === 'ping') return io.send(id, { t: 'pong', c0: m.c0, s: io.now() })
 
 		if (m.t === 'hello') {
@@ -54,7 +48,6 @@ export function createRoom(io, state = {}) {
 			io.setPeer(id, p)
 			broadcast({ t: 'peers', peers: peerList() })
 		} else if (m.t === 'edit') {
-			// Client proposes `at` (a bar boundary in server time). Never let it land in the past.
 			const at = Math.max(Number(m.at) || 0, io.now())
 			const seat = String(m.seat)
 			const rev = (s.seats[seat]?.rev || 0) + 1
@@ -62,18 +55,15 @@ export function createRoom(io, state = {}) {
 			broadcast({ t: 'edit', from: id, seat, data: m.data, at, rev, seq: ++s.seq, nonce: m.nonce, proposed: m.proposed })
 			save()
 		} else if (m.t === 'cursor') {
-			// Ephemeral, unquantized, not stored. Drawing feedback, not sound.
 			broadcast({ t: 'cursor', from: id, x: m.x, y: m.y, down: !!m.down, seat: m.seat, name: m.name }, id)
 		} else if (m.t === 'loop') {
-			// Tempo/length change lands on the next loop boundary; new origin = that boundary, so phase is continuous.
+			// Tempo/length change lands on the next loop boundary; the new origin is that boundary, so phase stays continuous.
 			const at = nextLoopBoundary(s.loop, io.now() + 150)
 			s.loop = {
 				bpm: clamp(Number(m.bpm) || s.loop.bpm, 30, 300),
 				beatsPerBar: clamp(Number(m.beatsPerBar) || s.loop.beatsPerBar, 1, 16),
 				bars: clamp(Number(m.bars) || s.loop.bars, 1, 64),
-				// the jam's harmony rides with the loop; clients fall back to A minor pentatonic, i III iv v
 				...harmony(m, s.loop),
-				// robots in empty seats, off unless someone turns them on
 				robots: typeof m.robots === 'boolean' ? m.robots : !!s.loop.robots,
 				origin: at,
 			}

@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// npm run new-instrument <name>
 // Writes src/instruments/<name>.js from a small working template and registers it.
-// Then open /?instrument=<name> to sit down with it.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -19,13 +17,11 @@ const file = join(dir, `${id}.js`)
 if (existsSync(file)) { console.error(`src/instruments/${id}.js already exists`); process.exit(1) }
 
 writeFileSync(file, `// ${name}: tap to drop a note. Across is time, up is pitch. Tap a note again to lift it.
-// A starting point: change the gesture, the sound and the drawing, keep the five parts.
-// The contract is in src/instruments/README.md.
 
 import { mtof, env, osc, rgba } from './lib/util.js'
 
-const SCALE = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22] // minor pentatonic, two octaves
-const ROOT = 57 // A3
+const SCALE = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22]
+const ROOT = 57
 
 export default {
 	id: '${id}',
@@ -37,7 +33,6 @@ export default {
 		shape: { value: 'triangle', options: ['sine', 'triangle', 'square', 'sawtooth'] },
 	},
 
-	// optional: robots call this to play your instrument, and an empty jam starts from sample()
 	generate: (steps) => ({ notes: Array.from({ length: 6 }, () => [Math.floor(Math.random() * steps), Math.floor(Math.random() * SCALE.length)]) }),
 	sample: (steps) => ({ notes: [[0, 0], [Math.floor(steps / 4), 4], [Math.floor(steps / 2), 2], [Math.floor((3 * steps) / 4), 6]] }),
 
@@ -46,7 +41,6 @@ export default {
 		let notes = [] // [step, degree]: the whole state, plain JSON
 
 		return {
-			// 1. serialize: everything a peer needs to hear and see what you drew
 			get state() { return { notes } },
 			setState(s) { notes = s?.notes ? s.notes.map((n) => [...n]) : [] },
 			clear() { notes = [] },
@@ -72,7 +66,6 @@ export default {
 				}
 			},
 
-			// 4. draw: shape is 'ring' (the thin strip wrapped round the dial) or 'sheet' (zoomed in, big)
 			frame(g, w, h, clock, shape) {
 				const n = clock.steps, pos = clock.pos()
 				if (shape === 'sheet') {
@@ -89,7 +82,6 @@ export default {
 				}
 			},
 
-			// 5. let go of anything you hold on to (timers, nodes)
 			dispose() {},
 		}
 	},

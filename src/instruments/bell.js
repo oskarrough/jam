@@ -1,4 +1,4 @@
-// Bell: draw a line; height is pitch. Five voices: glock, its own two-operator FM, marimba, celesta, music box.
+// Bell: draw a line; height is pitch. Voices: glock, FM, marimba, celesta, music box.
 
 import { stepline } from './lib/stepline.js'
 import { voice as jukebox } from './lib/voices.js'
@@ -11,7 +11,6 @@ function gen() {
 	return a
 }
 
-// the bell's own voice, from before the jukebox voices
 function fm({ audio: ac, out, params }, m, t) {
 	const f = mtof(m), g = ac.createGain(), mg = ac.createGain()
 	env(g, t, 0.002, 0.12, 1.5); g.connect(out)
@@ -28,6 +27,5 @@ export default stepline({
 	params: { ratio: { value: 3.5, min: 1, max: 8, step: 0.01 }, index: { value: 2.2, min: 0, max: 8, step: 0.1 } },
 	voices: [['glock', jukebox('glock', -10.7)], ['fm', fm], ['marimba', jukebox('marimba', -7.2)], ['celesta', jukebox('celesta', -12.0)], ['music box', jukebox('musicbox', -12.0)]],
 	generate: gen,
-	// chattery repeated notes: a question over A and C, an answer over D and E
 	sample: [3, -1, 3, -1, 3, -1, 2, -1, 1, -1, -1, -1, 1, -1, 2, -1, 3, -1, 3, -1, 4, -1, 3, -1, 2, -1, -1, -1, 1, -1, -1, -1, 2, -1, 2, -1, 2, -1, 1, -1, 0, -1, -1, -1, 1, -1, 2, -1, 3, -1, -1, -1, 2, -1, 1, -1, 0, -1, -1, -1, -1, -1, -1, -1],
 })

@@ -1,10 +1,5 @@
-// roughjam relay on Cloudflare: one Durable Object per room, static site from Workers assets.
-// Same protocol as server.js; both wrap room.js. Config: ../cloudflare.config.ts.
-//
-// WebSocket hibernation: sockets survive the object sleeping, presence rides on each socket's attachment,
-// and loop + seats persist to storage so a cold room comes back with its patterns.
-// Note: Date.now() in Workers advances only between I/O events. Inside webSocketMessage it is the time the
-// message was delivered, which is what an NTP-style pong wants.
+// roughjam relay on Cloudflare: one Durable Object per room, static site from Workers assets; wraps room.js.
+// Date.now() advances only between I/O events: in webSocketMessage it is the delivery time, which an NTP-style pong wants.
 
 import { DurableObject } from 'cloudflare:workers'
 import { createRoom, peerId } from './room.js'
@@ -35,7 +30,6 @@ export class JamRoom extends DurableObject {
 	}
 
 	async fetch(req) {
-		// Recordings reuse this class (one object per recording, no extra binding): PUT stores, GET reads.
 		if (req.headers.get('x-roughjam-rec')) {
 			if (req.method === 'PUT') { await this.ctx.storage.put('rec', await req.text()); return new Response(null, { status: 204 }) }
 			const rec = await this.ctx.storage.get('rec')
@@ -43,7 +37,7 @@ export class JamRoom extends DurableObject {
 		}
 		const { 0: client, 1: server } = new WebSocketPair()
 		const id = peerId()
-		this.ctx.acceptWebSocket(server, [id]) // tag = peer id, so socket(id) is a lookup
+		this.ctx.acceptWebSocket(server, [id])
 		server.serializeAttachment({ id, info: {} })
 		return new Response(null, { status: 101, webSocket: client })
 	}
@@ -77,10 +71,8 @@ export default {
 			const room = (new URL(req.url).searchParams.get('room') || 'open').slice(0, 64)
 			return env.ROOMS.get(env.ROOMS.idFromName(room)).fetch(req)
 		}
-		// The page probes this to find out it can go multiplayer. Reaches the Worker because no asset matches.
 		if (new URL(req.url).pathname.endsWith('/sync/relay')) return new Response(null, { status: 204, headers: { 'x-roughjam-relay': '1', 'cache-control': 'no-store' } })
 		const path = new URL(req.url).pathname
-		// recordings: POST /api/r -> {id}; GET /api/r/<id> -> the recording. Stored in a Durable Object per recording.
 		if (path === '/api/r' && req.method === 'POST') {
 			const body = await req.text()
 			if (body.length > MAX_REC) return new Response('too big', { status: 413 })
@@ -91,7 +83,6 @@ export default {
 		}
 		const r = path.match(/^\/api\/r\/([\w-]{4,32})$/)
 		if (r) return env.ROOMS.get(env.ROOMS.idFromName('rec/' + r[1])).fetch('https://rec/', { headers: { 'x-roughjam-rec': '1' } })
-		// /j/<name> is your own jam, /r/<id> a recording: serve the page with <base href="/"> so its relative asset paths still resolve.
 		const m = path.match(/^\/(j|r)\/([\w-]{1,48})(\/?)$/)
 		if (m && m[3]) return Response.redirect(new URL(`/${m[1]}/${m[2]}`, req.url), 301)
 		if (m) {

@@ -2,7 +2,7 @@
 // Checks: presence, clock agreement on the shared beat, quantized edit landing on the same bar for both.
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
-const { chromium } = createRequire(import.meta.url)('playwright') // global install ok, or npm i -D playwright
+const { chromium } = createRequire(import.meta.url)('playwright')
 
 const PORT = 8799, LAG = Number(process.env.LAG ?? 40), SKEW = 5000
 // BASE=http://localhost:8787 tests an already-running relay (e.g. `wrangler dev`) instead of spawning server.js.
@@ -30,8 +30,7 @@ console.log('alice', da, '\nbob  ', db)
 check(da.peers === 2 && db.peers === 2, 'both see 2 peers')
 check(Math.abs(db.offset + SKEW - da.offset) < 15, `bob's offset recovers his ${SKEW}ms skew (Δ ${(db.offset + SKEW - da.offset).toFixed(1)}ms)`)
 
-// Sample both clocks at the "same" wall instant: ask each for server-now relative to its own local reading.
-// Bob's Date.now() is real but his timeOrigin is fake, so (estimated server now − real now) should match Alice's.
+// Sample both clocks at the "same" instant. Bob's timeOrigin is fake, so (estimated server now - real now) should match Alice's.
 const [ta, tb] = await Promise.all([a, b].map((p) => p.evaluate(() => jam.clock.now() - Date.now())))
 check(Math.abs(ta - tb) < 20, `server-clock estimate agrees across peers (Δ ${(ta - tb).toFixed(1)}ms)`)
 
@@ -45,22 +44,19 @@ await new Promise((r) => setTimeout(r, wait))
 const [la, lb] = await Promise.all([a, b].map((p) => p.evaluate(() => JSON.stringify(jam.seatAt('bass')))))
 check(la === lb && la !== undefined, `both play the same bass pattern after the bar (waited ${wait.toFixed(0)}ms)`)
 
-// Tempo change lands on the next loop boundary for both.
 await a.evaluate(() => jam.setLoop({ bpm: 120 }))
 await new Promise((r) => setTimeout(r, 500))
 const loops = await Promise.all([a, b].map((p) => p.evaluate(() => { const c = jam.clock, f = c.nextLoop(c.now() + 20000); return c.loopAt(f).bpm })))
 check(loops[0] === 120 && loops[1] === 120, 'tempo change scheduled on both')
 
-// Late joiner gets state.
 const c = await open('carol', 'lead')
 await new Promise((r) => setTimeout(r, 800))
 check((await c.evaluate(() => JSON.stringify(jam.seatAt('bass')))) === la, 'late joiner gets current seats')
 
-// The real jam page (repo root) on the network transport.
 const jamPage = async (name, path) => {
 	const p = await (await browser.newContext()).newPage()
 	p.on('pageerror', (e) => console.error(name, e))
-	await p.goto(`${BASE}${path}?name=${name}`) // no ?ws: the page finds the same-origin relay itself
+	await p.goto(`${BASE}${path}?name=${name}`)
 	return p
 }
 const peersText = (p) => p.evaluate(() => [document.getElementById('peers')?.textContent, document.getElementById('jamline')?.textContent, jam.transport.peers.length])

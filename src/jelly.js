@@ -1,10 +1,4 @@
 // Jelly: things give where you press them, then spring back with a wobble.
-// The idea is borrowed from jelly-ui.com (soft-body controls), done small and our own way:
-// one damped spring per thing, and the deformation is aimed at the point you pressed.
-//
-//   spring()             a 0..1 spring: set .target, call .step(dt), read .x (overshoots on release)
-//   jellify(el)          DOM: squash the element toward the press point, wobble back on release
-//   dent(a, x)           for the canvas: a gaussian dip at angle a with depth x, for wobble() outlines
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -21,16 +15,13 @@ export function spring({ k = 520, c = 11 } = {}) {
 	return s
 }
 
-// angular dent: depth at angle t from a dent centred at a, width w radians
 export const dentAt = (t, a, w = 0.35) => {
 	let d = t - a
 	d = Math.atan2(Math.sin(d), Math.cos(d))
 	return Math.exp(-((d / w) ** 2))
 }
 
-// DOM: aim a squash along the line from the element's centre to the press point.
-// Pressing near an edge pushes that edge in and bulges the opposite side; pressing the
-// middle just squashes it down. Text and glyphs ride along, nothing is redrawn.
+// DOM: squash toward the press point; pressing the middle squashes down. Nothing is redrawn.
 export function jellify(el, { amount = 0.22 } = {}) {
 	const s = spring({ k: 600, c: 12 })
 	let ax = 0, ay = 0, raf = 0, last = 0
@@ -39,7 +30,6 @@ export function jellify(el, { amount = 0.22 } = {}) {
 		last = t
 		const x = s.step(dt)
 		const ang = Math.atan2(ay, ax), off = Math.min(1, Math.hypot(ax, ay))
-		// squash along the press axis, stretch across it; shift a little toward the press
 		const sq = 1 - amount * x * (0.5 + 0.5 * off), st = 1 + amount * 0.5 * x
 		const deg = (ang * 180) / Math.PI
 		el.style.transform = `translate(${ax * x * 3}px, ${ay * x * 3 + x * 2}px) rotate(${deg}deg) scale(${sq}, ${st}) rotate(${-deg}deg)`
@@ -55,7 +45,6 @@ export function jellify(el, { amount = 0.22 } = {}) {
 	el.addEventListener('pointerdown', (e) => { aim(e); s.target = 1; go() })
 	el.addEventListener('pointermove', (e) => { if (s.target) aim(e) })
 	for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) el.addEventListener(ev, () => { if (s.target) { s.target = 0; s.v -= 4; go() } })
-	// keyboard presses get a centred squash
 	el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { ax = ay = 0; s.target = 1; go(); setTimeout(() => { s.target = 0; go() }, 90) } })
 	return s
 }

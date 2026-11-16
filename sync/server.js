@@ -1,6 +1,5 @@
-// roughjam relay for Node. Same protocol as worker.js (Cloudflare); both wrap room.js.
-// Usage: PORT=8787 node sync/server.js   Serves the repo root statically, so / is the jam and /sync/ the sync demo.
-//        LAG=60 simulates 60 ms (±20%) one-way latency in both directions, for testing.
+// roughjam relay for Node; wraps room.js like worker.js.
+// PORT=8787 node sync/server.js also serves the repo root. LAG=60 fakes 60 ms (±20%) one-way latency.
 
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
@@ -14,7 +13,7 @@ const LAG = Number(process.env.LAG || 0)
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.md': 'text/plain', '.svg': 'image/svg+xml' }
 
-const recordings = new Map() // id -> json string (memory only; the Worker stores them for real)
+const recordings = new Map()
 const recId = () => Array.from({ length: 8 }, () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)]).join('')
 
 const http = createServer(async (req, res) => {
@@ -36,7 +35,6 @@ const http = createServer(async (req, res) => {
 		const body = await readFile(file)
 		res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' }).end(body)
 	} catch {
-		// /j/<name> is your own jam, /r/<id> a recording: serve the page with <base href="/">, as the Worker does.
 		const m = path.match(/^[/\\]([jr])[/\\]([\w-]{1,48})([/\\]?)$/)
 		if (m && m[3]) return res.writeHead(301, { location: `/${m[1]}/${m[2]}` }).end()
 		if (m) return res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' }).end(String(await readFile(join(ROOT, 'index.html'))).replace('<head>', '<head>\n<base href="/">'))
@@ -45,7 +43,7 @@ const http = createServer(async (req, res) => {
 })
 
 const later = (fn) => (LAG ? setTimeout(fn, LAG * (0.8 + Math.random() * 0.4)) : fn())
-const rooms = new Map() // roomId -> {room, sockets: Map<peerId, ws>, info: Map<peerId, info>}
+const rooms = new Map()
 
 function getRoom(roomId) {
 	if (!rooms.has(roomId)) {

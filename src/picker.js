@@ -1,8 +1,4 @@
-// Instrument strip: while you're zoomed into your instrument, every instrument sits above the sheet as a row
-// of drawn glyph tokens, one squiggle each. Tap one to swap your ring's instrument (it syncs like any edit).
-// The name of the current one, or whatever you point at, is set in italics at the end of the row.
-// An instrument with a choice of voices lists them in the sheet's top corner, small italics on the ink;
-// tap one to hear it (it syncs like any edit).
+// Instrument strip: while zoomed in, every instrument sits above the sheet as a drawn glyph; tap one to swap your ring's instrument.
 
 import { jellify } from './jelly.js'
 
@@ -77,7 +73,6 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		voices.hidden = !names.length
 		for (const b of voices.children) b.setAttribute('aria-pressed', b.textContent === L?.params.voice)
 	}
-	// j/k and the arrows walk your ring through every instrument, wrapping around
 	const ids = [...registry.keys()]
 	function cycle(d) {
 		const L = seat()
@@ -86,7 +81,6 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		choose(id)
 		return id
 	}
-	// mark the current one and keep it in view when the row scrolls (phones)
 	function paint() {
 		const L = seat()
 		if (!L) return

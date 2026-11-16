@@ -8,7 +8,6 @@ import { extname, join, normalize } from 'node:path'
 export const ROOT = new URL('../..', import.meta.url).pathname
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' }
 
-// Static files from the repo root; /j/<name> and /r/<id> fall back to index.html like the deployed worker.
 export function serve() {
 	const server = createServer(async (req, res) => {
 		let p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname))
@@ -22,7 +21,6 @@ export function serve() {
 	return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok({ url: `http://127.0.0.1:${server.address().port}`, close: () => server.close() })))
 }
 
-// Playwright from the project, else from the global install.
 export function playwright() {
 	const req = createRequire(import.meta.url)
 	try { return req('playwright') } catch {}
@@ -32,18 +30,18 @@ export function playwright() {
 }
 
 // A page that records every uncaught error and console.error. Relay 404s are expected with ?ws=off.
-export async function open(browser, url, { phone = false } = {}) {
-	const ctx = await browser.newContext(phone ? { ...playwright().devices['iPhone 13'] } : { viewport: { width: 1280, height: 860 } })
+// ready: wait for window.jam (the jam page); pass false for pages without it, like the lab.
+export async function open(browser, url, { phone = false, ready = true, small = false } = {}) {
+	const ctx = await browser.newContext(phone ? { ...playwright().devices['iPhone 13'] } : { viewport: small ? { width: 720, height: 520 } : { width: 1280, height: 860 } })
 	const page = await ctx.newPage()
 	page.errors = []
 	page.on('pageerror', (e) => page.errors.push(e.stack || e.message))
 	page.on('console', (m) => { if (m.type() === 'error' && !/404|WebSocket/.test(m.text())) page.errors.push(m.text()) })
 	await page.goto(url)
-	await page.waitForFunction(() => window.jam, null, { timeout: 10000 }).catch(() => {})
+	if (ready) await page.waitForFunction(() => window.jam, null, { timeout: 10000 }).catch(() => {})
 	return page
 }
 
-// Put an instrument with its starting pattern in my seat; zoom in for its sheet.
 export async function play(page, id, { sheet = false } = {}) {
 	await page.evaluate(({ id, sheet }) => {
 		const { engine, registry, me, view } = window.jam
@@ -52,5 +50,6 @@ export async function play(page, id, { sheet = false } = {}) {
 		engine.setInstrument(L, id, { state: (m.sample || m.generate)?.(engine.steps(), L.params) })
 		view.setFocus(sheet ? me.seat : -1)
 	}, { id, sheet })
-	await page.waitForTimeout(sheet ? 900 : 400)
+	await page.waitForFunction((sheet) => { const v = window.jam.view; return !v.moving && (sheet ? v.sheetShift === 0 : v.sheetShift === Infinity) }, sheet, { timeout: 5000 }).catch(() => {})
+	await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
 }
