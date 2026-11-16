@@ -39,6 +39,7 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `d` th
     src/engine.js           audio graph, lanes, lookahead scheduler on the shared clock
     src/view.js             the dial (lanes wrapped round rings) and a flat strips view
     src/heart.js            the centrepiece: a Möbius band of Gaussian splats, driven by the clock and the music
+    src/backdrop.js         the landscape and sky squiggles, painted once per resize in the heart's dithered, stroked hand
     src/picker.js           the glyph sheet for choosing your instrument
     src/jelly.js            the springy presses on buttons and badges
     src/bots.js             the robots

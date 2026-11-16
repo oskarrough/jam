@@ -8,6 +8,7 @@
 import { rgba } from './instruments/util.js'
 import { INK, SERIF, GROUNDS } from './palette.js'
 import { spring, dentAt } from './jelly.js'
+import { paintLandscape, makeWisps } from './backdrop.js'
 
 const TAU = Math.PI * 2
 const VERMILION = '#d64a28'
@@ -223,52 +224,6 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		c.closePath()
 	}
 
-	// ridge line from summed bumps, filled down to the bottom
-	function ridge(c, base, bumps, rough, R, color) {
-		c.fillStyle = color
-		c.beginPath()
-		c.moveTo(-10, H + 10)
-		const ph = R() * 10
-		for (let x = -10; x <= W + 10; x += 6) {
-			let y = base
-			for (const [cx, w, h] of bumps) y -= h * Math.exp(-(((x / W - cx) / w) ** 2))
-			y += Math.sin(x * 0.013 + ph) * rough + Math.sin(x * 0.041 + ph * 2) * rough * 0.4
-			c.lineTo(x, y)
-		}
-		c.lineTo(W + 10, H + 10)
-		c.closePath()
-		c.fill()
-	}
-
-	// Mortensen-ish automatism: one thin line drifting across the sky, curling back on itself now and then
-	function wanderingLine(c, R, y0, y1) {
-		let x = -10, y = (y0 + y1) / 2, a = 0, da = 0
-		const step = 3
-		c.beginPath()
-		c.moveTo(x, y)
-		for (let k = 0; k < 4000 && x < W + 10; k++) {
-			da = da * 0.95 + (R() - 0.5) * 0.025
-			if (R() < 0.0015) da += (R() < 0.5 ? -1 : 1) * 0.35 // a loop
-			a += da
-			a -= Math.sin(a) * 0.01 // keep heading east, mostly
-			if (y < y0) a += 0.05
-			if (y > y1) a -= 0.05
-			x += Math.cos(a) * step
-			y += Math.sin(a) * step
-			c.lineTo(x, y)
-		}
-		c.stroke()
-	}
-
-	function crescent(c, x, y, r, rot, thick) {
-		c.save(); c.translate(x, y); c.rotate(rot)
-		c.beginPath()
-		c.arc(0, 0, r, -Math.PI * 0.85, Math.PI * 0.85)
-		c.quadraticCurveTo(r * (1 - thick * 2.2), 0, Math.cos(-Math.PI * 0.85) * r, Math.sin(-Math.PI * 0.85) * r)
-		c.fill()
-		c.restore()
-	}
-
 	function paintBackdrop(cv, G) {
 		cv.width = W * DPR
 		cv.height = H * DPR
@@ -283,65 +238,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		c.fillRect(0, 0, W, H)
 		if (!opts.landscape) { c.fillStyle = G.paper; c.fillRect(0, 0, W, H); paintGrain(c); return }
 
-		// low flamingo sun, and a couple of black crescents floating where birds would be
-		c.fillStyle = G.sun
-		c.beginPath(); c.arc(W * 0.86, hy - H * 0.2, Math.max(14, Math.min(W, H) * 0.035), 0, TAU); c.fill()
-		// the wandering line
-		c.strokeStyle = G.line; c.lineWidth = 0.9; c.lineJoin = 'round'; c.lineCap = 'round'
-		wanderingLine(c, R, Math.max(H * 0.26, hy - H * 0.34), hy - H * 0.16)
-
-		// hills: far lilac, near violet, then a dark band of rounded tree masses
-		ridge(c, hy, [[0.22, 0.28, H * 0.24], [0.78, 0.18, H * 0.09], [1.02, 0.12, H * 0.14]], 3, R, G.far)
-		// flat shadow plane on the far hill
-		c.fillStyle = G.farShade
-		c.beginPath(); c.moveTo(W * 0.3, hy - H * 0.21); c.lineTo(W * 0.62, hy - H * 0.02); c.lineTo(W * 0.3, hy); c.closePath(); c.fill()
-		ridge(c, hy + H * 0.02, [[0.65, 0.22, H * 0.1], [0.05, 0.1, H * 0.05]], 2, R, G.near)
-		c.fillStyle = G.trees
-		for (let k = 0; k < 26; k++) {
-			const x = R() * W, y = hy + H * 0.02 - R() * H * 0.03, r = 6 + R() * Math.max(10, S * 0.03)
-			c.beginPath(); c.ellipse(x, y, r * 1.1, r, 0, Math.PI, TAU); c.fill()
-		}
-
-		// fields: ochre, then a green bank cut on a diagonal, then a long violet shadow
-		c.fillStyle = G.field
-		c.beginPath(); c.moveTo(-10, hy + H * 0.02)
-		for (let x = -10; x <= W + 10; x += 20) c.lineTo(x, hy + H * 0.02 + Math.sin(x * 0.01) * 3)
-		c.lineTo(W + 10, H + 10); c.lineTo(-10, H + 10); c.closePath(); c.fill()
-		// etched furrows
-		c.strokeStyle = G.furrow; c.lineWidth = 0.8
-		for (let k = 1; k < 14; k++) {
-			const y = hy + H * 0.02 + k * k * 1.6
-			c.beginPath(); c.moveTo(-10, y); c.bezierCurveTo(W * 0.3, y - 4, W * 0.7, y + 6, W + 10, y + 2); c.stroke()
-		}
-		c.fillStyle = G.grass
-		c.beginPath(); c.moveTo(-10, H * 0.84); c.bezierCurveTo(W * 0.3, H * 0.8, W * 0.6, H * 0.9, W + 10, hy + H * 0.1); c.lineTo(W + 10, H + 10); c.lineTo(-10, H + 10); c.closePath(); c.fill()
-		c.fillStyle = G.shadow
-		c.beginPath(); c.moveTo(W * 0.55, H + 10); c.bezierCurveTo(W * 0.7, H * 0.9, W * 0.85, H * 0.86, W + 10, H * 0.8); c.lineTo(W + 10, H + 10); c.closePath(); c.fill()
-		// grass hatching
-		c.strokeStyle = G.grassInk; c.lineWidth = 0.8
-		for (let k = 0; k < 240; k++) {
-			const x = R() * W, y = H * 0.86 + R() * H * 0.16, h = 4 + R() * 7
-			c.beginPath(); c.moveTo(x, y); c.lineTo(x + 1.5, y - h); c.stroke()
-		}
-
-		// collage scraps: an engineer's grid and a circuit trace, half buried in the field
-		c.save()
-		c.translate(W * 0.06, H * 0.74); c.rotate(-0.06)
-		const gs = Math.max(9, S * 0.018)
-		c.strokeStyle = G.dark ? G.line : ink(0.55); c.lineWidth = 0.7
-		for (let k = 0; k <= 6; k++) { c.beginPath(); c.moveTo(k * gs, 0); c.lineTo(k * gs, gs * 4); c.stroke() }
-		for (let k = 0; k <= 4; k++) { c.beginPath(); c.moveTo(0, k * gs); c.lineTo(gs * 6, k * gs); c.stroke() }
-		c.fillStyle = G.scrap
-		for (let k = 0; k < 9; k++) { c.beginPath(); c.arc((1 + (k % 3)) * gs + gs * 0.5, (1 + Math.floor(k / 3)) * gs - gs * 0.5, gs * 0.38, 0, TAU); c.fill() }
-		c.restore()
-		c.strokeStyle = VERMILION; c.lineWidth = 2; c.fillStyle = VERMILION
-		const tx = W * 0.9, ty = H * 0.62, u = Math.max(10, S * 0.02)
-		for (let k = 0; k < 4; k++) {
-			c.beginPath(); c.moveTo(tx + k * u * 0.7, ty); c.lineTo(tx + k * u * 0.7, ty + u * (1.2 + k * 0.5)); c.lineTo(tx + k * u * 0.7 - u, ty + u * (2 + k * 0.5)); c.stroke()
-			c.beginPath(); c.arc(tx + k * u * 0.7, ty, 2.4, 0, TAU); c.fill()
-		}
-
-		paintGrain(c)
+		// the landscape itself is painted in the heart's hand: see backdrop.js
+		paintLandscape(cv, { W, H, DPR, hy, G })
 	}
 
 	function paintGrain(c) {
@@ -454,17 +352,21 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		paintBackdrop(bg, G); applyCss()
 	}
 
-	// black crescents adrift in the sky, slow as weather; they keep clear of the dial
+	// squiggles adrift in the sky, slow as weather; they keep clear of the dial. Sprites from backdrop.js, remade per ground.
 	const drifters = Array.from({ length: 5 }, (_, k) => ({ u: (k * 0.23 + 0.07) % 1, v: 0.08 + ((k * 0.37) % 0.3), s: 0.6 + ((k * 0.61) % 0.8), sp: 0.4 + ((k * 0.29) % 0.6), rot: k * 1.3 }))
+	let wisps = null, wispsFor = null
 	function drawDrifters(t) {
+		if (wispsFor !== G) { wisps = makeWisps(G); wispsFor = G }
 		const T = reduce ? 0 : t / 1000
-		g.fillStyle = G.mark
-		for (const d of drifters) {
+		g.imageSmoothingEnabled = false
+		drifters.forEach((d, k) => {
 			const x = ((d.u + T * 0.004 * d.sp) % 1.1) * (W + 60) - 30, y = d.v * H + Math.sin(T * 0.3 * d.sp + d.rot) * 8
-			if (opts.mode === 'dial' && Math.hypot(x - CX, y - CY) < medallion() + 50) continue
-			if (x < 260 && y < 200) continue // not over the title
-			crescent(g, x, y, Math.max(5, S * 0.014) * d.s, d.rot + Math.sin(T * 0.2 + d.rot) * 0.4, 0.35)
-		}
+			if (opts.mode === 'dial' && Math.hypot(x - CX, y - CY) < medallion() + 50) return
+			if (x < 260 && y < 200) return // not over the title
+			const set = wisps[k % wisps.length], im = set[Math.floor(T * 3 * d.sp + k) % set.length], z = 2 * (0.8 + d.s * 0.4)
+			g.drawImage(im, Math.round(x - im.width * z), Math.round(y - (im.height * z) / 2), Math.round(im.width * z), Math.round(im.height * z))
+		})
+		g.imageSmoothingEnabled = true
 	}
 
 

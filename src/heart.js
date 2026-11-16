@@ -10,7 +10,8 @@
 //   band     breathes on the beat, ripples on the downbeat; hatching follows the light as it turns.
 //   motes    thrown off the comet whenever a lane sounds, in that lane's colour.
 //   chamber  a dark engraved well under the eye, so its light has something to glow against.
-//   eye      the core swells with the mix; its ink pupil tightens on low end.
+//   eye      the core swells with the mix; its ink pupil tightens on low end. It looks at whoever just
+//            played (glance(lane, holdMs)), and holds on you while you draw.
 // Rotation and the comet come from the shared clock, so every seat sees the same heart.
 //
 // Splats are flat 3D Gaussians (centre + two tangent axes), projected to a 2D covariance in the vertex shader,
@@ -87,7 +88,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		// band
 		radius: 0.62, width: 0.26, hatch: 0.8, outline: 0.9, body: 0.6,
 		// reaction
-		sensitivity: 1, burst: 26, fling: 1, moteLife: 2, moteSize: 1, eye: 1, shadow: 0.35,
+		sensitivity: 1, burst: 26, fling: 1, moteLife: 2, moteSize: 1, eye: 1, gaze: 0.17, shadow: 0.35,
 		// palette
 		ochre: '#e0a63a', rose: '#cf6f9a', violet: '#5a3f8e', cream: '#f3e8cf', ink: '#211a2e', shade: '#211a2e', comet: '#d24b2a', scratch: false,
 		// chamber: the heart's own ground, a dark engraved well that the eye glows in. Off = sit on the view's ground.
@@ -256,7 +257,21 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 
 	/* ───────── motes ───────── */
 	const head = { p: [0, 0, 0], t: [1, 0, 0], n: [0, 0, 1] }
+
+	// gaze: the eye looks at whoever just played. A glance holds briefly so busy moments read as
+	// looking from one player to the next; after a quiet spell it drifts home.
+	const gaze = { x: 0, y: 0, tx: 0, ty: 0, hold: 0, at: 0 }
+	// screen angle of a lane's seat, matching the view (first lane bottom-left, then round)
+	const seatAngle = (i) => (opts.seatAngle ? opts.seatAngle(i) : Math.PI * 0.75 - (i * TAU) / engine.lanes.length)
+	function glance(i, holdMs = 280) {
+		const now = performance.now()
+		if (now < gaze.hold && holdMs <= 280) return
+		const a = seatAngle(i)
+		gaze.tx = Math.cos(a) * opts.gaze; gaze.ty = -Math.sin(a) * opts.gaze
+		gaze.hold = now + holdMs; gaze.at = now
+	}
 	function emit(L, strength) {
+		glance(L.index)
 		const n = Math.round(opts.burst * (0.25 + strength) * (reduce ? 0.3 : 1))
 		const [r, g, b] = hex(L.color)
 		const m = motes
@@ -405,11 +420,15 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 
 		// eye: glow ball that swells with the mix, ink pupil that tightens on low end
 		const swell = opts.eye * (1 + 0.55 * level + 0.3 * barEnv)
+		if (now - gaze.at > 2600) { gaze.tx = Math.sin(T * 0.31) * opts.gaze * 0.25; gaze.ty = Math.sin(T * 0.23 + 1) * opts.gaze * 0.15 }
+		const gk = Math.min(1, dt * (now - gaze.at > 2600 ? 1.5 : 11))
+		gaze.x += (gaze.tx - gaze.x) * gk; gaze.y += (gaze.ty - gaze.y) * gk
 		for (let i = 0; i < core.n; i++) {
 			const glow = i < core.nGlow
 			const rad = glow ? 0.105 * swell : 0.034 * opts.eye * (1.25 - 0.7 * thump)
 			const ox = core.p[i * 3] * rad, oy = core.p[i * 3 + 1] * rad, oz = core.p[i * 3 + 2] * rad
-			const x = M[0] * ox + M[1] * oy + M[2] * oz, y = M[3] * ox + M[4] * oy + M[5] * oz + lift, z = M[6] * ox + M[7] * oy + M[8] * oz
+			const gz = glow ? 1 : 1.3 // the pupil leads the iris a little
+			const x = M[0] * ox + M[1] * oy + M[2] * oz + gaze.x * gz, y = M[3] * ox + M[4] * oy + M[5] * oz + lift + gaze.y * gz, z = M[6] * ox + M[7] * oy + M[8] * oz
 			if (glow) {
 				const fl = 0.75 + 0.25 * Math.sin(T * 3.1 + core.rnd[i] * 40), sz = (0.022 + 0.03 * core.rnd[i]) * swell * fl
 				const m = Math.min(1, Math.hypot(ox, oy, oz) / (0.16 * swell))
@@ -491,6 +510,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		re.add(opts, 'moteLife', 0.3, 5, 0.1).name('mote life s')
 		re.add(opts, 'moteSize', 0.3, 3, 0.05).name('mote size')
 		re.add(opts, 'eye', 0, 2.5, 0.05)
+		re.add(opts, 'gaze', 0, 0.3, 0.01)
 		re.add({ poke: () => engine.lanes.forEach((L) => emit(L, 0.8)) }, 'poke')
 		const pal = f.addFolder('palette').close()
 		for (const k of ['ochre', 'rose', 'violet', 'cream', 'ink', 'shade', 'comet']) pal.addColor(opts, k)
@@ -503,7 +523,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	}
 
 	return {
-		opts, stats, canvas, addGui, emit, setGround,
+		opts, stats, canvas, addGui, emit, setGround, glance,
 		destroy() { cancelAnimationFrame(raf); taps.forEach((t) => t.L.out.disconnect(t.an)); canvas.remove(); well.remove() },
 	}
 }

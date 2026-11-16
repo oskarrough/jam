@@ -82,6 +82,7 @@ const view = createView(document.getElementById('c'), engine, {
 		L.instance.pointer(e)
 		engine.pushSoon(L)
 		view.showCursor('me', i, e.x, e.y, me.name)
+		heart.glance?.(i, 1400) // the eye settles on you while you draw
 		transport.cursor(e.x, e.y, e.type !== 'up', L.id)
 	},
 })
@@ -90,6 +91,7 @@ bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 
 transport.on('cursor', (c) => {
 	const i = lanes.findIndex((L) => L.id === c.lane)
+	if (i >= 0) heart.glance?.(i, 700)
 	if (i >= 0) view.showCursor(c.from || 'peer' + i, i, c.x, c.y, c.name || transport.peers.find((p) => p.id === c.from)?.name)
 })
 transport.on('peers', renderSeats)
