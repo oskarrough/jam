@@ -160,3 +160,39 @@ export function rgba(hex, a) {
 	const n = parseInt(hex.slice(1), 16)
 	return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`
 }
+
+// ── the shared playhead
+// The host draws this on your sheet so "where are we in the loop" reads the same in every instrument:
+// a fading sweep and a lit column for the current step under your drawing, a bold line with a glow over it.
+// Declare where time runs with `playhead` on the module: 'x' (left to right, the default), 'y' (top to bottom),
+// or false when time isn't a straight axis in your instrument; then show it your own way.
+export const playhead = {
+	under(g, w, h, clock, { color, axis = 'x' }) {
+		const n = clock.steps, pos = clock.pos(), L = axis === 'y' ? h : w, cell = L / n, at = (pos / n) * L
+		const trail = Math.min(L * 0.25, cell * 4)
+		const band = (a, b, fill) => { g.fillStyle = fill; axis === 'y' ? g.fillRect(0, a, w, b - a) : g.fillRect(a, 0, b - a, h) }
+		for (const shift of [0, L]) { // the sweep wraps round the loop's start
+			const a = at - trail + shift, b = at + shift
+			if (b <= 0 || a >= L) continue
+			const gr = axis === 'y' ? g.createLinearGradient(0, a, 0, b) : g.createLinearGradient(a, 0, b, 0)
+			gr.addColorStop(0, rgba(color, 0)); gr.addColorStop(1, rgba(color, 0.2))
+			band(a, b, gr)
+		}
+		const s = Math.floor(pos) % n
+		band(s * cell, (s + 1) * cell, rgba(color, 0.14))
+	},
+	over(g, w, h, clock, { color, ink, axis = 'x' }) {
+		const n = clock.steps, at = (clock.pos() / n) * (axis === 'y' ? h : w), k = 6
+		g.save()
+		g.shadowColor = color; g.shadowBlur = 14
+		g.fillStyle = ink
+		if (axis === 'y') {
+			g.fillRect(0, at - 1.25, w, 2.5)
+			g.beginPath(); g.moveTo(0, at - k); g.lineTo(k * 1.4, at); g.lineTo(0, at + k); g.moveTo(w, at - k); g.lineTo(w - k * 1.4, at); g.lineTo(w, at + k); g.fill()
+		} else {
+			g.fillRect(at - 1.25, 0, 2.5, h)
+			g.beginPath(); g.moveTo(at - k, 0); g.lineTo(at, k * 1.4); g.lineTo(at + k, 0); g.moveTo(at - k, h); g.lineTo(at, h - k * 1.4); g.lineTo(at + k, h); g.fill()
+		}
+		g.restore()
+	},
+}

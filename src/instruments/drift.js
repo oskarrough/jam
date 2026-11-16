@@ -14,6 +14,7 @@ export default {
   id: 'drift',
   glyph: '<circle class="f" cx="16" cy="16" r="2.6"/><circle cx="16" cy="16" r="7"/><circle cx="16" cy="16" r="12" stroke-dasharray="2 3"/>',
   name: 'Drift',
+  playhead: false, // a pond, not a timeline
   how: 'Tap to drop a stone, drag it to bend, tap it again to lift it out.',
   params: {
     span: { value: 10, min: 4, max: 16, step: 1 },

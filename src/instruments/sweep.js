@@ -2,7 +2,7 @@
 // Hold and move: height is cutoff, left/right is resonance. The gesture is recorded
 // at the playhead and loops, so you overdub automation by performing it.
 import { kit } from './lib/kit.js'
-import { withPointer, view, absOf, theme, SLOTS, clamp, subSlots } from './lib/util.js'
+import { withPointer, absOf, theme, SLOTS, clamp, subSlots } from './lib/util.js'
 
 const cutoffOf = (y) => 60 * Math.pow(2, (1 - y) * 7.5)
 const qOf = (x) => 0.4 + x * 16
@@ -111,7 +111,6 @@ export default {
       },
       frame(g, w, h, clock) {
         size[0] = w; size[1] = h
-        const t = view(clock)
         const sw = w / SLOTS
         // automation as columns; width of the cap shows resonance
         state.auto.forEach((a, s) => {
@@ -122,9 +121,6 @@ export default {
           g.fillStyle = th.dim
           g.fillRect(s * sw, y - 1, sw - 1, 2 + a[1] * 8)
         })
-        const px = (t.phase) * w
-        g.strokeStyle = th.dim
-        g.beginPath(); g.moveTo(px, 0); g.lineTo(px, h); g.stroke()
         // current filter state as a horizontal line
         const fy = clamp(1 - Math.log2(filt.frequency.value / 60) / 7.5, 0, 1) * h
         g.strokeStyle = live ? th.accent : th.fg

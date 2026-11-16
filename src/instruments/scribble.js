@@ -58,6 +58,7 @@ export default {
   id: 'scribble',
   glyph: '<path d="M4 21c3-11 6 6 8-5s4 11 7 0 3 9 9-7"/>',
   name: 'Scribble',
+  playhead: false, // replays in stroke order
   how: 'Scribble anywhere. The drawing replays once per loop in stroke order; left is oo, right is ee, height is pitch.',
   params: {
     range: { value: 10, min: 3, max: 16, step: 1 },

@@ -21,6 +21,7 @@ export default {
   id: 'strum',
   glyph: '<path d="M4 9h24M4 13h24M4 17h24M4 21h24" stroke-width="1"/><path d="M9 26L23 5" stroke-width="2.2"/>',
   name: 'Strum',
+  playhead: 'y', // time runs top to bottom
   how: 'Swipe sideways across the strings. Fast swipes are loud. Strums record into the loop.',
   params: {
     record: { value: true },
@@ -117,11 +118,6 @@ export default {
           g.stroke()
         }
         g.lineWidth = 1
-        if (t.playing) {
-          const y = t.phase * h
-          g.strokeStyle = th.faint
-          g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke()
-        }
         g.fillStyle = th.dim
         g.font = `${Math.max(10, h / 30)}px ${th.font}`
         g.fillText(chordName, 8, h - 8)

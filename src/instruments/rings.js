@@ -17,6 +17,7 @@ export default {
   id: 'rings',
   glyph: '<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="8.5"/><circle cx="16" cy="16" r="13"/><circle class="f" cx="16" cy="3" r="1.8"/>',
   name: 'Rings',
+  playhead: false, // time goes round each ring
   how: 'Drag around a ring to rotate it, drag outward or inward to add or remove pulses, tap to add one.',
   params: {
     outer: { value: 16, min: 3, max: 16, step: 1 },

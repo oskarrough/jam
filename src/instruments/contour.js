@@ -119,10 +119,7 @@ export default {
           pen = true
         })
         g.stroke()
-        // playhead
-        const px = (t.phase) * w
-        g.strokeStyle = th.dim
-        g.beginPath(); g.moveTo(px, 0); g.lineTo(px, h); g.stroke()
+        const px = (t.phase) * w // the host draws the playhead line; we mark the note under it
         const y = state.ys[Math.floor((t.phase) * SLOTS)]
         if (y !== null && t.playing) {
           g.fillStyle = th.accent

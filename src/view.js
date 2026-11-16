@@ -5,7 +5,7 @@
 // a wandering ink line), and the machine on top: a paper dial pasted on with a flat offset shadow,
 // one ring per player, ink on paper. The centre is left bare for src/heart.js.
 
-import { rgba } from './instruments/lib/util.js'
+import { rgba, playhead } from './instruments/lib/util.js'
 import { INK, SERIF, GROUNDS } from './palette.js'
 import { spring, dentAt } from './jelly.js'
 import { paintLandscape, makeWisps } from './backdrop.js'
@@ -474,12 +474,14 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		if (L && L.w === Math.round(w)) {
 			const steps = engine.steps(), fg = dark ? (a) => rgba(PALE, a) : ink
 			for (let s = 0; s < steps; s += 4) { g.fillStyle = s % 16 ? fg(0.07) : fg(0.18); g.fillRect(x + (s / steps) * w, y, 1, h) }
+			const axis = L.module.playhead ?? 'x', ph = { color: L.color, ink: dark ? PALE : INK, axis }
+			g.save(); g.translate(x, y)
+			if (axis) playhead.under(g, w, h, engine.iclock, ph)
 			if (dark) g.filter = 'invert(1) hue-rotate(180deg)'
-			g.drawImage(L.canvas, x, y, w, h)
+			g.drawImage(L.canvas, 0, 0, w, h)
 			g.filter = 'none'
-			g.fillStyle = dark ? PALE : INK
-			g.fillRect(x + phase * w, y - 5, 1.5, 10)
-			g.fillRect(x + phase * w, y + h - 5, 1.5, 10)
+			if (axis) playhead.over(g, w, h, engine.iclock, ph)
+			g.restore()
 		}
 		g.strokeStyle = INK; g.lineWidth = 1.4
 		g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
