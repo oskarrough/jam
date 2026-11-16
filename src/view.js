@@ -75,7 +75,7 @@ export function createView(
 	let handing = null // a press on a badge: {from, id, x, y, x0, y0, moved, own, long, timer}
 	let lastTap = null
 	const LONG_MS = 550,
-		DOUBLE_MS = 260
+		DOUBLE_MS = 300
 	const seatUnder = (px, py) =>
 		seats.findIndex((_, i) => {
 			const [x, y] = seatPos(i)
@@ -466,21 +466,22 @@ export function createView(
 			release(seatJelly[from])
 			if (e.type === 'pointercancel' || long) return
 			if (!moved || !own) {
-				// a second tap on the same badge soon after is a double tap: solo, and the first tap never happens
+				// a tap acts at once. A second tap on the same badge soon after makes it a double tap: solo.
+				// Whatever the first tap did, the second puts back: zoom in or out again, or return to your old seat.
 				if (lastTap && lastTap.i === from && performance.now() - lastTap.t < DOUBLE_MS) {
-					clearTimeout(lastTap.timer)
+					const { own, prev } = lastTap
 					lastTap = null
+					if (own) onSit(from)
+					else if (prev >= 0 && occupant(from).me) onSit(prev)
 					return onSolo?.(from)
 				}
-				clearTimeout(lastTap?.timer)
 				lastTap = {
 					i: from,
 					t: performance.now(),
-					timer: setTimeout(() => {
-						lastTap = null
-						onSit(from)
-					}, DOUBLE_MS),
+					own: occupant(from).me,
+					prev: seats.findIndex((_, j) => occupant(j).me),
 				}
+				onSit(from)
 				return
 			}
 			const to = seatUnder(e.clientX, e.clientY)
@@ -1081,17 +1082,21 @@ export function createView(
 		g.textAlign = 'center'
 		g.textBaseline = 'middle'
 		g.fillStyle = st.name ? PAPER : ink(0.6)
-		const img = st.me && glyphImg(L.module.id, PAPER)
+		// every badge wears its instrument's glyph: pale on a taken seat, faint ink on an empty one
+		const img = glyphImg(L.module.id, st.name ? PAPER : ink(0.6))
 		if (img) g.drawImage(img, x - r * 0.78, y - r * 0.78, r * 1.56, r * 1.56)
 		else g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
 		if (L.mix.mute) {
-			// muted: an ink slash through the badge
-			g.strokeStyle = INK
-			g.lineWidth = 2.2
+			// muted: an ink slash through the badge, edged in paper so it reads over the glyph
+			g.strokeStyle = PAPER
+			g.lineWidth = 5
 			g.lineCap = 'round'
 			g.beginPath()
 			g.moveTo(x - r * 0.95, y + r * 0.95)
 			g.lineTo(x + r * 0.95, y - r * 0.95)
+			g.stroke()
+			g.strokeStyle = INK
+			g.lineWidth = 2.2
 			g.stroke()
 			g.lineCap = 'butt'
 		}
