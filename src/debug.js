@@ -2,7 +2,7 @@
 
 import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.esm.min.js'
 
-export function createDebug({ engine, transport, view, frengers, me, sit, registry, renderSeats }) {
+export function createDebug({ engine, transport, view, frengers, me, sit, registry, renderSeats, heart }) {
 	const { clock } = transport
 	const gui = new GUI({ title: 'debug  (d)', width: 280 })
 	if (innerWidth < 640) gui.close()
@@ -80,6 +80,7 @@ export function createDebug({ engine, transport, view, frengers, me, sit, regist
 	const viewF = gui.addFolder('view')
 	viewF.add(view.opts, 'mode', ['dial', 'strips']).onChange((m) => view.setMode(m))
 	viewF.add(view.opts, 'slices', 32, 512, 1).name('ring slices')
+	heart?.addGui(gui)
 	const botF = gui.addFolder('frengers')
 	botF.add(frengers.opts, 'on').onChange(() => { document.getElementById('bots')?.setAttribute('aria-pressed', frengers.opts.on); renderSeats() }).listen()
 	botF.add(frengers.opts, 'minLoops', 1, 16, 1).name('min loops between')

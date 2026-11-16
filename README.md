@@ -14,6 +14,7 @@ No server needed for local play: tabs in one browser talk over BroadcastChannel.
     src/transport/local.js  BroadcastChannel transport, same API as sync/sync.js, with fake latency, jitter, skew
     src/engine.js           audio graph, lanes, lookahead scheduler on the shared clock
     src/view.js             dial view (lanes wrapped round rings, dusk backdrop) and strips view, pointer mapping
+    src/heart.js            the centrepiece: a Möbius band of Gaussian splats on its own WebGL2 canvas, driven by the clock and lane audio
     src/frengers.js         bots that sit in empty seats and redraw their part every few loops
     src/debug.js            lil-gui panel: loop, lanes and instrument params, network, clock
     src/instruments/        instrument modules and the registry

@@ -5,6 +5,7 @@ import { createEngine } from './engine.js'
 import { createView } from './view.js'
 import { createFrengers, BOT_NAMES } from './frengers.js'
 import { registry } from './instruments/index.js'
+import { createHeart } from './heart.js'
 
 const NAMES = ['ash', 'birch', 'wren', 'sorrel', 'quill', 'juniper', 'tansy', 'rook']
 const LANE_IDS = ['lane1', 'lane2', 'lane3', 'lane4']
@@ -66,6 +67,7 @@ const view = createView(document.getElementById('c'), engine, {
 		transport.cursor(e.x, e.y, e.type !== 'up', L.id)
 	},
 })
+const heart = createHeart({ engine, geom: () => view.center() })
 frengers = createFrengers(engine, { seated: (i) => !!humanAt(i), view })
 
 transport.on('cursor', (c) => {
@@ -152,9 +154,9 @@ setInterval(() => {
 // debug panel loads its library from a CDN; the jam must work without it
 let debug = { toggle() {} }
 import('./debug.js')
-	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, frengers, me, sit, registry, renderSeats })))
+	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, frengers, me, sit, registry, renderSeats, heart })))
 	.catch((e) => console.warn('debug panel unavailable', e))
 renderSeats()
 
 // handy in the console
-Object.assign(window, { jam: { engine, transport, view, frengers, registry, me } })
+Object.assign(window, { jam: { engine, transport, view, frengers, registry, me, heart } })
