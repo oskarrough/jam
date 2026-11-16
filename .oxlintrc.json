@@ -1,0 +1,13 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": [],
+	"categories": { "correctness": "off" },
+	"env": { "browser": true, "node": true },
+	"globals": { "WebSocketPair": "readonly", "HTMLRewriter": "readonly" },
+	"ignorePatterns": ["**/node_modules/**", "src/vendor/**", ".wrangler/**", ".cloudflare/**", "shots/**"],
+	"rules": {
+		"no-undef": "error",
+		"no-dupe-keys": "error",
+		"no-unused-vars": ["warn", { "args": "none", "caughtErrors": "none" }]
+	}
+}
