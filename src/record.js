@@ -13,7 +13,7 @@ export function createRecorder({ engine, transport, seatName }) {
 	const clock = transport.clock
 	let cur = null
 
-	const snap = (L) => ({ instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } })
+	const snap = (L) => ({ instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params }, ...(L.mix.mute ? { mute: true } : {}) })
 	const same = (a, b) => a && b && JSON.stringify(a) === JSON.stringify(b)
 
 	const lastCursor = new Map()

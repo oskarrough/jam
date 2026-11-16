@@ -69,6 +69,7 @@ export async function renderRecording(rec, seatIds) {
 		}
 		if (data.params) Object.assign(L.params, data.params)
 		L.inst.setState(data.state)
+		L.out.gain.setValueAtTime(data.mute ? 0 : MIX.level, cursor)
 	}
 
 	for (let g = 0; g < total; g++) {
