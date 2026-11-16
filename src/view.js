@@ -24,7 +24,7 @@ function rng(seed) {
 	return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
 }
 
-export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) {
+export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, onHand, canHand }) {
 	const g = canvas.getContext('2d')
 	const { lanes, transport } = engine
 	const { clock } = transport
@@ -40,6 +40,9 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	let G = GROUNDS.vallotton, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
 	const cursors = new Map() // key -> {lane, x, y, name, until}
 	let heat = 0, lastT = performance.now(), lastBeat = -1, hover = null, drag = null
+	// handing your part to a robot: press your own badge, drag the thread onto theirs
+	let handing = null // {from, id, x, y, x0, y0, moved}
+	const seatUnder = (px, py) => lanes.findIndex((_, i) => { const [x, y] = seatPos(i); return Math.hypot(px - x, py - y) < seatR() + 6 })
 	// jelly: each ring and seat has a spring; pressing dents it where you pressed, release wobbles it back
 	const ringJelly = lanes.map(() => ({ s: spring({ k: 420, c: 9 }), a: 0 }))
 	const seatJelly = lanes.map(() => ({ s: spring({ k: 700, c: 10 }), a: 0 }))
@@ -161,6 +164,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 			const [x, y] = seatPos(i)
 			if (Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6) {
 				press(seatJelly[i], Math.atan2(e.clientY - y, e.clientX - x))
+				// your own badge waits for release: a tap zooms, a drag hands your part to a robot
+				if (onHand && seat(i).me) {
+					canvas.setPointerCapture(e.pointerId)
+					handing = { from: i, id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false }
+					return
+				}
 				setTimeout(() => release(seatJelly[i]), 110)
 				return onSit(i)
 			}
@@ -182,6 +191,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		const onSeat = lanes.some((_, i) => { const [x, y] = seatPos(i); return Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6 })
 		const onDial = focus.on && Math.hypot(e.clientX - CX, e.clientY - CY) < medallion()
 		canvas.style.cursor = onSeat || onDial ? 'pointer' : inDev(e.clientX, e.clientY) || (hover && canDraw(hover.lane)) ? '' : 'default'
+		if (handing && e.pointerId === handing.id) {
+			handing.x = e.clientX; handing.y = e.clientY
+			if (Math.hypot(handing.x - handing.x0, handing.y - handing.y0) > 8) handing.moved = true
+			if (handing.moved) canvas.style.cursor = 'grabbing'
+			return
+		}
 		if (!drag || e.pointerId !== drag.id) return
 		if (drag.dev) return onPointer(drag.lane, { type: 'move', ...devXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: drag.button })
 		const h = hit(e.clientX, e.clientY, drag.lane)
@@ -189,6 +204,20 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		onPointer(drag.lane, { type: 'move', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
 	})
 	const up = (e) => {
+		if (handing && e.pointerId === handing.id) {
+			const { from, moved } = handing
+			handing = null
+			release(seatJelly[from])
+			if (e.type === 'pointercancel') return
+			if (!moved) return onSit(from)
+			const to = seatUnder(e.clientX, e.clientY)
+			if (to >= 0 && canHand?.(from, to)) {
+				press(seatJelly[to], Math.atan2(e.clientY - seatPos(to)[1], e.clientX - seatPos(to)[0]))
+				setTimeout(() => release(seatJelly[to]), 160)
+				onHand(from, to)
+			}
+			return
+		}
 		if (!drag || e.pointerId !== drag.id) return
 		const h = drag.dev ? devXY(e.clientX, e.clientY) : hit(e.clientX, e.clientY, drag.lane)
 		onPointer(drag.lane, { type: 'up', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
@@ -196,6 +225,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		drag = null
 	}
 	canvas.addEventListener('pointerup', up)
+	canvas.addEventListener('pointercancel', (e) => { if (handing && e.pointerId === handing.id) up(e) })
 
 	// zoom into a lane (your own), or out with -1
 	function setFocus(i) {
@@ -338,6 +368,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		else drawStrips(phase)
 		if (opts.mode === 'dial' && eSheet() > 0) drawDevice(phase)
 		drawCursors()
+		drawHanding()
 		requestAnimationFrame(frame)
 	}
 
@@ -441,6 +472,13 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 			g.strokeStyle = INK; g.lineWidth = 1; g.setLineDash([3, 4]); g.lineDashOffset = reduce ? 0 : -performance.now() / 120
 			wobble(g, x, y, r + 6, i * 7 + 3, 0.8); g.stroke()
 			g.restore()
+		}
+		if (st.riff) {
+			// a robot riffing on someone wears a thin ring in the giver's colour
+			g.strokeStyle = st.riff.color; g.lineWidth = 2.4
+			wobble(g, x, y, r + 5, i * 9 + 4, 0.7); g.stroke()
+			g.strokeStyle = ink(0.55); g.lineWidth = 0.7
+			wobble(g, x, y, r + 6.6, i * 9 + 4, 0.7); g.stroke()
 		}
 		const J = seatJelly[i]
 		wobble(g, x, y, r, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 })
@@ -579,6 +617,34 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		wobble(g, CX, CY, porthole() - 4, 22, 0.6); g.stroke()
 
 		lanes.forEach((L, i) => drawSeat(i, ...seatPos(i), true))
+	}
+
+	// the thread you pull from your badge while handing your part over; robots that can take it ring dashed
+	function drawHanding() {
+		if (!handing?.moved) return
+		const L = lanes[handing.from], [sx, sy] = seatPos(handing.from), r = seatR()
+		const over = seatUnder(handing.x, handing.y)
+		lanes.forEach((_, j) => {
+			if (!canHand?.(handing.from, j)) return
+			const [x, y] = seatPos(j)
+			g.strokeStyle = over === j ? INK : ink(0.6)
+			g.lineWidth = over === j ? 1.8 : 1
+			g.setLineDash(over === j ? [] : [3, 4])
+			g.lineDashOffset = reduce ? 0 : performance.now() / 90
+			wobble(g, x, y, r + 9, j * 11 + 5, 0.8); g.stroke()
+			g.setLineDash([])
+		})
+		// a slack ink thread that tightens as you pull
+		const dx = handing.x - sx, dy = handing.y - sy, d = Math.hypot(dx, dy)
+		const sag = Math.max(0, 40 - d * 0.12)
+		g.strokeStyle = INK; g.lineWidth = 1.3; g.lineCap = 'round'
+		g.beginPath(); g.moveTo(sx, sy)
+		g.quadraticCurveTo(sx + dx / 2, sy + dy / 2 + sag, handing.x, handing.y)
+		g.stroke()
+		// your colour, as a small paper token on the end of the thread
+		g.fillStyle = L.color
+		g.beginPath(); g.arc(handing.x, handing.y, r * 0.45, 0, TAU); g.fill()
+		g.strokeStyle = INK; g.lineWidth = 1.2; g.stroke()
 	}
 
 	function drawCursors() {
