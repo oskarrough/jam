@@ -74,7 +74,7 @@ export function createView(
 	// handing your part to a robot: press your own badge, drag the thread onto theirs
 	let handing = null // a press on a badge: {from, id, x, y, x0, y0, moved, own, long, timer}
 	let lastTap = null
-	let miniFade = 1
+	const TAP_MS = 180
 	const LONG_MS = 550,
 		DOUBLE_MS = 300
 	const seatUnder = (px, py) =>
@@ -108,19 +108,23 @@ export function createView(
 		S0 = Math.max(240, Math.min(W - 24, H - top - bottom))
 		CX0 = W / 2
 		CY0 = top + (H - top - bottom) / 2
-		// zoomed, the sheet takes the whole screen between the strip and the deck; the machine shrinks to a small
-		// dial floating over the sheet's left edge, half-way down. Tap it to go back.
-		const sy = (narrow ? 8 : 12) + STRIP,
-			side = narrow ? 8 : 16
-		sheet = {
-			x: side,
-			y: sy,
-			w: W - side * 2,
-			h: Math.max(160, H - sy - bottom - (narrow ? 8 : 16)),
+		// zoomed, the sheet fills the screen between the strip and the deck, except for room kept for the machine:
+		// a left gutter (clamp(100px, 10vw, 200px)) where the small dial sits, cropped by the screen's edge; on a phone,
+		// where a gutter would eat a quarter of the width, a band under the sheet instead. Tap the dial to go back.
+		const sy = (narrow ? 8 : 12) + STRIP
+		if (narrow) {
+			const band = 132
+			sheet = { x: 8, y: sy, w: W - 16, h: Math.max(160, H - sy - bottom - band) }
+			SF = (band - 10) / 1.1
+			CXF = W / 2
+			CYF = sheet.y + sheet.h + band / 2
+		} else {
+			const gutter = Math.max(100, Math.min(W * 0.1, 200))
+			sheet = { x: gutter, y: sy, w: W - gutter - 16, h: Math.max(160, H - sy - bottom - 16) }
+			SF = Math.max(150, Math.min(gutter * 1.4, 280))
+			CXF = gutter - 6 - SF * 0.5
+			CYF = sheet.y + sheet.h / 2
 		}
-		SF = narrow ? Math.min(150, W * 0.38) : Math.max(170, Math.min(H * 0.28, 240))
-		CXF = SF * 0.56 + (narrow ? 2 : 10)
-		CYF = sheet.y + sheet.h / 2
 		applyZoom()
 		sizeSeats()
 		if (focus.on)
@@ -345,7 +349,6 @@ export function createView(
 	const inSheet = (x, y) =>
 		focus.on &&
 		sheet &&
-		!onMini(x, y) &&
 		x >= sheet.x &&
 		x <= sheet.x + sheet.w &&
 		y >= sheet.y &&
@@ -358,6 +361,14 @@ export function createView(
 		if (inSheet(e.clientX, e.clientY) && canDraw(focus.seat)) {
 			canvas.setPointerCapture(e.pointerId)
 			drag = { seat: focus.seat, id: e.pointerId, alt: e.shiftKey, button: e.button, sheet: true }
+			// the small dial floats over the sheet, and the sheet stays playable under it: a press there is held
+			// back until it moves or lingers (then it draws), and a quick still tap means the dial instead
+			if (onMini(e.clientX, e.clientY)) {
+				const d = drag
+				d.pending = { x: e.clientX, y: e.clientY }
+				d.timer = setTimeout(() => commit(d), TAP_MS)
+				return
+			}
 			return onPointer(focus.seat, {
 				type: 'down',
 				...sheetXY(e.clientX, e.clientY),
@@ -443,6 +454,10 @@ export function createView(
 			return
 		}
 		if (!drag || e.pointerId !== drag.id) return
+		if (drag.pending) {
+			if (Math.hypot(e.clientX - drag.pending.x, e.clientY - drag.pending.y) < 6) return
+			commit(drag)
+		}
 		if (drag.sheet)
 			return onPointer(drag.seat, {
 				type: 'move',
@@ -462,7 +477,46 @@ export function createView(
 			button: drag.button,
 		})
 	})
+	function commit(d) {
+		if (drag !== d || !d.pending) return
+		const { x, y } = d.pending
+		d.pending = null
+		clearTimeout(d.timer)
+		onPointer(d.seat, { type: 'down', ...sheetXY(x, y), id: d.id, alt: d.alt, button: d.button })
+	}
+	// a tap on a badge acts at once. A second tap on the same badge soon after makes it a double tap: solo.
+	// Whatever the first tap did, the second puts back: zoom in or out again, or return to your old seat.
+	function tapBadge(from) {
+		if (lastTap && lastTap.i === from && performance.now() - lastTap.t < DOUBLE_MS) {
+			const { own, prev } = lastTap
+			lastTap = null
+			if (own) onSit(from)
+			else if (prev >= 0 && occupant(from).me) onSit(prev)
+			return onSolo?.(from)
+		}
+		lastTap = {
+			i: from,
+			t: performance.now(),
+			own: occupant(from).me,
+			prev: seats.findIndex((_, j) => occupant(j).me),
+		}
+		onSit(from)
+	}
 	const up = (e) => {
+		if (drag?.pending && e.pointerId === drag.id) {
+			// a still, quick tap on the floating dial: a badge acts as a badge, anywhere else goes back
+			clearTimeout(drag.timer)
+			const { x, y } = drag.pending
+			drag = null
+			if (e.type === 'pointercancel') return
+			const i = seatUnder(x, y)
+			if (i >= 0) {
+				press(seatJelly[i], 0)
+				setTimeout(() => release(seatJelly[i]), 110)
+				return tapBadge(i)
+			}
+			return setFocus(-1)
+		}
 		if (handing && e.pointerId === handing.id) {
 			const { from, moved, own, long, timer } = handing
 			handing = null
@@ -470,22 +524,7 @@ export function createView(
 			release(seatJelly[from])
 			if (e.type === 'pointercancel' || long) return
 			if (!moved || !own) {
-				// a tap acts at once. A second tap on the same badge soon after makes it a double tap: solo.
-				// Whatever the first tap did, the second puts back: zoom in or out again, or return to your old seat.
-				if (lastTap && lastTap.i === from && performance.now() - lastTap.t < DOUBLE_MS) {
-					const { own, prev } = lastTap
-					lastTap = null
-					if (own) onSit(from)
-					else if (prev >= 0 && occupant(from).me) onSit(prev)
-					return onSolo?.(from)
-				}
-				lastTap = {
-					i: from,
-					t: performance.now(),
-					own: occupant(from).me,
-					prev: seats.findIndex((_, j) => occupant(j).me),
-				}
-				onSit(from)
+				tapBadge(from)
 				return
 			}
 			const to = seatUnder(e.clientX, e.clientY)
@@ -1189,9 +1228,7 @@ export function createView(
 		}
 		if (dialP === 0) return
 		g.save()
-		// while you draw on the sheet, the floating dial steps back so the notes under it show through
-		miniFade += ((focus.on && drag?.sheet ? 0.25 : 1) - miniFade) * Math.min(1, dt * 10)
-		g.globalAlpha = EASES.smooth(Math.min(1, dialP * 2.5)) * miniFade
+		g.globalAlpha = EASES.smooth(Math.min(1, dialP * 2.5))
 		const dk = 0.86 + 0.14 * EASES['out back'](dialP)
 		if (dk !== 1) {
 			g.translate(CX, CY)
@@ -1675,8 +1712,7 @@ export function createView(
 			return { x, y, r: seatR() }
 		},
 		// the bare disc inside the innermost ring, CSS px; null in strips mode
-		center: () =>
-			opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER, fade: miniFade } : null,
+		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER } : null),
 		resize,
 	}
 }
