@@ -16,11 +16,13 @@ const room = q.get('room') || 'campfire'
 const name = q.get('name') || NAMES[Math.floor(Math.random() * NAMES.length)]
 
 // Transport is the swappable part: ?ws=ws://host:8787 uses the network layer in sync/, if present.
+// On the deployed site (jam.0sk.ar) the relay is the same origin, so it connects by default; ?ws=off stays local.
+const wsUrl = q.get('ws') === 'off' ? null : q.get('ws') || (/(^|\.)0sk\.ar$/.test(location.hostname) ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/` : null)
 async function makeTransport() {
-	if (q.get('ws')) {
+	if (wsUrl) {
 		try {
 			const { createTransport } = await import('../sync/sync.js')
-			const t = createTransport({ url: q.get('ws'), room, name })
+			const t = createTransport({ url: wsUrl, room, name })
 			t.kind = 'ws'
 			return t
 		} catch (e) {
