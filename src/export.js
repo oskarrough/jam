@@ -56,7 +56,14 @@ export async function renderRecording(rec, seatIds) {
 		send.gain.value = MIX.space
 		out.connect(master)
 		out.connect(send).connect(roomIn)
-		return { id, color: SEAT_COLORS[i % SEAT_COLORS.length], out, mod: null, inst: null, params: null }
+		return {
+			id,
+			color: SEAT_COLORS[i % SEAT_COLORS.length],
+			out,
+			mod: null,
+			inst: null,
+			params: null,
+		}
 	})
 	function apply(L, data) {
 		const mod = registry.get(data.instrument)
@@ -65,7 +72,14 @@ export async function renderRecording(rec, seatIds) {
 			L.inst?.dispose?.()
 			L.mod = mod
 			L.params = Object.fromEntries(Object.entries(mod.params || {}).map(([k, p]) => [k, val(p)]))
-			L.inst = mod.create({ audio, out: L.out, clock, params: L.params, color: L.color, theme: INK_THEME })
+			L.inst = mod.create({
+				audio,
+				out: L.out,
+				clock,
+				params: L.params,
+				color: L.color,
+				theme: INK_THEME,
+			})
 		}
 		if (data.params) Object.assign(L.params, data.params)
 		L.inst.setState(data.state)
@@ -79,7 +93,11 @@ export async function renderRecording(rec, seatIds) {
 			for (const L of seats) if (frame[L.id]) apply(L, frame[L.id])
 		}
 		for (const L of seats) {
-			try { L.inst?.step(g % n, cursor, stepDur) } catch (e) { console.error(L.mod.id, e) }
+			try {
+				L.inst?.step(g % n, cursor, stepDur)
+			} catch (e) {
+				console.error(L.mod.id, e)
+			}
 		}
 	}
 	cursor = end
@@ -93,7 +111,10 @@ export async function encodeRecording(buffer, { name, title, artist }) {
 		const mb = await import('./vendor/mediabunny-m4a.js')
 		const opts = { numberOfChannels: 2, sampleRate: RATE, bitrate: 192e3 }
 		if (await mb.canEncodeAudio('aac', opts)) {
-			const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new mb.BufferTarget() })
+			const output = new mb.Output({
+				format: new mb.Mp4OutputFormat({ fastStart: 'in-memory' }),
+				target: new mb.BufferTarget(),
+			})
 			const src = new mb.AudioBufferSource({ codec: 'aac', bitrate: opts.bitrate })
 			output.addAudioTrack(src)
 			output.setMetadataTags({ title, artist })
@@ -102,33 +123,54 @@ export async function encodeRecording(buffer, { name, title, artist }) {
 			await output.finalize()
 			return new File([output.target.buffer], name + '.m4a', { type: 'audio/mp4' })
 		}
-	} catch (e) { console.warn('m4a failed, writing WAV', e) }
+	} catch (e) {
+		console.warn('m4a failed, writing WAV', e)
+	}
 	return new File([wav(buffer)], name + '.wav', { type: 'audio/wav' })
 }
 
 function wav(buffer) {
-	const ch = buffer.numberOfChannels, len = buffer.length, bytes = len * ch * 2
+	const ch = buffer.numberOfChannels,
+		len = buffer.length,
+		bytes = len * ch * 2
 	const v = new DataView(new ArrayBuffer(44 + bytes))
 	const str = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)))
-	str(0, 'RIFF'); v.setUint32(4, 36 + bytes, true); str(8, 'WAVE')
-	str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true)
-	v.setUint32(24, buffer.sampleRate, true); v.setUint32(28, buffer.sampleRate * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true)
-	str(36, 'data'); v.setUint32(40, bytes, true)
+	str(0, 'RIFF')
+	v.setUint32(4, 36 + bytes, true)
+	str(8, 'WAVE')
+	str(12, 'fmt ')
+	v.setUint32(16, 16, true)
+	v.setUint16(20, 1, true)
+	v.setUint16(22, ch, true)
+	v.setUint32(24, buffer.sampleRate, true)
+	v.setUint32(28, buffer.sampleRate * ch * 2, true)
+	v.setUint16(32, ch * 2, true)
+	v.setUint16(34, 16, true)
+	str(36, 'data')
+	v.setUint32(40, bytes, true)
 	const data = Array.from({ length: ch }, (_, c) => buffer.getChannelData(c))
-	for (let i = 0, o = 44; i < len; i++) for (let c = 0; c < ch; c++, o += 2) {
-		const s = Math.max(-1, Math.min(1, data[c][i]))
-		v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true)
-	}
+	for (let i = 0, o = 44; i < len; i++)
+		for (let c = 0; c < ch; c++, o += 2) {
+			const s = Math.max(-1, Math.min(1, data[c][i]))
+			v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+		}
 	return v.buffer
 }
 
 /** Phones get the share sheet (WhatsApp, Messages…); everyone else a download. Throws NotAllowedError when the tap has gone stale. */
 export async function deliver(file) {
 	if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
-		try { await navigator.share({ files: [file], title: file.name }) } catch (e) { if (e.name !== 'AbortError') throw e }
+		try {
+			await navigator.share({ files: [file], title: file.name })
+		} catch (e) {
+			if (e.name !== 'AbortError') throw e
+		}
 		return 'shared'
 	}
-	const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(file), download: file.name })
+	const a = Object.assign(document.createElement('a'), {
+		href: URL.createObjectURL(file),
+		download: file.name,
+	})
 	a.click()
 	setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
 	return 'saved'

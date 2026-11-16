@@ -12,14 +12,16 @@ function gen() {
 	;[0, 6, 12, 20, 24, 28, 36, 44, 48, 54, 60].forEach((s) => {
 		if (Math.random() < 0.3) return
 		const down = Math.random() < 0.6
-		for (let k = 0; k < STRINGS; k++) hits.push([s, down ? k : STRINGS - 1 - k, +(0.5 + Math.random() * 0.4).toFixed(2)])
+		for (let k = 0; k < STRINGS; k++)
+			hits.push([s, down ? k : STRINGS - 1 - k, +(0.5 + Math.random() * 0.4).toFixed(2)])
 	})
 	return { hits }
 }
 
 export default {
 	id: 'strum',
-	glyph: '<path d="M4 9h24M4 13h24M4 17h24M4 21h24" stroke-width="1"/><path d="M9 26L23 5" stroke-width="2.2"/>',
+	glyph:
+		'<path d="M4 9h24M4 13h24M4 17h24M4 21h24" stroke-width="1"/><path d="M9 26L23 5" stroke-width="2.2"/>',
 	name: 'Strum',
 	playhead: 'y',
 	how: 'Swipe sideways across the strings. Fast swipes are loud. Strums record into the loop; the eraser or Shift rubs them out.',
@@ -40,7 +42,8 @@ export default {
 		const size = [1, 1]
 		const state = { hits: [] } // [slot, string, velocity]
 		const ring = Array.from({ length: STRINGS }, () => ({ t: -1, v: 0 }))
-		let lastX = null, lastT = 0
+		let lastX = null,
+			lastT = 0
 		let chordName = ''
 
 		const xOf = (j) => (j + 0.5) / STRINGS
@@ -52,8 +55,12 @@ export default {
 		}
 		function pluck(j, vel, time, abs) {
 			engine.voices.pluck(out, {
-				freq: mtof(notes(abs)[j]), time, gain: params.level * vel,
-				damp: params.decay, bright: params.bright, pan: (j - 2.5) * 0.12,
+				freq: mtof(notes(abs)[j]),
+				time,
+				gain: params.level * vel,
+				damp: params.decay,
+				bright: params.bright,
+				pan: (j - 2.5) * 0.12,
 			})
 			ring[j] = { t: time, v: vel }
 		}
@@ -68,21 +75,29 @@ export default {
 		}
 
 		function rub(e) {
-			const ry = Math.max(1.5, (Math.min(e.w, e.h) * 0.04) / e.h * SLOTS)
-			state.hits = state.hits.filter(([s, j]) => Math.abs(e.x - xOf(j)) > 0.5 / STRINGS || Math.abs(e.y * SLOTS - s) > ry)
+			const ry = Math.max(1.5, ((Math.min(e.w, e.h) * 0.04) / e.h) * SLOTS)
+			state.hits = state.hits.filter(
+				([s, j]) => Math.abs(e.x - xOf(j)) > 0.5 / STRINGS || Math.abs(e.y * SLOTS - s) > ry,
+			)
 		}
 
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
-				if (e.alt) { if (e.type === 'down' || (e.type === 'move' && e.pressed)) rub(e); lastX = null; return }
+				if (e.alt) {
+					if (e.type === 'down' || (e.type === 'move' && e.pressed)) rub(e)
+					lastX = null
+					return
+				}
 				const now = performance.now()
 				if (e.type === 'down') {
 					const j = clamp(Math.round(e.x * STRINGS - 0.5), 0, STRINGS - 1)
 					if (Math.abs(e.x - xOf(j)) < 0.04) liveHit(j, 0.6)
-					lastX = e.x; lastT = now
+					lastX = e.x
+					lastT = now
 				} else if (e.type === 'move' && e.pressed && lastX !== null) {
-					const a = Math.min(lastX, e.x), b = Math.max(lastX, e.x)
+					const a = Math.min(lastX, e.x),
+						b = Math.max(lastX, e.x)
 					const speed = Math.abs(e.x - lastX) / Math.max(1, now - lastT) // screen-widths per ms
 					const vel = clamp(0.25 + speed * 120, 0.25, 1)
 					const dir = e.x > lastX ? 1 : -1
@@ -90,7 +105,8 @@ export default {
 					for (let j = 0; j < STRINGS; j++) if (xOf(j) > a && xOf(j) <= b) crossed.push(j)
 					if (dir < 0) crossed.reverse()
 					crossed.forEach((j) => liveHit(j, vel))
-					lastX = e.x; lastT = now
+					lastX = e.x
+					lastT = now
 				} else if (e.type === 'up') lastX = null
 			}),
 			step(i, time, dur) {
@@ -101,7 +117,8 @@ export default {
 				})
 			},
 			frame(g, w, h, clock) {
-				size[0] = w; size[1] = h
+				size[0] = w
+				size[1] = h
 				const t = view(clock)
 				notes(Math.floor(t.abs))
 				state.hits.forEach(([s, j, v]) => {
@@ -126,9 +143,15 @@ export default {
 				g.font = `${Math.max(10, h / 30)}px ${th.font}`
 				g.fillText(chordName, 8, h - 8)
 			},
-			setState(s) { state.hits = s.hits.map((x) => x.slice()) },
-			clear() { state.hits = [] },
-			randomize() { this.setState(gen(clock.steps, params)) },
+			setState(s) {
+				state.hits = s.hits.map((x) => x.slice())
+			},
+			clear() {
+				state.hits = []
+			},
+			randomize() {
+				this.setState(gen(clock.steps, params))
+			},
 		}
 	},
 }

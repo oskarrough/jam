@@ -12,29 +12,48 @@ export const hit = (j, n, k, rot) => (((((j - rot) % n) + n) % n) * k) % n < k
 // Tapping a step toggles it: k goes up or down by one, and of all the rotations that put the
 // tapped step where you want it, the one that moves the fewest other pulses wins.
 function toggle(ring, n, j) {
-	const k = Math.min(ring.k, n), want = !hit(j, n, k, ring.rot), k2 = clamp(k + (want ? 1 : -1), 0, n)
-	let best = ring.rot, keep = -1
+	const k = Math.min(ring.k, n),
+		want = !hit(j, n, k, ring.rot),
+		k2 = clamp(k + (want ? 1 : -1), 0, n)
+	let best = ring.rot,
+		keep = -1
 	for (let rot = 0; rot < n; rot++) {
 		if (hit(j, n, k2, rot) !== want) continue
 		let same = 0
 		for (let i = 0; i < n; i++) if (hit(i, n, k2, rot) === hit(i, n, k, ring.rot)) same++
-		if (same > keep) { keep = same; best = rot }
+		if (same > keep) {
+			keep = same
+			best = rot
+		}
 	}
-	ring.k = k2; ring.rot = best
+	ring.k = k2
+	ring.rot = best
 }
 
 function gen(steps, p = {}) {
 	const n = [p.outer ?? 16, p.middle ?? 12, p.inner ?? 16]
-	return { rings: n.map((len) => ({ k: 1 + Math.floor(Math.random() * len * 0.6), rot: Math.floor(Math.random() * len) })) }
+	return {
+		rings: n.map((len) => ({
+			k: 1 + Math.floor(Math.random() * len * 0.6),
+			rot: Math.floor(Math.random() * len),
+		})),
+	}
 }
 
 export default {
 	id: 'rings',
-	glyph: '<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="8.5"/><circle cx="16" cy="16" r="13"/><circle class="f" cx="16" cy="3" r="1.8"/>',
+	glyph:
+		'<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="8.5"/><circle cx="16" cy="16" r="13"/><circle class="f" cx="16" cy="3" r="1.8"/>',
 	name: 'Rings',
 	playhead: false, // time goes round each ring
 	how: 'Tap a dot to turn it on or off; the rest of the ring spreads out evenly around it. Drag along a ring to turn it, drag outward or inward for more or fewer pulses.',
-	demo: (shape, aspect) => shape === 'ring' ? [tap(0.2, 0.17), line(0.2, 0.5, 0.45, 0.5, 10)] : [tap(...arc(0.5, 0.5, 0.44, 0.1, 0.1, aspect, 1)[0]), arc(0.5, 0.5, 0.31, 0.05, 0.3, aspect, 16)],
+	demo: (shape, aspect) =>
+		shape === 'ring'
+			? [tap(0.2, 0.17), line(0.2, 0.5, 0.45, 0.5, 10)]
+			: [
+					tap(...arc(0.5, 0.5, 0.44, 0.1, 0.1, aspect, 1)[0]),
+					arc(0.5, 0.5, 0.31, 0.05, 0.3, aspect, 16),
+				],
 	params: {
 		outer: { value: 16, min: 3, max: 16, step: 1 },
 		middle: { value: 12, min: 3, max: 16, step: 1 },
@@ -49,14 +68,21 @@ export default {
 		const { voices } = kit(audio)
 		const th = theme(ctx)
 		const size = [1, 1] // seat size from the last frame, for pointer maths
-		const state = { rings: [{ k: 7, rot: 0 }, { k: 3, rot: 3 }, { k: 4, rot: 0 }] }
+		const state = {
+			rings: [
+				{ k: 7, rot: 0 },
+				{ k: 3, rot: 3 },
+				{ k: 4, rot: 0 },
+			],
+		}
 		const fx = flashes()
 		const ns = () => [params.outer, params.middle, params.inner]
 		let drag = null
 
 		function geom(e) {
 			const R = Math.min(e.w, e.h) * 0.44
-			const dx = e.px - e.w / 2, dy = e.py - e.h / 2
+			const dx = e.px - e.w / 2,
+				dy = e.py - e.h / 2
 			return { R, r: Math.hypot(dx, dy), a: Math.atan2(dy, dx) + Math.PI / 2 }
 		}
 
@@ -73,8 +99,10 @@ export default {
 				state.rings[drag.i].rot = (((drag.rot0 + m) % n) + n) % n
 			} else if (e.type === 'up' && drag?.strip) {
 				if (drag.moved < 5) {
-					const n = ns()[drag.i], steps = clock.steps
-					const start = Math.floor(view(clock).abs / steps) * steps, s = clamp(Math.floor(e.x * steps), 0, steps - 1)
+					const n = ns()[drag.i],
+						steps = clock.steps
+					const start = Math.floor(view(clock).abs / steps) * steps,
+						s = clamp(Math.floor(e.x * steps), 0, steps - 1)
 					toggle(state.rings[drag.i], n, (((start + s) % n) + n) % n)
 				}
 				drag = null
@@ -85,7 +113,8 @@ export default {
 			const steps = t.steps
 			const start = Math.floor(t.abs / steps) * steps
 			const cur = Math.floor(t.abs) - start
-			const cw = w / steps, rh = h / 3
+			const cw = w / steps,
+				rh = h / 3
 			ns().forEach((n, r) => {
 				const { k, rot } = state.rings[r]
 				const cy = rh * r + rh / 2
@@ -95,8 +124,16 @@ export default {
 					const cx = cw * s + cw / 2
 					const glow = fx.glow(`${r}:${j}`, t.now)
 					const size = Math.max(1.5, Math.min(cw, rh) * (on ? 0.28 + glow * 0.1 : 0.08))
-					g.fillStyle = on ? (glow > 0 ? th.accent : th.fg) : s === cur && t.playing ? th.fg : th.dim
-					g.beginPath(); g.arc(cx, cy, size, 0, TAU); g.fill()
+					g.fillStyle = on
+						? glow > 0
+							? th.accent
+							: th.fg
+						: s === cur && t.playing
+							? th.fg
+							: th.dim
+					g.beginPath()
+					g.arc(cx, cy, size, 0, TAU)
+					g.fill()
 					// this ring's own downbeat, which drifts when its length isn't the loop's
 					if (j === 0 && n !== steps) {
 						g.fillStyle = th.dim
@@ -112,8 +149,15 @@ export default {
 				if (isStrip(e.w, e.h, e.shape)) return stripPointer(e)
 				const { R, r, a } = geom(e)
 				if (e.type === 'down') {
-					let best = 0, bd = Infinity
-					RADII.forEach((f, i) => { const d = Math.abs(r - f * R); if (d < bd) { bd = d; best = i } })
+					let best = 0,
+						bd = Infinity
+					RADII.forEach((f, i) => {
+						const d = Math.abs(r - f * R)
+						if (d < bd) {
+							bd = d
+							best = i
+						}
+					})
 					const ring = state.rings[best]
 					drag = { i: best, a0: a, r0: r, rot0: ring.rot, k0: ring.k, moved: 0, R }
 				} else if (e.type === 'move' && drag) {
@@ -121,12 +165,15 @@ export default {
 					const ring = state.rings[drag.i]
 					let da = a - drag.a0
 					da = Math.atan2(Math.sin(da), Math.cos(da))
-					const along = Math.abs(da) * drag.r0, out = Math.abs(r - drag.r0)
+					const along = Math.abs(da) * drag.r0,
+						out = Math.abs(r - drag.r0)
 					drag.moved = Math.max(drag.moved, along, out)
 					// one gesture does one thing: whichever way it went first
 					if (!drag.mode && drag.moved > 8) drag.mode = along > out ? 'turn' : 'count'
-					if (drag.mode === 'turn') ring.rot = (((drag.rot0 + Math.round((da / TAU) * n)) % n) + n) % n
-					if (drag.mode === 'count') ring.k = clamp(drag.k0 + Math.round((r - drag.r0) / (drag.R * 0.05)), 0, n)
+					if (drag.mode === 'turn')
+						ring.rot = (((drag.rot0 + Math.round((da / TAU) * n)) % n) + n) % n
+					if (drag.mode === 'count')
+						ring.k = clamp(drag.k0 + Math.round((r - drag.r0) / (drag.R * 0.05)), 0, n)
 				} else if (e.type === 'up' && drag) {
 					if (drag.moved < 8) {
 						const n = ns()[drag.i]
@@ -149,18 +196,22 @@ export default {
 				})
 			},
 			frame(g, w, h, clock, shape) {
-				size[0] = w; size[1] = h
+				size[0] = w
+				size[1] = h
 				if (isStrip(w, h, shape)) return frameStrip(g, w, h, view(clock))
 				const t = view(clock)
 				const R = Math.min(w, h) * 0.44
-				const cx = w / 2, cy = h / 2
+				const cx = w / 2,
+					cy = h / 2
 				const abs = Math.floor(t.abs)
 				ns().forEach((n, r) => {
 					const rad = RADII[r] * R
 					const { k, rot } = state.rings[r]
 					g.strokeStyle = th.faint
 					g.lineWidth = 1
-					g.beginPath(); g.arc(cx, cy, rad, 0, TAU); g.stroke()
+					g.beginPath()
+					g.arc(cx, cy, rad, 0, TAU)
+					g.stroke()
 					const cur = ((abs % n) + n) % n
 					// playhead hand per ring, at its own polymeter position
 					const frac = ((((t.abs % n) + n) % n) / n) * TAU - Math.PI / 2
@@ -175,23 +226,46 @@ export default {
 					g.strokeStyle = th.dim
 					for (let j = 0; j < n; j++) {
 						const ang = (j / n) * TAU - Math.PI / 2
-						const x = cx + Math.cos(ang) * rad, y = cy + Math.sin(ang) * rad
+						const x = cx + Math.cos(ang) * rad,
+							y = cy + Math.sin(ang) * rad
 						const on = hit(j, n, Math.min(k, n), rot)
 						const glow = fx.glow(`${r}:${j}`, t.now)
 						const s = Math.max(2, R * (on ? 0.035 + glow * 0.025 : 0.012))
-						g.fillStyle = on ? (glow > 0 ? th.accent : th.fg) : j === cur && t.playing ? th.fg : th.dim
-						g.beginPath(); g.arc(x, y, s, 0, TAU); g.fill()
+						g.fillStyle = on
+							? glow > 0
+								? th.accent
+								: th.fg
+							: j === cur && t.playing
+								? th.fg
+								: th.dim
+						g.beginPath()
+						g.arc(x, y, s, 0, TAU)
+						g.fill()
 						if (on) {
 							// polygon through the pulses
-							if (prev) { g.beginPath(); g.moveTo(prev[0], prev[1]); g.lineTo(x, y); g.stroke() }
+							if (prev) {
+								g.beginPath()
+								g.moveTo(prev[0], prev[1])
+								g.lineTo(x, y)
+								g.stroke()
+							}
 							prev = [x, y]
 						}
 					}
 				})
 			},
-			setState(s) { state.rings = s.rings.map((r) => ({ ...r })) },
-			clear() { state.rings.forEach((r) => { r.k = 0; r.rot = 0 }) },
-			randomize() { this.setState(gen(clock.steps, params)) },
+			setState(s) {
+				state.rings = s.rings.map((r) => ({ ...r }))
+			},
+			clear() {
+				state.rings.forEach((r) => {
+					r.k = 0
+					r.rot = 0
+				})
+			},
+			randomize() {
+				this.setState(gen(clock.steps, params))
+			},
 		}
 	},
 }

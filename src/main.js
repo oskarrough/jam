@@ -22,11 +22,23 @@ const pathJam = decodeURIComponent(location.pathname.match(/\/j\/([\w-]{1,48})\/
 const room = (q.get('room') || pathJam || 'open').toLowerCase().slice(0, 48)
 // A fresh jam: bass and drums hold the floor, the middle two seats are dealt from the strange instruments.
 // Seeded by room and day, so everyone in a room sees the same lineup and the open jam changes daily.
-const STRANGE = ['contour', 'grid', 'sweep', 'drift', 'scribble', 'strum', 'swarm', 'orbits', 'embers']
+const STRANGE = [
+	'contour',
+	'grid',
+	'sweep',
+	'drift',
+	'scribble',
+	'strum',
+	'swarm',
+	'orbits',
+	'embers',
+]
 const START = (() => {
 	let h = 2166136261
-	for (const c of room + new Date().toISOString().slice(0, 10)) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
-	const r = rng(h), pile = STRANGE.slice()
+	for (const c of room + new Date().toISOString().slice(0, 10))
+		h = Math.imul(h ^ c.charCodeAt(0), 16777619)
+	const r = rng(h),
+		pile = STRANGE.slice()
 	const deal = () => pile.splice(Math.floor(r() * pile.length), 1)[0]
 	return ['bass', deal(), deal(), 'drums']
 })()
@@ -62,10 +74,18 @@ async function makeTransport() {
 
 // /r/<id>: read-only replay
 let rec = null
-if (replayId) try { rec = await loadRecording(replayId) } catch (e) { console.warn(e) }
+if (replayId)
+	try {
+		rec = await loadRecording(replayId)
+	} catch (e) {
+		console.warn(e)
+	}
 let view = null
 const transport = rec
-	? createReplayTransport(rec, { seatIds: SEAT_IDS, onCursor: (i, x, y, down, who) => view?.showCursor('r' + who + i, i, x, y, who) })
+	? createReplayTransport(rec, {
+			seatIds: SEAT_IDS,
+			onCursor: (i, x, y, down, who) => view?.showCursor('r' + who + i, i, x, y, who),
+		})
 	: await makeTransport()
 const replay = transport.kind === 'replay'
 if (replay) document.body.classList.add('replay')
@@ -77,12 +97,25 @@ const undo = createUndo(engine)
 const humanAt = (i) => transport.peers.find((p) => p.seat === seats[i].id)
 const occupant = (i) => {
 	const p = humanAt(i)
-	if (p && p.id === transport.id) return { name: 'you', label: 'you', initial: me.name ? me.name[0] : 'Y', me: true, human: true }
-	if (p) return { name: p.name || playerName(i), label: p.name || playerName(i), initial: p.name ? p.name[0] : String(i + 1), human: true }
+	if (p && p.id === transport.id)
+		return { name: 'you', label: 'you', initial: me.name ? me.name[0] : 'Y', me: true, human: true }
+	if (p)
+		return {
+			name: p.name || playerName(i),
+			label: p.name || playerName(i),
+			initial: p.name ? p.name[0] : String(i + 1),
+			human: true,
+		}
 	if (bots?.opts.on && seats[i].module.generate) {
 		const r = seats[i].riff
 		const riff = r && { color: r.color, label: r.label || 'echoes', who: riffWho(r) }
-		return { name: botName(i), label: riff ? `${botName(i)} · ${riff.label} ${riff.who}` : botName(i), initial: botName(i).slice(-1), bot: true, riff }
+		return {
+			name: botName(i),
+			label: riff ? `${botName(i)} · ${riff.label} ${riff.who}` : botName(i),
+			initial: botName(i).slice(-1),
+			bot: true,
+			riff,
+		}
 	}
 	return { name: '', label: 'sit' }
 }
@@ -134,21 +167,43 @@ view = createView(document.getElementById('c'), engine, {
 	},
 })
 const ghost = createGhost({ engine, view, me })
-const heart = createHeart({ engine, geom: () => { const c = view.center(); if (c) c.moving = view.moving; return c } })
+const heart = createHeart({
+	engine,
+	geom: () => {
+		const c = view.center()
+		if (c) c.moving = view.moving
+		return c
+	},
+})
 bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 
 transport.on('cursor', (c) => {
 	const i = seats.findIndex((L) => L.id === c.seat)
 	if (i >= 0) heart.glance?.(i, 700)
-	if (i >= 0) view.showCursor(c.from || 'peer' + i, i, c.x, c.y, c.name || transport.peers.find((p) => p.id === c.from)?.name || playerName(i))
+	if (i >= 0)
+		view.showCursor(
+			c.from || 'peer' + i,
+			i,
+			c.x,
+			c.y,
+			c.name || transport.peers.find((p) => p.id === c.from)?.name || playerName(i),
+		)
 })
 transport.on('peers', renderSeats)
 transport.on('welcome', () => {
-	if (me.seat < 0) for (const i of [1, 2, 0, 3]) if (!humanAt(i)) { sit(i); break }
+	if (me.seat < 0)
+		for (const i of [1, 2, 0, 3])
+			if (!humanAt(i)) {
+				sit(i)
+				break
+			}
 	const want = registry.get(q.get('instrument'))
 	if (want && me.seat >= 0) {
 		const L = seats[me.seat]
-		if (L.module !== want) { engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps()) }); engine.push(L) }
+		if (L.module !== want) {
+			engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps()) })
+			engine.push(L)
+		}
 		view.setFocus?.(me.seat)
 		ghost.play()
 	}
@@ -158,34 +213,79 @@ engine.on('seats', renderSeats)
 let riffSig = ''
 setInterval(() => {
 	const sig = seats.map((L) => (L.riff ? L.riff.id + L.riff.turn : '')).join('|')
-	if (sig !== riffSig) { riffSig = sig; renderSeats() }
+	if (sig !== riffSig) {
+		riffSig = sig
+		renderSeats()
+	}
 }, 300)
 
 const $ = (id) => document.getElementById(id)
 
-const JAM_A = ['dusk', 'amber', 'moss', 'salt', 'velvet', 'copper', 'hollow', 'paper', 'lantern', 'violet']
-const JAM_B = ['moth', 'heron', 'fern', 'kettle', 'orchard', 'tide', 'comet', 'wren', 'ember', 'quarry']
+const JAM_A = [
+	'dusk',
+	'amber',
+	'moss',
+	'salt',
+	'velvet',
+	'copper',
+	'hollow',
+	'paper',
+	'lantern',
+	'violet',
+]
+const JAM_B = [
+	'moth',
+	'heron',
+	'fern',
+	'kettle',
+	'orchard',
+	'tide',
+	'comet',
+	'wren',
+	'ember',
+	'quarry',
+]
 const pick = (a) => a[Math.floor(Math.random() * a.length)]
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
-const word = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; return b }
+const word = (text, fn) => {
+	const b = document.createElement('button')
+	b.textContent = text
+	b.onclick = fn
+	return b
+}
 // leaves the recording for the jam it came from, live; the open jam when it came from there or we don't know
 const live = (room) => {
 	const named = room && room !== 'open'
-	const b = word(named ? 'join ' + room + ' live' : 'join the live jam', () => (location.href = named ? '/j/' + encodeURIComponent(room) : '/'))
+	const b = word(
+		named ? 'join ' + room + ' live' : 'join the live jam',
+		() => (location.href = named ? '/j/' + encodeURIComponent(room) : '/'),
+	)
 	b.title = 'leave this recording and play along with whoever is in there now'
 	return b
 }
 if (replay) {
-	const from = rec.room && rec.room !== 'open' ? [' of ', Object.assign(document.createElement('b'), { textContent: rec.room })] : []
+	const from =
+		rec.room && rec.room !== 'open'
+			? [' of ', Object.assign(document.createElement('b'), { textContent: rec.room })]
+			: []
 	jamline.append('a recording', ...from, ' · ', saveAudio(), ' · ', live(rec.room))
 } else if (replayId) jamline.append('that recording is gone · ', live())
 else if (transport.kind === 'ws') {
-	const fresh = (text) => Object.assign(word(text, () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))), { title: 'a new jam with its own link, for you and whoever you send it to' })
+	const fresh = (text) =>
+		Object.assign(
+			word(text, () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))),
+			{ title: 'a new jam with its own link, for you and whoever you send it to' },
+		)
 	if (isOpenJam) jamline.append(fresh('start your own jam'))
 	else {
 		const b = word(room, async () => {
-			try { await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room)); b.textContent = 'link copied' } catch { b.textContent = location.host + '/j/' + room }
+			try {
+				await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room))
+				b.textContent = 'link copied'
+			} catch {
+				b.textContent = location.host + '/j/' + room
+			}
 			setTimeout(() => (b.textContent = room), 1600)
 		})
 		b.title = 'copy the link to this jam'
@@ -196,7 +296,8 @@ else if (transport.kind === 'ws') {
 }
 // save audio: render the recording offline (m4a or WAV); phones share it, desktops download it
 function saveAudio() {
-	let file = null, busy = false
+	let file = null,
+		busy = false
 	const b = word('save audio', async () => {
 		if (busy) return
 		busy = true
@@ -205,7 +306,11 @@ function saveAudio() {
 				b.textContent = 'rendering…'
 				const { renderRecording, encodeRecording } = await import('./export.js')
 				const who = [...new Set(rec.seats.filter(Boolean))].join(', ')
-				file = await encodeRecording(await renderRecording(rec, SEAT_IDS), { name: 'roughjam-' + replayId, title: rec.room && rec.room !== 'open' ? rec.room : 'roughjam', artist: who })
+				file = await encodeRecording(await renderRecording(rec, SEAT_IDS), {
+					name: 'roughjam-' + replayId,
+					title: rec.room && rec.room !== 'open' ? rec.room : 'roughjam',
+					artist: who,
+				})
 			}
 			const { deliver } = await import('./export.js')
 			b.textContent = (await deliver(file)) === 'shared' ? 'save audio' : 'saved'
@@ -222,7 +327,9 @@ function saveAudio() {
 }
 // seats are drawn by view.js; this only keeps the peers line current
 function renderSeats() {
-	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name || playerName(seats.findIndex((L) => L.id === p.seat))))
+	const names = transport.peers.map((p) =>
+		p.id === transport.id ? 'you' : p.name || playerName(seats.findIndex((L) => L.id === p.seat)),
+	)
 	$('peers').textContent = names.length > 1 ? names.join(', ').replace(/, ([^,]*)$/, ' & $1') : ''
 }
 
@@ -231,10 +338,18 @@ $('sound').onclick = () => {
 	$('sound').setAttribute('aria-pressed', engine.soundOn)
 }
 // first touch wakes the sound; after that the speaker token is theirs
-$('c').addEventListener('pointerdown', () => { if (!engine.soundOn) $('sound').click() }, { once: true, capture: true })
+$('c').addEventListener(
+	'pointerdown',
+	() => {
+		if (!engine.soundOn) $('sound').click()
+	},
+	{ once: true, capture: true },
+)
 if (replay) {
 	// a recording plays on the first tap anywhere, from bar 1
-	const wake = (e) => { if (!e.target.closest?.('button, a, input, select')) $('sound').click() }
+	const wake = (e) => {
+		if (!e.target.closest?.('button, a, input, select')) $('sound').click()
+	}
 	document.addEventListener('pointerdown', wake, { capture: true })
 	engine.on('sound', (on) => {
 		document.removeEventListener('pointerdown', wake, { capture: true })
@@ -243,20 +358,30 @@ if (replay) {
 }
 // two-finger tap undoes, three redoes. The first finger has already drawn, so the tap first puts that back.
 {
-	const c = $('c'), touches = new Map()
+	const c = $('c'),
+		touches = new Map()
 	let tap = null
-	c.addEventListener('pointerdown', (e) => {
-		if (e.pointerType !== 'touch') return
-		touches.set(e.pointerId, [e.clientX, e.clientY])
-		const now = e.timeStamp // event time: a busy frame mustn't spoil a quick tap
-		if (touches.size === 1) tap = { t: now, n: 1, moved: false, mark: me.seat >= 0 ? undo.mark(me.seat) : null }
-		else if (tap && now - tap.t < 300) tap.n = Math.max(tap.n, touches.size)
-		else tap = null
-	}, { capture: true })
-	c.addEventListener('pointermove', (e) => {
-		const p = touches.get(e.pointerId)
-		if (p && tap && Math.hypot(e.clientX - p[0], e.clientY - p[1]) > 14) tap.moved = true
-	}, { capture: true })
+	c.addEventListener(
+		'pointerdown',
+		(e) => {
+			if (e.pointerType !== 'touch') return
+			touches.set(e.pointerId, [e.clientX, e.clientY])
+			const now = e.timeStamp // event time: a busy frame mustn't spoil a quick tap
+			if (touches.size === 1)
+				tap = { t: now, n: 1, moved: false, mark: me.seat >= 0 ? undo.mark(me.seat) : null }
+			else if (tap && now - tap.t < 300) tap.n = Math.max(tap.n, touches.size)
+			else tap = null
+		},
+		{ capture: true },
+	)
+	c.addEventListener(
+		'pointermove',
+		(e) => {
+			const p = touches.get(e.pointerId)
+			if (p && tap && Math.hypot(e.clientX - p[0], e.clientY - p[1]) > 14) tap.moved = true
+		},
+		{ capture: true },
+	)
 	const lift = (e) => {
 		if (!touches.delete(e.pointerId) || touches.size || !tap) return
 		const t = tap
@@ -327,16 +452,23 @@ addEventListener('keydown', (e) => {
 		return
 	}
 	if (e.metaKey || e.ctrlKey) return
-	if (e.key === ' ') { e.preventDefault(); $('sound').click() }
-	else if (/^[1-9]$/.test(e.key) && +e.key <= seats.length) sit(+e.key - 1)
+	if (e.key === ' ') {
+		e.preventDefault()
+		$('sound').click()
+	} else if (/^[1-9]$/.test(e.key) && +e.key <= seats.length) sit(+e.key - 1)
 	else if (e.key === 'd') debug.toggle()
 	else if (e.key === 'e') setErase(!me.erase)
-	else if (e.key === 'j' || e.key === 'ArrowLeft') { e.preventDefault(); cycleInstrument(-1) }
-	else if (e.key === 'k' || e.key === 'ArrowRight') { e.preventDefault(); cycleInstrument(1) }
-	else if (e.key === 'Escape' && view.focus.on) view.setFocus(-1)
+	else if (e.key === 'j' || e.key === 'ArrowLeft') {
+		e.preventDefault()
+		cycleInstrument(-1)
+	} else if (e.key === 'k' || e.key === 'ArrowRight') {
+		e.preventDefault()
+		cycleInstrument(1)
+	} else if (e.key === 'Escape' && view.focus.on) view.setFocus(-1)
 })
 function showTempo() {
-	const now = transport.clock.loopAt().bpm, bpm = heading()
+	const now = transport.clock.loopAt().bpm,
+		bpm = heading()
 	$('bpm').textContent = bpm
 	$('bpm').classList.toggle('pending', bpm !== now)
 }
@@ -344,7 +476,20 @@ setInterval(showTempo, 200)
 
 let debug = { toggle() {} }
 import('./debug.js')
-	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart })))
+	.then(
+		({ createDebug }) =>
+			(debug = createDebug({
+				engine,
+				transport,
+				view,
+				bots,
+				me,
+				sit,
+				registry,
+				renderSeats,
+				heart,
+			})),
+	)
 	.catch((e) => console.warn('debug panel unavailable', e))
 renderSeats()
 
@@ -352,8 +497,17 @@ document.querySelectorAll('.token').forEach((el) => jellify(el))
 jellify(document.querySelector('.tempo'), { amount: 0.08 })
 
 const sheetbar = $('sheetbar')
-const strip = createStrip({ engine, registry, me, el: sheetbar, before: () => undo.remember(me.seat), chosen: () => ghost.play() })
-function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.seat) }
+const strip = createStrip({
+	engine,
+	registry,
+	me,
+	el: sheetbar,
+	before: () => undo.remember(me.seat),
+	chosen: () => ghost.play(),
+})
+function toggleFocus() {
+	view.setFocus(view.focus.on ? -1 : me.seat)
+}
 addEventListener('zoom', (e) => {
 	const { on, sheet } = e.detail
 	document.body.classList.toggle('zoomed', on)
@@ -389,14 +543,17 @@ function cycleInstrument(d) {
 	if (replay || me.seat < 0) return
 	const id = strip.cycle(d)
 	if (!id || view.focus.on) return
-	const s = view.seatAt(me.seat), L = seats[me.seat]
+	const s = view.seatAt(me.seat),
+		L = seats[me.seat]
 	flash.style.setProperty('--c', L.color)
 	flash.innerHTML = `<span class="token">${strip.glyph(id)}</span><i></i>`
 	flash.querySelector('i').textContent = registry.get(id).name.toLowerCase()
 	flash.style.left = s.x + 'px'
 	flash.style.top = s.y + 'px'
 	flash.hidden = false
-	flash.classList.remove('pop'); void flash.offsetWidth; flash.classList.add('pop')
+	flash.classList.remove('pop')
+	void flash.offsetWidth
+	flash.classList.add('pop')
 	clearTimeout(flashT)
 	flashT = setTimeout(() => (flash.hidden = true), 1100)
 }
@@ -406,9 +563,19 @@ Object.assign(window, { jam: { engine, transport, view, bots, registry, me, hear
 // records 8 bars from the next loop start
 const recBtn = $('rec')
 if (recBtn && transport.kind === 'ws') {
-	const recorder = createRecorder({ engine, transport, seatName: (i) => { const o = occupant(i); return o.me ? me.name || playerName(i) : o.name || null } }) // 'you' becomes your name or seat
+	const recorder = createRecorder({
+		engine,
+		transport,
+		seatName: (i) => {
+			const o = occupant(i)
+			return o.me ? me.name || playerName(i) : o.name || null
+		},
+	}) // 'you' becomes your name or seat
 	const recline = $('recline')
-	const setRec = (state, p = 0) => { recBtn.dataset.state = state; recBtn.style.setProperty('--p', p.toFixed(3)) }
+	const setRec = (state, p = 0) => {
+		recBtn.dataset.state = state
+		recBtn.style.setProperty('--p', p.toFixed(3))
+	}
 	setRec('idle')
 	recBtn.onclick = async () => {
 		if (recorder.busy || recBtn.dataset.state === 'saving') return
@@ -421,12 +588,24 @@ if (recBtn && transport.kind === 'ws') {
 			const url = `${location.origin}/r/${id}`
 			setRec('done', 1)
 			const copy = word('copy link', async () => {
-				try { await navigator.clipboard.writeText(url); copy.textContent = 'link copied' } catch { copy.textContent = url }
+				try {
+					await navigator.clipboard.writeText(url)
+					copy.textContent = 'link copied'
+				} catch {
+					copy.textContent = url
+				}
 			})
 			copy.title = url
-			const a = Object.assign(document.createElement('a'), { href: '/r/' + id, target: '_blank', textContent: 'listen' })
+			const a = Object.assign(document.createElement('a'), {
+				href: '/r/' + id,
+				target: '_blank',
+				textContent: 'listen',
+			})
 			recline.append(r.bars + ' bars · ', copy, ' · ', a)
-			try { await navigator.clipboard.writeText(url); copy.textContent = 'link copied' } catch {}
+			try {
+				await navigator.clipboard.writeText(url)
+				copy.textContent = 'link copied'
+			} catch {}
 			setTimeout(() => setRec('idle'), 2500)
 		} catch (e) {
 			console.warn(e)

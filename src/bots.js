@@ -32,14 +32,29 @@ export function createBots(engine, { seated, view }) {
 			const riffing = canRiff(L)
 			const active = lead && !seated(i) && (L.module.generate || riffing)
 			let b = bots.get(i)
-			if (!active) { bots.delete(i); return }
+			if (!active) {
+				bots.delete(i)
+				return
+			}
 			if (!b) bots.set(i, (b = { nextAt: now + 800 + Math.random() * loopMs() * 1.5, sweep: null }))
-			if (riffing && b.riffId !== L.riff.id) { b.riffId = L.riff.id; b.sweep = null; b.nextAt = now }
+			if (riffing && b.riffId !== L.riff.id) {
+				b.riffId = L.riff.id
+				b.sweep = null
+				b.nextAt = now
+			}
 			if (!riffing) b.riffId = null
 			if (!b.sweep && now > b.nextAt) {
 				const turn = riffing ? riffTurn(L) : null
 				const target = turn ? turn.state : L.module.generate?.(engine.steps(), L.params)
-				if (target) b.sweep = { t0: now, y: 0.5, mod: L.module, target, riff: turn?.riff, ms: turn ? opts.riffSweepMs : opts.sweepMs }
+				if (target)
+					b.sweep = {
+						t0: now,
+						y: 0.5,
+						mod: L.module,
+						target,
+						riff: turn?.riff,
+						ms: turn ? opts.riffSweepMs : opts.sweepMs,
+					}
 				else b.nextAt = now + loopMs()
 			}
 			if (b.sweep && b.sweep.mod !== L.module) b.sweep = null
@@ -54,7 +69,12 @@ export function createBots(engine, { seated, view }) {
 					L.instance.setState(b.sweep.target)
 					if (b.sweep.riff) L.riff = b.sweep.riff
 					engine.push(L)
-					b.nextAt = now + loopMs() * (b.sweep.riff ? 1 + ((L.riff.turn || 0) % 2) : opts.minLoops + Math.random() * (opts.maxLoops - opts.minLoops))
+					b.nextAt =
+						now +
+						loopMs() *
+							(b.sweep.riff
+								? 1 + ((L.riff.turn || 0) % 2)
+								: opts.minLoops + Math.random() * (opts.maxLoops - opts.minLoops))
 					b.sweep = null
 				}
 			}
@@ -63,11 +83,22 @@ export function createBots(engine, { seated, view }) {
 	setInterval(tick, 60)
 
 	function hand(from, to, { by } = {}) {
-		const A = seats[from], B = seats[to]
-		if (!A || !B || from === to || seated(to) || !canPhrase(A.module.id) || !canPhrase(B.module.id)) return false
+		const A = seats[from],
+			B = seats[to]
+		if (!A || !B || from === to || seated(to) || !canPhrase(A.module.id) || !canPhrase(B.module.id))
+			return false
 		const motif = toPhrase(A, engine.steps())
 		if (!motif?.notes.length) return false
-		B.riff = { id: Math.random().toString(36).slice(2, 10), from: by ?? transport.id, fromSeat: from, color: A.color, motif, turn: 0, last: null, label: 'echoes' }
+		B.riff = {
+			id: Math.random().toString(36).slice(2, 10),
+			from: by ?? transport.id,
+			fromSeat: from,
+			color: A.color,
+			motif,
+			turn: 0,
+			last: null,
+			label: 'echoes',
+		}
 		engine.push(B)
 		return true
 	}
@@ -78,5 +109,15 @@ export function createBots(engine, { seated, view }) {
 		engine.push(L)
 	}
 
-	return { opts, hand, release, get count() { return bots.size }, get leading() { return leader() } }
+	return {
+		opts,
+		hand,
+		release,
+		get count() {
+			return bots.size
+		},
+		get leading() {
+			return leader()
+		},
+	}
 }

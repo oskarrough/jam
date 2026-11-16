@@ -3,11 +3,27 @@
 
 export function createGhost({ engine, view, me, times = 2 }) {
 	let run = null
-	const seen = (id) => { try { return +localStorage.getItem('roughjam.ghost.' + id) || 0 } catch { return 0 } }
-	const saw = (id) => { try { localStorage.setItem('roughjam.ghost.' + id, seen(id) + 1) } catch {} }
+	const seen = (id) => {
+		try {
+			return +localStorage.getItem('roughjam.ghost.' + id) || 0
+		} catch {
+			return 0
+		}
+	}
+	const saw = (id) => {
+		try {
+			localStorage.setItem('roughjam.ghost.' + id, seen(id) + 1)
+		} catch {}
+	}
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 
-	function stop() { if (run) { cancelAnimationFrame(run.raf); clearTimeout(run.wait); run = null } }
+	function stop() {
+		if (run) {
+			cancelAnimationFrame(run.raf)
+			clearTimeout(run.wait)
+			run = null
+		}
+	}
 
 	function play(i = me.seat, { force = false } = {}) {
 		stop()
@@ -20,7 +36,9 @@ export function createGhost({ engine, view, me, times = 2 }) {
 		r.wait = setTimeout(() => {
 			const shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
 			const aspect = L.canvas.width / Math.max(1, L.canvas.height)
-			const strokes = (typeof demo === 'function' ? demo(shape, aspect) : demo).filter((s) => s.length)
+			const strokes = (typeof demo === 'function' ? demo(shape, aspect) : demo).filter(
+				(s) => s.length,
+			)
 			if (!strokes.length) return (run = null)
 			const plan = []
 			let t = 0
@@ -36,8 +54,11 @@ export function createGhost({ engine, view, me, times = 2 }) {
 				const now = performance.now() - t0
 				const cur = plan.find((p) => now >= p.t0 && now < p.t0 + p.dur)
 				if (cur) {
-					const f = (now - cur.t0) / cur.dur, k = Math.min(cur.s.length - 1, f * (cur.s.length - 1))
-					const a = cur.s[Math.floor(k)], b = cur.s[Math.ceil(k)], u = k - Math.floor(k)
+					const f = (now - cur.t0) / cur.dur,
+						k = Math.min(cur.s.length - 1, f * (cur.s.length - 1))
+					const a = cur.s[Math.floor(k)],
+						b = cur.s[Math.ceil(k)],
+						u = k - Math.floor(k)
 					view.showCursor('ghost', i, a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, '')
 				}
 				if (now < t) r.raf = requestAnimationFrame(tick)
@@ -48,5 +69,11 @@ export function createGhost({ engine, view, me, times = 2 }) {
 		return true
 	}
 
-	return { play, stop, get playing() { return !!run } }
+	return {
+		play,
+		stop,
+		get playing() {
+			return !!run
+		},
+	}
 }

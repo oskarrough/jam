@@ -53,7 +53,8 @@ export default {
 		function paint(x, y, erase) {
 			const s = clamp(Math.floor(x * SLOTS), 0, SLOTS - 1)
 			const from = lastSlot ?? s
-			const a = Math.min(from, s), b = Math.max(from, s)
+			const a = Math.min(from, s),
+				b = Math.max(from, s)
 			for (let i = a; i <= b; i++) state.ys[i] = erase ? null : clamp(y, 0, 1)
 			lastSlot = s
 		}
@@ -61,8 +62,10 @@ export default {
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
-				if (e.type === 'down') { lastSlot = null; paint(e.x, e.y, e.alt) }
-				else if (e.type === 'move' && e.pressed) paint(e.x, e.y, e.alt)
+				if (e.type === 'down') {
+					lastSlot = null
+					paint(e.x, e.y, e.alt)
+				} else if (e.type === 'move' && e.pressed) paint(e.x, e.y, e.alt)
 				else if (e.type === 'up') lastSlot = null
 			}),
 			step(i, time, dur) {
@@ -92,13 +95,17 @@ export default {
 				})
 			},
 			frame(g, w, h, clock) {
-				size[0] = w; size[1] = h
+				size[0] = w
+				size[1] = h
 				const t = view(clock)
 				g.strokeStyle = th.faint
 				g.lineWidth = 1
 				for (let d = 0; d <= params.range; d++) {
 					const y = Math.round((1 - d / params.range) * (h - 1)) + 0.5
-					g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke()
+					g.beginPath()
+					g.moveTo(0, y)
+					g.lineTo(w, y)
+					g.stroke()
 				}
 				g.fillStyle = th.dim
 				const sw = w / SLOTS
@@ -112,23 +119,37 @@ export default {
 				g.beginPath()
 				let pen = false
 				state.ys.forEach((y, s) => {
-					if (y === null) { pen = false; return }
+					if (y === null) {
+						pen = false
+						return
+					}
 					const x = (s + 0.5) * sw
 					pen ? g.lineTo(x, y * h) : g.moveTo(x, y * h)
 					pen = true
 				})
 				g.stroke()
-				const px = (t.phase) * w // host draws the playhead; we mark the note under it
-				const y = state.ys[Math.floor((t.phase) * SLOTS)]
+				const px = t.phase * w // host draws the playhead; we mark the note under it
+				const y = state.ys[Math.floor(t.phase * SLOTS)]
 				if (y !== null && t.playing) {
 					g.fillStyle = th.accent
-					g.beginPath(); g.arc(px, (1 - toDeg(y) / params.range) * h, Math.max(2, w / 120), 0, Math.PI * 2); g.fill()
+					g.beginPath()
+					g.arc(px, (1 - toDeg(y) / params.range) * h, Math.max(2, w / 120), 0, Math.PI * 2)
+					g.fill()
 				}
 			},
-			setState(s) { state.ys = s.ys.slice() },
-			clear() { state.ys.fill(null) },
-			randomize() { this.setState(gen(clock.steps, params)) },
-			dispose() { amp.gain.setTargetAtTime(0, audio.currentTime, 0.02); osc.stop(audio.currentTime + 0.2) },
+			setState(s) {
+				state.ys = s.ys.slice()
+			},
+			clear() {
+				state.ys.fill(null)
+			},
+			randomize() {
+				this.setState(gen(clock.steps, params))
+			},
+			dispose() {
+				amp.gain.setTargetAtTime(0, audio.currentTime, 0.02)
+				osc.stop(audio.currentTime + 0.2)
+			},
 		}
 	},
 }

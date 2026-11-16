@@ -25,7 +25,10 @@ export function createClock() {
 		samples.push({ rtt, offset: raw, local: c1 })
 		if (samples.length > SAMPLES) samples.shift()
 		const minRtt = Math.min(...samples.map((x) => x.rtt))
-		const good = samples.filter((x) => x.rtt <= minRtt * 1.25 + 2).map((x) => x.offset).sort((a, b) => a - b)
+		const good = samples
+			.filter((x) => x.rtt <= minRtt * 1.25 + 2)
+			.map((x) => x.offset)
+			.sort((a, b) => a - b)
 		const est = good[good.length >> 1]
 		if (!locked || Math.abs(est - offset) > 30) offset = est
 		else offset += Math.max(-1, Math.min(1, est - offset))
@@ -35,7 +38,8 @@ export function createClock() {
 	const now = () => localNow() + offset
 	const toLocal = (serverMs) => serverMs - offset - performance.timeOrigin
 	const fromLocal = (perfMs) => perfMs + performance.timeOrigin + offset
-	const toAudio = (ctx, serverMs) => ctx.currentTime + (toLocal(serverMs) - performance.now()) / 1000
+	const toAudio = (ctx, serverMs) =>
+		ctx.currentTime + (toLocal(serverMs) - performance.now()) / 1000
 
 	function setLoop(loop, from = -Infinity) {
 		loops.push({ loop, from })
@@ -57,7 +61,13 @@ export function createClock() {
 		const beats = (t - l.origin) / beatMs(l)
 		const total = l.beatsPerBar * l.bars
 		const inLoop = ((beats % total) + total) % total
-		return { beats, bar: Math.floor(inLoop / l.beatsPerBar), beat: Math.floor(inLoop % l.beatsPerBar), loopPhase: inLoop / total, loop: l }
+		return {
+			beats,
+			bar: Math.floor(inLoop / l.beatsPerBar),
+			beat: Math.floor(inLoop % l.beatsPerBar),
+			loopPhase: inLoop / total,
+			loop: l,
+		}
 	}
 	const ceilTo = (l, t, unit) => l.origin + Math.ceil((t - l.origin) / unit) * unit
 	const nextBar = (t = now()) => ceilTo(loopAt(t), t, barMs(loopAt(t)))
@@ -72,42 +82,100 @@ export function createClock() {
 		const minRtt = Math.min(...rtts)
 		const good = samples.filter((x) => x.rtt <= minRtt * 1.5 + 5)
 		if (good.length > 4 && good.at(-1).local - good[0].local > 20000) {
-			const xs = good.map((x) => x.local), ys = good.map((x) => x.offset)
-			const mx = xs.reduce((a, b) => a + b) / xs.length, my = ys.reduce((a, b) => a + b) / ys.length
-			let num = 0, den = 0
-			for (let i = 0; i < xs.length; i++) (num += (xs[i] - mx) * (ys[i] - my)), (den += (xs[i] - mx) ** 2)
+			const xs = good.map((x) => x.local),
+				ys = good.map((x) => x.offset)
+			const mx = xs.reduce((a, b) => a + b) / xs.length,
+				my = ys.reduce((a, b) => a + b) / ys.length
+			let num = 0,
+				den = 0
+			for (let i = 0; i < xs.length; i++)
+				((num += (xs[i] - mx) * (ys[i] - my)), (den += (xs[i] - mx) ** 2))
 			drift = den ? (num / den) * 60000 : 0
 		}
-		return { rtt: rtts.length ? Math.min(...rtts) : null, rttLast: rtts.at(-1) ?? null, jitter, offset, drift, locked, samples: samples.length }
+		return {
+			rtt: rtts.length ? Math.min(...rtts) : null,
+			rttLast: rtts.at(-1) ?? null,
+			jitter,
+			offset,
+			drift,
+			locked,
+			samples: samples.length,
+		}
 	}
 
 	function instrumentClock(steps = 16) {
 		return {
-			get bpm() { return loopAt()?.bpm },
+			get bpm() {
+				return loopAt()?.bpm
+			},
 			steps,
-			get startTime() { return toLocal(loopAt().origin) },
-			pos: () => { const p = pos(); return p && p.loopPhase * steps },
+			get startTime() {
+				return toLocal(loopAt().origin)
+			},
+			pos: () => {
+				const p = pos()
+				return p && p.loopPhase * steps
+			},
 		}
 	}
 
 	const pending = (t = now()) => loops.filter((l) => l.from > t).map((l) => l.loop)
 
-	return { addSample, pending, now, toLocal, fromLocal, toAudio, setLoop, loopAt, pos, nextBar, nextLoop, stats, instrumentClock, beatMs, barMs, loopMs }
+	return {
+		addSample,
+		pending,
+		now,
+		toLocal,
+		fromLocal,
+		toAudio,
+		setLoop,
+		loopAt,
+		pos,
+		nextBar,
+		nextLoop,
+		stats,
+		instrumentClock,
+		beatMs,
+		barMs,
+		loopMs,
+	}
 }
 
-export function createTransport({ url, room = 'open', name = 'anon', seat = null, color = null } = {}) {
+export function createTransport({
+	url,
+	room = 'open',
+	name = 'anon',
+	seat = null,
+	color = null,
+} = {}) {
 	const clock = createClock()
 	const listeners = {}
 	const seats = {} // seat -> [{at, data, rev, from}] (short history so seatAt() can answer for near-future times)
 	const pending = new Map()
 	const timers = new Set()
-	let ws = null, id = null, peers = [], connected = false, retry = 0, pingTimer = null, closed = false
+	let ws = null,
+		id = null,
+		peers = [],
+		connected = false,
+		retry = 0,
+		pingTimer = null,
+		closed = false
 	let me = { name, seat, color }
-	let sent = 0, recv = 0, lastLateMs = 0
+	let sent = 0,
+		recv = 0,
+		lastLateMs = 0
 
 	const emit = (ev, d) => (listeners[ev] || []).forEach((fn) => fn(d))
-	const on = (ev, fn) => ((listeners[ev] ||= []).push(fn), () => (listeners[ev] = listeners[ev].filter((f) => f !== fn)))
-	const tx = (m) => { if (ws?.readyState === 1) { ws.send(JSON.stringify(m)); sent++ } }
+	const on = (ev, fn) => (
+		(listeners[ev] ||= []).push(fn),
+		() => (listeners[ev] = listeners[ev].filter((f) => f !== fn))
+	)
+	const tx = (m) => {
+		if (ws?.readyState === 1) {
+			ws.send(JSON.stringify(m))
+			sent++
+		}
+	}
 
 	clock.setLoop({ bpm: 96, beatsPerBar: 4, bars: 4, origin: Math.floor(localNow()) })
 
@@ -124,7 +192,8 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 		while (h.length > 4) h.shift()
 		schedule(entry.at - LOOKAHEAD, () => {
 			// timers for edits landing on the same bar can fire out of order; only the newest one for that bar applies
-			const cur = seats[seat] || [], i = cur.indexOf(entry)
+			const cur = seats[seat] || [],
+				i = cur.indexOf(entry)
 			if (i < 0 || cur[i + 1]?.at === entry.at) return
 			const late = clock.now() - (entry.at - LOOKAHEAD)
 			if (late > 20) lastLateMs = late
@@ -142,7 +211,11 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 			retry = 0
 			tx({ t: 'hello', room, ...me })
 			let n = 0
-			const burst = () => { tx({ t: 'ping', c0: localNow() }); if (++n < 10) pingTimer = setTimeout(burst, 50); else pingTimer = setInterval(() => tx({ t: 'ping', c0: localNow() }), 1500) }
+			const burst = () => {
+				tx({ t: 'ping', c0: localNow() })
+				if (++n < 10) pingTimer = setTimeout(burst, 50)
+				else pingTimer = setInterval(() => tx({ t: 'ping', c0: localNow() }), 1500)
+			}
 			burst()
 			emit('status', { connected })
 		}
@@ -154,7 +227,8 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 				id = m.id
 				peers = m.peers
 				clock.setLoop(m.loop, -Infinity)
-				for (const [seat, l] of Object.entries(m.seats)) record(seat, { at: l.at, data: l.data, rev: l.rev, from: l.owner })
+				for (const [seat, l] of Object.entries(m.seats))
+					record(seat, { at: l.at, data: l.data, rev: l.rev, from: l.owner })
 				emit('welcome', { id, loop: m.loop, seats: m.seats, peers })
 				emit('peers', peers)
 			} else if (m.t === 'peers') {
@@ -179,7 +253,8 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 		}
 		ws.onclose = () => {
 			connected = false
-			clearTimeout(pingTimer); clearInterval(pingTimer)
+			clearTimeout(pingTimer)
+			clearInterval(pingTimer)
 			emit('status', { connected })
 			if (!closed) setTimeout(connect, Math.min(5000, 300 * 2 ** retry++))
 		}
@@ -211,13 +286,36 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 		edit,
 		seatAt,
 		seats: () => Object.fromEntries(Object.keys(seats).map((k) => [k, seatAt(k)])),
-		cursor: (x, y, down = false, seat = me.seat, name) => tx({ t: 'cursor', x, y, down, seat, name }),
+		cursor: (x, y, down = false, seat = me.seat, name) =>
+			tx({ t: 'cursor', x, y, down, seat, name }),
 		setLoop: (loop) => tx({ t: 'loop', ...loop }),
-		setMe: (patch) => { Object.assign(me, patch); tx({ t: 'presence', ...patch }) },
+		setMe: (patch) => {
+			Object.assign(me, patch)
+			tx({ t: 'presence', ...patch })
+		},
 		clock,
-		get id() { return id },
-		get peers() { return peers },
-		debug: () => ({ connected, id, room, peers: peers.length, ...clock.stats(), pending: pending.size, sent, recv, lateMs: lastLateMs, pos: clock.pos() }),
-		close: () => { closed = true; ws?.close(); timers.forEach(clearTimeout) },
+		get id() {
+			return id
+		},
+		get peers() {
+			return peers
+		},
+		debug: () => ({
+			connected,
+			id,
+			room,
+			peers: peers.length,
+			...clock.stats(),
+			pending: pending.size,
+			sent,
+			recv,
+			lateMs: lastLateMs,
+			pos: clock.pos(),
+		}),
+		close: () => {
+			closed = true
+			ws?.close()
+			timers.forEach(clearTimeout)
+		},
 	}
 }

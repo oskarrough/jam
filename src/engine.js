@@ -18,23 +18,38 @@ export function createEngine(transport, { seatIds, instruments }) {
 	const emit = (ev, d) => (listeners[ev] || []).forEach((fn) => fn(d))
 	const on = (ev, fn) => (listeners[ev] ||= []).push(fn)
 
-
 	const { master, roomIn, analyser } = mixBus(audio)
 	master.gain.value = 0
 
 	const loop = () => clock.loopAt()
 	kit(audio).follow(loop)
-	const steps = () => { const l = loop(); return l.bars * l.beatsPerBar * 4 }
+	const steps = () => {
+		const l = loop()
+		return l.bars * l.beatsPerBar * 4
+	}
 	const stepMs = (l = loop()) => clock.beatMs(l) / 4
 
 	const iclock = {
-		get bpm() { return loop().bpm },
-		get steps() { return steps() },
-		get stepDur() { return stepMs() / 1000 },
-		get startTime() { return clock.toAudio(audio, loop().origin) },
+		get bpm() {
+			return loop().bpm
+		},
+		get steps() {
+			return steps()
+		},
+		get stepDur() {
+			return stepMs() / 1000
+		},
+		get startTime() {
+			return clock.toAudio(audio, loop().origin)
+		},
 		now: () => audio.currentTime,
-		pos: () => { const p = clock.pos(); return p ? p.loopPhase * steps() : 0 },
-		get playing() { return soundOn },
+		pos: () => {
+			const p = clock.pos()
+			return p ? p.loopPhase * steps() : 0
+		},
+		get playing() {
+			return soundOn
+		},
 	}
 
 	const seats = seatIds.map((id, i) => {
@@ -42,7 +57,18 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const send = audio.createGain()
 		out.connect(master)
 		out.connect(send).connect(roomIn)
-		return { id, index: i, color: SEAT_COLORS[i % SEAT_COLORS.length], out, send, mix: { level: 0.9, space: 0.25, mute: false }, module: null, instance: null, params: {}, canvas: document.createElement('canvas') }
+		return {
+			id,
+			index: i,
+			color: SEAT_COLORS[i % SEAT_COLORS.length],
+			out,
+			send,
+			mix: { level: 0.9, space: 0.25, mute: false },
+			module: null,
+			instance: null,
+			params: {},
+			canvas: document.createElement('canvas'),
+		}
 	})
 	seats.forEach((L) => (L.g = L.canvas.getContext('2d')))
 
@@ -60,7 +86,14 @@ export function createEngine(transport, { seatIds, instruments }) {
 		L.module = mod
 		L.params = Object.fromEntries(Object.entries(mod.params || {}).map(([k, p]) => [k, val(p)]))
 		if (params) Object.assign(L.params, params)
-		L.instance = mod.create({ audio, out: L.out, clock: iclock, params: L.params, color: L.color, theme: INK_THEME })
+		L.instance = mod.create({
+			audio,
+			out: L.out,
+			clock: iclock,
+			params: L.params,
+			color: L.color,
+			theme: INK_THEME,
+		})
 		if (state !== undefined) L.instance.setState(state)
 		applyMix(L)
 		emit('seats')
@@ -75,7 +108,11 @@ export function createEngine(transport, { seatIds, instruments }) {
 	const seatById = (id) => seats.find((L) => L.id === id)
 	const lastSent = new Map()
 	function push(L, { now = false } = {}) {
-		const data = { instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } }
+		const data = {
+			instrument: L.module.id,
+			state: structuredClone(L.instance.state),
+			params: { ...L.params },
+		}
 		if (L.riff) data.riff = L.riff
 		if (L.mix.mute) data.mute = true
 		lastSent.set(L.id, performance.now())
@@ -86,15 +123,26 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const since = performance.now() - (lastSent.get(L.id) || 0)
 		clearTimeout(timers.get(L.id))
 		if (since > 100) push(L)
-		else timers.set(L.id, setTimeout(() => push(L), 100 - since))
+		else
+			timers.set(
+				L.id,
+				setTimeout(() => push(L), 100 - since),
+			)
 	}
 	transport.on('apply', ({ seat, data, local }) => {
 		const L = seatById(seat)
 		if (!L || !data || local) return
 		L.riff = data.riff || null
-		if (!!data.mute !== L.mix.mute) { L.mix.mute = !!data.mute; applyMix(L) }
-		if (data.instrument !== L.module.id) setInstrument(L, data.instrument, { state: data.state, params: data.params })
-		else { if (data.params) Object.assign(L.params, data.params); L.instance.setState(data.state) }
+		if (!!data.mute !== L.mix.mute) {
+			L.mix.mute = !!data.mute
+			applyMix(L)
+		}
+		if (data.instrument !== L.module.id)
+			setInstrument(L, data.instrument, { state: data.state, params: data.params })
+		else {
+			if (data.params) Object.assign(L.params, data.params)
+			L.instance.setState(data.state)
+		}
 		emit('apply', L)
 	})
 	transport.on('welcome', ({ seats: snap }) => {
@@ -112,16 +160,28 @@ export function createEngine(transport, { seatIds, instruments }) {
 		}
 		while (nextT < now + cfg.lookaheadMs) {
 			l = clock.loopAt(nextT)
-			const sm = stepMs(l), n = l.bars * l.beatsPerBar * 4
+			const sm = stepMs(l),
+				n = l.bars * l.beatsPerBar * 4
 			const abs = Math.round((nextT - l.origin) / sm)
 			const i = ((abs % n) + n) % n
 			const at = clock.toAudio(audio, nextT)
 			const late = (audio.currentTime - at) * 1000
-			if (late > 0) { stats.late++; stats.lastLateMs = late }
+			if (late > 0) {
+				stats.late++
+				stats.lastLateMs = late
+			}
 			// a few ms late still sounds; much later would land off the beat, so drop it
-			if (late <= 30) for (const L of seats) { try { L.instance.step(i, Math.max(at, audio.currentTime), sm / 1000) } catch (e) { console.error(L.module.id, e) } }
+			if (late <= 30)
+				for (const L of seats) {
+					try {
+						L.instance.step(i, Math.max(at, audio.currentTime), sm / 1000)
+					} catch (e) {
+						console.error(L.module.id, e)
+					}
+				}
 			stats.scheduled++
-			const next = nextT + sm, ln = clock.loopAt(next)
+			const next = nextT + sm,
+				ln = clock.loopAt(next)
 			nextT = ln === l ? next : ln.origin + Math.ceil((next - ln.origin) / stepMs(ln)) * stepMs(ln)
 		}
 	}
@@ -145,15 +205,44 @@ export function createEngine(transport, { seatIds, instruments }) {
 	}
 
 	return {
-		audio, seats, cfg, stats, iclock, transport,
-		on, setInstrument, push, pushSoon, applyMix, setSound, level,
+		audio,
+		seats,
+		cfg,
+		stats,
+		iclock,
+		transport,
+		on,
+		setInstrument,
+		push,
+		pushSoon,
+		applyMix,
+		setSound,
+		level,
 		heard: (i) => heard(seats[i]),
-		get solo() { return solo },
-		setMute(L, on) { L.mix.mute = on; applyMix(L); push(L, { now: true }); emit('mix', L) },
-		setSolo(i) { solo = solo === i ? -1 : i; seats.forEach(applyMix); emit('mix') },
-		get soundOn() { return soundOn },
-		steps, loop,
-		setTick(ms) { cfg.tickMs = ms; clearInterval(timer); timer = setInterval(tick, ms) },
+		get solo() {
+			return solo
+		},
+		setMute(L, on) {
+			L.mix.mute = on
+			applyMix(L)
+			push(L, { now: true })
+			emit('mix', L)
+		},
+		setSolo(i) {
+			solo = solo === i ? -1 : i
+			seats.forEach(applyMix)
+			emit('mix')
+		},
+		get soundOn() {
+			return soundOn
+		},
+		steps,
+		loop,
+		setTick(ms) {
+			cfg.tickMs = ms
+			clearInterval(timer)
+			timer = setInterval(tick, ms)
+		},
 	}
 }
 
@@ -182,7 +271,8 @@ export function mixBus(audio, dest = audio.destination) {
 }
 
 function impulse(ac, sec, decay) {
-	const len = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(2, len, ac.sampleRate)
+	const len = Math.floor(ac.sampleRate * sec),
+		b = ac.createBuffer(2, len, ac.sampleRate)
 	for (let c = 0; c < 2; c++) {
 		const d = b.getChannelData(c)
 		for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay)

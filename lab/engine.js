@@ -9,8 +9,12 @@ export function createClock(audio, { bpm = 96, steps = 16 } = {}) {
 		startTime: 0,
 		playing: false,
 		frozen: 0,
-		get stepDur() { return 60 / c.bpm / 4 },
-		get loopDur() { return c.stepDur * c.steps },
+		get stepDur() {
+			return 60 / c.bpm / 4
+		},
+		get loopDur() {
+			return c.stepDur * c.steps
+		},
 		now: () => audio.currentTime,
 		abs(t = audio.currentTime) {
 			if (!c.playing) return c.frozen
@@ -30,7 +34,9 @@ export function createClock(audio, { bpm = 96, steps = 16 } = {}) {
 }
 
 export function createEngine() {
-	const audio = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' })
+	const audio = new (window.AudioContext || window.webkitAudioContext)({
+		latencyHint: 'interactive',
+	})
 	const comp = audio.createDynamicsCompressor()
 	comp.threshold.value = -14
 	comp.ratio.value = 4
@@ -65,4 +71,3 @@ export function createEngine() {
 
 	return { audio, master, reverb, seat, ...kit(audio) }
 }
-

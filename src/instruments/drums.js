@@ -15,26 +15,48 @@ const LABELS = ['kick', 'snare', 'hat']
 const blankVel = (n) => Array.from({ length: n }, () => [LV, LV, LV])
 
 function drumSample() {
-	const d = new Array(64).fill(0), v = blankVel(64)
+	const d = new Array(64).fill(0),
+		v = blankVel(64)
 	for (let b = 0; b < 4; b++) {
 		const o = b * 16
-		d[o] |= 1; d[o + 6] |= 1; d[o + 8] |= 1
-		v[o][0] = 9; v[o + 6][0] = 5
-		d[o + 4] |= 2; d[o + 12] |= 2
+		d[o] |= 1
+		d[o + 6] |= 1
+		d[o + 8] |= 1
+		v[o][0] = 9
+		v[o + 6][0] = 5
+		d[o + 4] |= 2
+		d[o + 12] |= 2
 		v[o + 12][1] = 8
-		for (const h of [2, 6, 10, 14]) { d[o + h] |= 4; v[o + h][2] = h % 4 === 2 ? 7 : 4 }
+		for (const h of [2, 6, 10, 14]) {
+			d[o + h] |= 4
+			v[o + h][2] = h % 4 === 2 ? 7 : 4
+		}
 	}
-	d[30] |= 1; d[62] |= 1; d[63] |= 2; d[61] |= 2
-	v[61][1] = 3; v[63][1] = 5
+	d[30] |= 1
+	d[62] |= 1
+	d[63] |= 2
+	d[61] |= 2
+	v[61][1] = 3
+	v[63][1] = 5
 	return { d, v }
 }
 function drumGen() {
-	const a = new Array(32).fill(0), v = blankVel(32)
+	const a = new Array(32).fill(0),
+		v = blankVel(32)
 	for (let i = 0; i < 32; i++) {
-		if (i % 8 === 0 || (i % 2 === 0 && Math.random() < 0.12) || (i % 8 === 3 && Math.random() < 0.3)) a[i] |= 1
+		if (
+			i % 8 === 0 ||
+			(i % 2 === 0 && Math.random() < 0.12) ||
+			(i % 8 === 3 && Math.random() < 0.3)
+		)
+			a[i] |= 1
 		if (i % 8 === 4 || Math.random() < 0.05) a[i] |= 2
 		if (i % 2 === 0 ? Math.random() < 0.85 : Math.random() < 0.3) a[i] |= 4
-		v[i] = [i % 16 === 0 ? 9 : i % 8 === 0 ? 7 : 5, i % 8 === 4 ? (i % 16 === 12 ? 8 : 6) : 2 + Math.floor(Math.random() * 2), i % 4 === 0 ? 7 : i % 2 === 0 ? 5 : 3]
+		v[i] = [
+			i % 16 === 0 ? 9 : i % 8 === 0 ? 7 : 5,
+			i % 8 === 4 ? (i % 16 === 12 ? 8 : 6) : 2 + Math.floor(Math.random() * 2),
+			i % 4 === 0 ? 7 : i % 2 === 0 ? 5 : 3,
+		]
 	}
 	return { d: a, v }
 }
@@ -42,34 +64,64 @@ function drumGen() {
 const gainOf = (lv) => Math.pow(lv / LV, 1.25)
 const hitVoice = {
 	1({ audio: ac, out }, t, lv) {
-		const g = ac.createGain(); env(g, t, 0.002, 0.9 * gainOf(lv), 0.3 + lv * 0.01); g.connect(out)
+		const g = ac.createGain()
+		env(g, t, 0.002, 0.9 * gainOf(lv), 0.3 + lv * 0.01)
+		g.connect(out)
 		const f0 = 120 + lv * 7
 		const o = osc(ac, 'sine', f0, t, 0.5, g)
-		o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12)
+		o.frequency.setValueAtTime(f0, t)
+		o.frequency.exponentialRampToValueAtTime(42, t + 0.12)
 	},
 	2({ audio: ac, out }, t, lv) {
-		const g = ac.createGain(), bp = ac.createBiquadFilter()
-		bp.type = 'bandpass'; bp.frequency.value = 1300 + lv * 110; bp.Q.value = 0.8
-		env(g, t, 0.002, 0.45 * gainOf(lv), 0.1 + lv * 0.012); bp.connect(g); g.connect(out); noiseSrc(ac, t, 0.25, bp)
-		const g2 = ac.createGain(); env(g2, t, 0.002, 0.25 * gainOf(lv), 0.07); g2.connect(out); osc(ac, 'triangle', 190, t, 0.12, g2)
+		const g = ac.createGain(),
+			bp = ac.createBiquadFilter()
+		bp.type = 'bandpass'
+		bp.frequency.value = 1300 + lv * 110
+		bp.Q.value = 0.8
+		env(g, t, 0.002, 0.45 * gainOf(lv), 0.1 + lv * 0.012)
+		bp.connect(g)
+		g.connect(out)
+		noiseSrc(ac, t, 0.25, bp)
+		const g2 = ac.createGain()
+		env(g2, t, 0.002, 0.25 * gainOf(lv), 0.07)
+		g2.connect(out)
+		osc(ac, 'triangle', 190, t, 0.12, g2)
 	},
 	4({ audio: ac, out, params }, t, lv) {
-		const g = ac.createGain(), hp = ac.createBiquadFilter()
-		hp.type = 'highpass'; hp.frequency.value = 6000 + lv * 200
-		env(g, t, 0.001, 0.16 * gainOf(lv), val(params.decay) * (0.6 + lv / 15)); hp.connect(g); g.connect(out); noiseSrc(ac, t, 0.3, hp)
+		const g = ac.createGain(),
+			hp = ac.createBiquadFilter()
+		hp.type = 'highpass'
+		hp.frequency.value = 6000 + lv * 200
+		env(g, t, 0.001, 0.16 * gainOf(lv), val(params.decay) * (0.6 + lv / 15))
+		hp.connect(g)
+		g.connect(out)
+		noiseSrc(ac, t, 0.3, hp)
 	},
 }
 
 export default {
 	id: 'drums',
-	glyph: '<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
+	glyph:
+		'<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
 	how: 'Kick, snare and hat in three rows. Tap a step for a hit, drag it up or down for how loud it hits, sideways to paint: higher in the row hits louder. Shift-drag erases.',
-	demo: () => [tap(0.07, 0.84), tap(0.32, 0.84), tap(0.57, 0.84), line(0.32, 0.84, 0.32, 0.72, 6), line(0.07, 0.17, 0.6, 0.17, 16)],
+	demo: () => [
+		tap(0.07, 0.84),
+		tap(0.32, 0.84),
+		tap(0.57, 0.84),
+		line(0.32, 0.84, 0.32, 0.72, 6),
+		line(0.07, 0.17, 0.6, 0.17, 16),
+	],
 	optional: ['vel'],
 	params: { decay: { value: 0.045, min: 0.01, max: 0.3, step: 0.005 } },
-	generate: (steps) => { const { d, v } = drumGen(); return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) } },
-	sample: (steps) => { const { d, v } = drumSample(); return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) } },
+	generate: (steps) => {
+		const { d, v } = drumGen()
+		return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) }
+	},
+	sample: (steps) => {
+		const { d, v } = drumSample()
+		return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) }
+	},
 	create(ctx) {
 		const { clock } = ctx
 		let hits = new Array(clock.steps).fill(0)
@@ -77,7 +129,8 @@ export default {
 		let g = null
 		const ensure = () => {
 			if (hits.length !== clock.steps) hits = fit(hits, clock.steps, 0)
-			if (vel.length !== hits.length) vel = fit(vel, hits.length, [LV, LV, LV]).map((x) => x.slice())
+			if (vel.length !== hits.length)
+				vel = fit(vel, hits.length, [LV, LV, LV]).map((x) => x.slice())
 		}
 		const has = (s, row) => !!(hits[s] & (1 << row))
 		const put = (s, row, on, lv) => {
@@ -89,18 +142,31 @@ export default {
 		// the pen sits where the stem's top would (see frame)
 		const lvAt = (y, row) => clamp(Math.round((((1 - y) * ROWS - row - 0.1) / 0.68) * 9), 1, 9)
 		return {
-			get state() { return { hits, vel } },
+			get state() {
+				return { hits, vel }
+			},
 			setState(s) {
 				hits = s?.hits ? s.hits.slice() : new Array(clock.steps).fill(0)
-				vel = Array.isArray(s?.vel) && s.vel.length === hits.length ? s.vel.map((x) => [0, 1, 2].map((r) => clamp(Math.round(x?.[r] || LV), 1, 9))) : blankVel(hits.length)
+				vel =
+					Array.isArray(s?.vel) && s.vel.length === hits.length
+						? s.vel.map((x) => [0, 1, 2].map((r) => clamp(Math.round(x?.[r] || LV), 1, 9)))
+						: blankVel(hits.length)
 			},
-			clear() { hits = new Array(clock.steps).fill(0); vel = blankVel(clock.steps) },
+			clear() {
+				hits = new Array(clock.steps).fill(0)
+				vel = blankVel(clock.steps)
+			},
 			pointer(e) {
 				ensure()
-				const n = hits.length, s = Math.min(n - 1, Math.max(0, Math.floor(e.x * n)))
+				const n = hits.length,
+					s = Math.min(n - 1, Math.max(0, Math.floor(e.x * n)))
 				const row = clamp(Math.floor((1 - e.y) * ROWS), 0, ROWS - 1)
 				if (e.type === 'down') {
-					if (e.alt || e.button === 2) { put(s, row, false); g = { s, row, mode: 'erase' }; return }
+					if (e.alt || e.button === 2) {
+						put(s, row, false)
+						g = { s, row, mode: 'erase' }
+						return
+					}
 					const had = has(s, row)
 					if (!had) put(s, row, true, LV)
 					g = { s, row, had, lv: lvOf(s, row), x0: e.x, y0: e.y, mode: null }
@@ -120,9 +186,16 @@ export default {
 					let d = s - g.s
 					if (d > n / 2) d -= n
 					if (d < -n / 2) d += n
-					const lv = g.mode === 'paint' ? lvAt(e.y, g.row) : g.lv, from = g.paintLv ?? lv
+					const lv = g.mode === 'paint' ? lvAt(e.y, g.row) : g.lv,
+						from = g.paintLv ?? lv
 					if (g.mode === 'paint' && !g.paintLv) put(g.s, g.row, true, lv)
-					for (let j = 1; j <= Math.abs(d); j++) put((g.s + Math.sign(d) * j + n) % n, g.row, g.mode !== 'erase', Math.round(from + ((lv - from) * j) / Math.abs(d)))
+					for (let j = 1; j <= Math.abs(d); j++)
+						put(
+							(g.s + Math.sign(d) * j + n) % n,
+							g.row,
+							g.mode !== 'erase',
+							Math.round(from + ((lv - from) * j) / Math.abs(d)),
+						)
 					if (g.mode === 'paint') g.paintLv = lv
 					g.s = s
 				} else if (e.type === 'up' && g) {
@@ -131,13 +204,18 @@ export default {
 				}
 			},
 			step(i, time) {
-				const k = i % hits.length, m = hits[k]
+				const k = i % hits.length,
+					m = hits[k]
 				for (let r = 0; r < ROWS; r++) if (m & (1 << r)) hitVoice[1 << r](ctx, time, lvOf(k, r))
 			},
 			frame(gx, w, h, clock, shape) {
 				ensure()
-				const n = hits.length, pos = clock.pos(), color = ctx.color
-				const strip = isStrip(w, h, shape), band = h / ROWS, cw = w / n
+				const n = hits.length,
+					pos = clock.pos(),
+					color = ctx.color
+				const strip = isStrip(w, h, shape),
+					band = h / ROWS,
+					cw = w / n
 				const rowY = (r) => (1 - (r + 0.5) / ROWS) * h
 				gx.fillStyle = rgba(INK, 0.22)
 				for (let r = 1; r < ROWS; r++) gx.fillRect(0, (r / ROWS) * h - 0.5, w, 1)
@@ -145,7 +223,9 @@ export default {
 				gx.textAlign = 'left'
 				gx.textBaseline = strip ? 'middle' : 'top'
 				gx.fillStyle = rgba(INK, 0.55)
-				LABELS.forEach((label, r) => gx.fillText(label, cw + 3, strip ? rowY(r) : h - (r + 1) * band + 6))
+				LABELS.forEach((label, r) =>
+					gx.fillText(label, cw + 3, strip ? rowY(r) : h - (r + 1) * band + 6),
+				)
 				if (!strip) {
 					for (let r = 0; r < ROWS; r++) {
 						const base = h - r * band - band * 0.1
@@ -160,11 +240,13 @@ export default {
 				for (let s = 0; s < n; s++) {
 					const m = hits[s]
 					if (!m) continue
-					const d = (pos - s + n) % n, f = d < 1.5 ? 1 - d / 1.5 : 0
+					const d = (pos - s + n) % n,
+						f = d < 1.5 ? 1 - d / 1.5 : 0
 					const x = (s + 0.5) * cw
 					for (let r = 0; r < ROWS; r++) {
 						if (!(m & (1 << r))) continue
-						const lv = lvOf(s, r), k = lv / 9
+						const lv = lvOf(s, r),
+							k = lv / 9
 						const full = Math.min(band * [0.17, 0.13, 0.09][r], [16, 12, 8][r])
 						let y, size
 						if (strip) {
@@ -174,19 +256,36 @@ export default {
 							const base = h - r * band - band * 0.1
 							y = base - k * band * 0.68
 							size = Math.min(full, cw * 0.32) * (0.75 + 0.35 * k) + f * 2
-							gx.strokeStyle = INK; gx.lineWidth = 1 + k * 1.5
-							gx.beginPath(); gx.moveTo(x, base); gx.lineTo(x, y); gx.stroke()
+							gx.strokeStyle = INK
+							gx.lineWidth = 1 + k * 1.5
+							gx.beginPath()
+							gx.moveTo(x, base)
+							gx.lineTo(x, y)
+							gx.stroke()
 						}
 						gx.fillStyle = f > 0.3 ? INK : lv >= 9 ? INK : color
 						gx.beginPath()
 						if (r === 1) gx.rect(x - size, y - size, size * 2, size * 2)
-						else if (r === 2) { gx.moveTo(x, y - size * 1.3); gx.lineTo(x + size, y); gx.lineTo(x, y + size * 1.3); gx.lineTo(x - size, y); gx.closePath() }
-						else gx.arc(x, y, size, 0, 6.283)
+						else if (r === 2) {
+							gx.moveTo(x, y - size * 1.3)
+							gx.lineTo(x + size, y)
+							gx.lineTo(x, y + size * 1.3)
+							gx.lineTo(x - size, y)
+							gx.closePath()
+						} else gx.arc(x, y, size, 0, 6.283)
 						gx.fill()
-						gx.strokeStyle = INK; gx.lineWidth = 1; gx.stroke()
-						if (lv >= 9) { gx.beginPath(); gx.arc(x, y, size + 3.5, 0, 6.283); gx.stroke() }
+						gx.strokeStyle = INK
+						gx.lineWidth = 1
+						gx.stroke()
+						if (lv >= 9) {
+							gx.beginPath()
+							gx.arc(x, y, size + 3.5, 0, 6.283)
+							gx.stroke()
+						}
 						if (g?.shown && g.s === s && g.row === r && g.mode === 'level') {
-							gx.fillStyle = INK; gx.textAlign = 'center'; gx.textBaseline = 'bottom'
+							gx.fillStyle = INK
+							gx.textAlign = 'center'
+							gx.textBaseline = 'bottom'
 							gx.fillText(String(lv), x, y - size * 1.4 - 3)
 						}
 					}

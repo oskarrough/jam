@@ -6,7 +6,8 @@ import { jellify } from './jelly.js'
 const fallback = '<circle cx="16" cy="16" r="9"/>'
 
 export function createStrip({ engine, registry, me, el, before, chosen }) {
-	const glyph = (id) => `<svg viewBox="0 0 32 32" aria-hidden="true">${registry.get(id)?.glyph || fallback}</svg>`
+	const glyph = (id) =>
+		`<svg viewBox="0 0 32 32" aria-hidden="true">${registry.get(id)?.glyph || fallback}</svg>`
 	el.classList.add('strip')
 	el.setAttribute('role', 'toolbar')
 	el.setAttribute('aria-label', 'Instruments')
@@ -20,7 +21,10 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	el.append(row, caption, voices)
 
 	const seat = () => engine.seats[me.seat]
-	const showCurrent = () => { const L = seat(); caption.textContent = L ? L.module.name.toLowerCase() : '' }
+	const showCurrent = () => {
+		const L = seat()
+		caption.textContent = L ? L.module.name.toLowerCase() : ''
+	}
 	const buttons = []
 	for (const [id, mod] of registry) {
 		const b = document.createElement('button')
@@ -46,9 +50,16 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		const L = seat()
 		if (!L || L.module.id === id) return false
 		before?.()
-		left.set(`${L.id}:${L.module.id}`, { state: structuredClone(L.instance.state), params: { ...L.params } })
+		left.set(`${L.id}:${L.module.id}`, {
+			state: structuredClone(L.instance.state),
+			params: { ...L.params },
+		})
 		const back = left.get(`${L.id}:${id}`)
-		engine.setInstrument(L, id, back ? structuredClone(back) : { state: registry.get(id).sample?.(engine.steps()) })
+		engine.setInstrument(
+			L,
+			id,
+			back ? structuredClone(back) : { state: registry.get(id).sample?.(engine.steps()) },
+		)
 		engine.push(L, { now: true })
 		paint()
 		chosen?.(id)
@@ -63,19 +74,23 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	}
 	let shown = null
 	function paintVoices() {
-		const L = seat(), names = L?.module.voices || []
+		const L = seat(),
+			names = L?.module.voices || []
 		const key = names.join('|')
 		if (key !== shown) {
 			shown = key
-			voices.replaceChildren(...names.map((n) => {
-				const b = document.createElement('button')
-				b.textContent = n
-				b.onclick = () => voice(n)
-				return b
-			}))
+			voices.replaceChildren(
+				...names.map((n) => {
+					const b = document.createElement('button')
+					b.textContent = n
+					b.onclick = () => voice(n)
+					return b
+				}),
+			)
 		}
 		voices.hidden = !names.length
-		for (const b of voices.children) b.setAttribute('aria-pressed', b.textContent === L?.params.voice)
+		for (const b of voices.children)
+			b.setAttribute('aria-pressed', b.textContent === L?.params.voice)
 	}
 	const ids = [...registry.keys()]
 	function cycle(d) {
@@ -93,14 +108,18 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		showCurrent()
 		paintVoices()
 		const cur = buttons.find((b) => b.dataset.id === L.module.id)
-		if (cur && row.scrollWidth > row.clientWidth) row.scrollLeft = cur.offsetLeft - row.clientWidth / 2 + cur.offsetWidth / 2
+		if (cur && row.scrollWidth > row.clientWidth)
+			row.scrollLeft = cur.offsetLeft - row.clientWidth / 2 + cur.offsetWidth / 2
 	}
 
 	el.addEventListener('keydown', (e) => {
 		const i = buttons.indexOf(document.activeElement)
 		const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key]
-		if (i >= 0 && step) { e.preventDefault(); e.stopPropagation(); buttons[(i + step + buttons.length) % buttons.length].focus() }
+		if (i >= 0 && step) {
+			e.preventDefault()
+			e.stopPropagation()
+			buttons[(i + step + buttons.length) % buttons.length].focus()
+		}
 	})
 	return { paint, cycle, glyph }
 }
-

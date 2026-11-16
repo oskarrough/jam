@@ -10,18 +10,18 @@ All ten share one clock and one key. Each draws into a plain rectangle, so the d
 can wrap it into a ring. Everything you draw is the instrument's `state`, plain JSON,
 mostly well under 1 KB.
 
-| # | instrument | gesture | intended feel |
-|---|---|---|---|
-| 01 | contour | draw a line; x is time, y is pitch | singing with a pencil; the glide makes sloppy lines sound deliberate |
-| 02 | grid | paint cells | the control group: precise, familiar, a little office-like |
-| 03 | rings | rotate and stretch euclidean rings, each with its own length | turning a lock; uneven ring lengths drift into polymeter on their own |
-| 04 | sweep | hold and move over a held chord; records at the playhead | DJ hands: you perform the filter, then it performs you back |
-| 05 | drift | drop up to five drone stones in a pond | slow and ambient; the chord breathes and rotates without you |
-| 06 | scribble | scribble freely; replayed in stroke order as vowel grains | handwriting as voice; frantic scribbles stutter, calm ones hum |
-| 07 | strum | swipe across six strings; strums record and follow the chords | the most social one: a rhythm you play once turns into a progression |
-| 08 | swarm | string wires across fireflies' fixed flight paths | composing by placing tripwires, not notes; surprising, deterministic |
-| 09 | orbits | place planets; size is pitch, distance is speed | watch-it-happen polyrhythm; 3 and 6 lap orbits fall between the 16ths |
-| 10 | embers | throw sparks above the fire; they pop on the grid and burn out | percussion that decays unless someone keeps feeding it |
+| #   | instrument | gesture                                                        | intended feel                                                         |
+| --- | ---------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 01  | contour    | draw a line; x is time, y is pitch                             | singing with a pencil; the glide makes sloppy lines sound deliberate  |
+| 02  | grid       | paint cells                                                    | the control group: precise, familiar, a little office-like            |
+| 03  | rings      | rotate and stretch euclidean rings, each with its own length   | turning a lock; uneven ring lengths drift into polymeter on their own |
+| 04  | sweep      | hold and move over a held chord; records at the playhead       | DJ hands: you perform the filter, then it performs you back           |
+| 05  | drift      | drop up to five drone stones in a pond                         | slow and ambient; the chord breathes and rotates without you          |
+| 06  | scribble   | scribble freely; replayed in stroke order as vowel grains      | handwriting as voice; frantic scribbles stutter, calm ones hum        |
+| 07  | strum      | swipe across six strings; strums record and follow the chords  | the most social one: a rhythm you play once turns into a progression  |
+| 08  | swarm      | string wires across fireflies' fixed flight paths              | composing by placing tripwires, not notes; surprising, deterministic  |
+| 09  | orbits     | place planets; size is pitch, distance is speed                | watch-it-happen polyrhythm; 3 and 6 lap orbits fall between the 16ths |
+| 10  | embers     | throw sparks above the fire; they pop on the grid and burn out | percussion that decays unless someone keeps feeding it                |
 
 The "intended feel" column is design intent from building them, not a listening test.
 

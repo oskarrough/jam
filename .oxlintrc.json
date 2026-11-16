@@ -5,7 +5,13 @@
 	"categories": { "correctness": "off" },
 	"env": { "browser": true, "node": true },
 	"globals": { "WebSocketPair": "readonly", "HTMLRewriter": "readonly" },
-	"ignorePatterns": ["**/node_modules/**", "src/vendor/**", ".wrangler/**", ".cloudflare/**", "shots/**"],
+	"ignorePatterns": [
+		"**/node_modules/**",
+		"src/vendor/**",
+		".wrangler/**",
+		".cloudflare/**",
+		"shots/**"
+	],
 	"rules": {
 		"no-undef": "error",
 		"no-dupe-keys": "error",

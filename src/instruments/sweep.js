@@ -7,18 +7,29 @@ const cutoffOf = (y) => 60 * Math.pow(2, (1 - y) * 7.5)
 const qOf = (x) => 0.4 + x * 16
 
 function gen() {
-	const a = Math.random(), b = Math.floor(Math.random() * 3) + 1
+	const a = Math.random(),
+		b = Math.floor(Math.random() * 3) + 1
 	const auto = []
-	for (let s = 0; s < SLOTS; s++) auto.push([+(0.5 + 0.4 * Math.sin((s / SLOTS) * Math.PI * 2 * b + a * 6)).toFixed(3), +(Math.random() * 0.5).toFixed(3)])
+	for (let s = 0; s < SLOTS; s++)
+		auto.push([
+			+(0.5 + 0.4 * Math.sin((s / SLOTS) * Math.PI * 2 * b + a * 6)).toFixed(3),
+			+(Math.random() * 0.5).toFixed(3),
+		])
 	return { auto }
 }
 
 export default {
 	id: 'sweep',
-	glyph: '<path d="M5 25A13 13 0 0 1 27 12"/><path d="M23 9l4 3-3 4"/><path d="M8 19h4M11 14h4" stroke-dasharray="1 2"/>',
+	glyph:
+		'<path d="M5 25A13 13 0 0 1 27 12"/><path d="M23 9l4 3-3 4"/><path d="M8 19h4M11 14h4" stroke-dasharray="1 2"/>',
 	name: 'Sweep',
 	how: 'Hold and move to sweep the filter: up is brighter, right is more resonant. It records as you play; the eraser or Shift rubs it out.',
-	demo: () => [Array.from({ length: 24 }, (_, k) => [0.2 + k * 0.025, 0.75 - 0.5 * Math.sin((k / 23) * Math.PI)])],
+	demo: () => [
+		Array.from({ length: 24 }, (_, k) => [
+			0.2 + k * 0.025,
+			0.75 - 0.5 * Math.sin((k / 23) * Math.PI),
+		]),
+	],
 	params: {
 		record: { value: true },
 		detune: { value: 9, min: 0, max: 40, step: 1 },
@@ -88,7 +99,8 @@ export default {
 		let lastRub = null
 		function rub(e) {
 			const s = clamp(Math.floor(e.x * SLOTS), 0, SLOTS - 1)
-			const a = Math.min(lastRub ?? s, s), b = Math.max(lastRub ?? s, s)
+			const a = Math.min(lastRub ?? s, s),
+				b = Math.max(lastRub ?? s, s)
 			for (let i = a; i <= b; i++) state.auto[i] = null
 			lastRub = s
 		}
@@ -97,14 +109,21 @@ export default {
 			state,
 			pointer: withPointer(size, (e) => {
 				if (e.alt) {
-					if (e.type === 'down') { lastRub = null; rub(e) }
-					else if (e.type === 'move' && e.pressed) rub(e)
+					if (e.type === 'down') {
+						lastRub = null
+						rub(e)
+					} else if (e.type === 'move' && e.pressed) rub(e)
 					else if (e.type === 'up') lastRub = null
 					return
 				}
-				if (e.type === 'down') { lastRec = null; applyLive(e) }
-				else if (e.type === 'move' && e.pressed) applyLive(e)
-				else if (e.type === 'up') { live = null; lastRec = null }
+				if (e.type === 'down') {
+					lastRec = null
+					applyLive(e)
+				} else if (e.type === 'move' && e.pressed) applyLive(e)
+				else if (e.type === 'up') {
+					live = null
+					lastRec = null
+				}
 			}),
 			step(i, time, dur) {
 				const abs = absOf(clock, time)
@@ -123,7 +142,8 @@ export default {
 				})
 			},
 			frame(g, w, h, clock) {
-				size[0] = w; size[1] = h
+				size[0] = w
+				size[1] = h
 				const sw = w / SLOTS
 				state.auto.forEach((a, s) => {
 					if (!a) return
@@ -136,19 +156,30 @@ export default {
 				const fy = clamp(1 - Math.log2(filt.frequency.value / 60) / 7.5, 0, 1) * h
 				g.strokeStyle = live ? th.accent : th.fg
 				g.lineWidth = 1 + filt.Q.value / 4
-				g.beginPath(); g.moveTo(0, fy); g.lineTo(w, fy); g.stroke()
+				g.beginPath()
+				g.moveTo(0, fy)
+				g.lineTo(w, fy)
+				g.stroke()
 				g.lineWidth = 1
 				if (live) {
 					g.strokeStyle = th.accent
-					g.beginPath(); g.arc(live.x * w, live.y * h, 10, 0, Math.PI * 2); g.stroke()
+					g.beginPath()
+					g.arc(live.x * w, live.y * h, 10, 0, Math.PI * 2)
+					g.stroke()
 				}
 				g.fillStyle = th.dim
 				g.font = `${Math.max(10, h / 30)}px ${th.font}`
 				g.fillText(chordName, 8, h - 8)
 			},
-			setState(s) { state.auto = s.auto.map((a) => (a ? a.slice() : null)) },
-			clear() { state.auto.fill(null) },
-			randomize() { this.setState(gen(clock.steps, params)) },
+			setState(s) {
+				state.auto = s.auto.map((a) => (a ? a.slice() : null))
+			},
+			clear() {
+				state.auto.fill(null)
+			},
+			randomize() {
+				this.setState(gen(clock.steps, params))
+			},
 			dispose() {
 				amp.gain.setTargetAtTime(0, audio.currentTime, 0.05)
 				oscs.forEach(({ o }) => o.stop(audio.currentTime + 0.4))

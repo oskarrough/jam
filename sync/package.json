@@ -1,12 +1,12 @@
 {
-  "name": "roughjam-sync",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "node server.js",
-    "test": "node test.mjs"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
-  }
+	"name": "roughjam-sync",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"start": "node server.js",
+		"test": "node test.mjs"
+	},
+	"dependencies": {
+		"ws": "^8.18.0"
+	}
 }

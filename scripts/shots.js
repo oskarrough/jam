@@ -3,8 +3,11 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { ROOT, serve, playwright, open, play } from './lib/browser.js'
 
-const args = process.argv.slice(2), phone = args.includes('--phone'), want = args.find((a) => !a.startsWith('--')) || 'all'
-const dir = join(ROOT, 'shots'), tag = phone ? '-phone' : ''
+const args = process.argv.slice(2),
+	phone = args.includes('--phone'),
+	want = args.find((a) => !a.startsWith('--')) || 'all'
+const dir = join(ROOT, 'shots'),
+	tag = phone ? '-phone' : ''
 mkdirSync(dir, { recursive: true })
 const srv = await serve()
 const browser = await playwright().chromium.launch()
@@ -18,5 +21,11 @@ try {
 		await play(page, id, { sheet: true })
 		await page.screenshot({ path: join(dir, `${id}-sheet${tag}.png`) })
 	}
-	console.log(`${ids.length * 2} shots in shots/` + (page.errors.length ? '\nerrors:\n  ' + page.errors.join('\n  ') : ''))
-} finally { await browser.close(); srv.close() }
+	console.log(
+		`${ids.length * 2} shots in shots/` +
+			(page.errors.length ? '\nerrors:\n  ' + page.errors.join('\n  ') : ''),
+	)
+} finally {
+	await browser.close()
+	srv.close()
+}

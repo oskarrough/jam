@@ -22,7 +22,13 @@ const PARENT = {
 	'hira joshi': [0, 2, 3, 5, 7, 8, 10],
 }
 // 'i III iv v' (or 'i,iii,iv,v') to degrees; case is ignored, the triad's quality comes from the key
-export const parseChords = (s) => String(s).toLowerCase().split(/[\s,·-]+/).map((w) => NUMERALS.indexOf(w)).filter((d) => d >= 0).slice(0, 16)
+export const parseChords = (s) =>
+	String(s)
+		.toLowerCase()
+		.split(/[\s,·-]+/)
+		.map((w) => NUMERALS.indexOf(w))
+		.filter((d) => d >= 0)
+		.slice(0, 16)
 
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
@@ -43,7 +49,12 @@ export function kit(audio) {
 	let source = () => null
 	const cur = () => {
 		const l = source() || {}
-		return { root: l.root ?? key.root, scale: l.scale ?? key.scale, chords: l.chords?.length ? l.chords : CHORDS, barSteps: (l.beatsPerBar ?? 4) * 4 }
+		return {
+			root: l.root ?? key.root,
+			scale: l.scale ?? key.scale,
+			chords: l.chords?.length ? l.chords : CHORDS,
+			barSteps: (l.beatsPerBar ?? 4) * 4,
+		}
 	}
 	const rootMidi = () => ROOTS[cur().root] ?? 57
 
@@ -62,12 +73,25 @@ export function kit(audio) {
 		const parent = PARENT[h.scale] || PARENT.minor
 		const tone = (i) => rootMidi() + parent[(r + i) % 7] + 12 * Math.floor((r + i) / 7)
 		const notes = [tone(0), tone(2), tone(4)]
-		const third = notes[1] - notes[0], fifth = notes[2] - notes[0]
+		const third = notes[1] - notes[0],
+			fifth = notes[2] - notes[0]
 		const n = NUMERALS[r]
-		return { root: notes[0], notes, name: third === 4 ? n.toUpperCase() : fifth === 6 ? n + '°' : n }
+		return {
+			root: notes[0],
+			notes,
+			name: third === 4 ? n.toUpperCase() : fifth === 6 ? n + '°' : n,
+		}
 	}
 
-	k = { noise, key, degree, chord, follow: (fn) => (source = fn), barSteps: () => cur().barSteps, voices: makeVoices(audio, noise) }
+	k = {
+		noise,
+		key,
+		degree,
+		chord,
+		follow: (fn) => (source = fn),
+		barSteps: () => cur().barSteps,
+		voices: makeVoices(audio, noise),
+	}
 	kits.set(audio, k)
 	return k
 }
@@ -106,8 +130,10 @@ function makeVoices(ac, noise) {
 			m.connect(mg).connect(c.frequency)
 			env(g, time, gain, 0.002, d)
 			c.connect(g).connect(dest)
-			c.start(time); m.start(time)
-			c.stop(time + d + 0.1); m.stop(time + d + 0.1)
+			c.start(time)
+			m.start(time)
+			c.stop(time + d + 0.1)
+			m.stop(time + d + 0.1)
 		},
 
 		marimba(dest, { freq, time, gain = 0.2, d = 0.6 }) {

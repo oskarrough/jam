@@ -8,15 +8,29 @@ import { dirname, join } from 'node:path'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'src/instruments')
 const raw = process.argv[2]
-if (!raw) { console.error('usage: npm run new-instrument <name>'); process.exit(1) }
-const id = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-if (!/^[a-z]/.test(id)) { console.error(`"${raw}" needs to start with a letter`); process.exit(1) }
+if (!raw) {
+	console.error('usage: npm run new-instrument <name>')
+	process.exit(1)
+}
+const id = raw
+	.toLowerCase()
+	.replace(/[^a-z0-9]+/g, '-')
+	.replace(/^-|-$/g, '')
+if (!/^[a-z]/.test(id)) {
+	console.error(`"${raw}" needs to start with a letter`)
+	process.exit(1)
+}
 const ident = id.replace(/-(.)/g, (_, c) => c.toUpperCase())
 const name = id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
 const file = join(dir, `${id}.js`)
-if (existsSync(file)) { console.error(`src/instruments/${id}.js already exists`); process.exit(1) }
+if (existsSync(file)) {
+	console.error(`src/instruments/${id}.js already exists`)
+	process.exit(1)
+}
 
-writeFileSync(file, `// ${name}: tap to drop a note. Across is time, up is pitch. Tap a note again to lift it.
+writeFileSync(
+	file,
+	`// ${name}: tap to drop a note. Across is time, up is pitch. Tap a note again to lift it.
 
 import { mtof, env, osc, rgba } from './lib/util.js'
 
@@ -86,7 +100,8 @@ export default {
 		}
 	},
 }
-`)
+`,
+)
 
 const index = join(dir, 'index.js')
 let src = readFileSync(index, 'utf8')

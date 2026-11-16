@@ -2,7 +2,18 @@ import GUI from '../src/vendor/lil-gui.esm.min.js'
 import { createEngine, createClock, SCALES, ROOTS } from './engine.js'
 import { instruments as all } from '../src/instruments/index.js'
 
-const LAB = ['contour', 'grid', 'rings', 'sweep', 'drift', 'scribble', 'strum', 'swarm', 'orbits', 'embers']
+const LAB = [
+	'contour',
+	'grid',
+	'rings',
+	'sweep',
+	'drift',
+	'scribble',
+	'strum',
+	'swarm',
+	'orbits',
+	'embers',
+]
 const instruments = LAB.map((id) => all.find((m) => m.id === id)).filter(Boolean)
 import { THEME } from '../src/instruments/lib/util.js'
 
@@ -11,7 +22,10 @@ const STORE = 'roughjam.lab.v1'
 const LOOKAHEAD = 0.12
 const TICK_MS = 25
 
-let engine, clock, seats, focus = 0
+let engine,
+	clock,
+	seats,
+	focus = 0
 const ui = {
 	playing: false,
 	bpm: 92,
@@ -26,7 +40,6 @@ const ui = {
 	reverb: 0.25,
 	mute: false,
 }
-
 
 $('#start').addEventListener('click', boot, { once: true })
 
@@ -47,10 +60,31 @@ function boot() {
 		const s = saved?.seats?.[mod.id]
 		if (s?.params) for (const k in s.params) if (k in params) params[k] = s.params[k]
 		const { out, send } = engine.seat()
-		const inst = mod.create({ audio: engine.audio, out, clock, params, theme: { ...THEME, sheet: { ink: THEME.fg } } })
-		if (s?.state) try { inst.setState(s.state) } catch (e) { console.warn('bad saved state', mod.id, e) }
+		const inst = mod.create({
+			audio: engine.audio,
+			out,
+			clock,
+			params,
+			theme: { ...THEME, sheet: { ink: THEME.fg } },
+		})
+		if (s?.state)
+			try {
+				inst.setState(s.state)
+			} catch (e) {
+				console.warn('bad saved state', mod.id, e)
+			}
 		else inst.randomize?.()
-		return { mod, inst, params, out, send, level: s?.level ?? 1, reverb: s?.reverb ?? 0.25, mute: false, heard: idx === 0 }
+		return {
+			mod,
+			inst,
+			params,
+			out,
+			send,
+			level: s?.level ?? 1,
+			reverb: s?.reverb ?? 0.25,
+			mute: false,
+			heard: idx === 0,
+		}
 	})
 	focus = clampIdx(saved?.focus ?? 0)
 	seats[focus].heard = true
@@ -67,7 +101,6 @@ function boot() {
 }
 
 const clampIdx = (i) => Math.max(0, Math.min(instruments.length - 1, i | 0))
-
 
 let nextStep = 0
 let nextTime = 0
@@ -100,7 +133,11 @@ function tick() {
 		const i = ((nextStep % clock.steps) + clock.steps) % clock.steps
 		seats.forEach((l, idx) => {
 			if (!audible(idx)) return
-			try { l.inst.step(i, nextTime, clock.stepDur) } catch (e) { console.error(l.mod.id, e) }
+			try {
+				l.inst.step(i, nextTime, clock.stepDur)
+			} catch (e) {
+				console.error(l.mod.id, e)
+			}
 		})
 		if (ui.backing) backing(i, nextTime)
 		nextStep++
@@ -125,7 +162,6 @@ function updateGains() {
 	})
 	document.querySelectorAll('.seat').forEach((el, idx) => el.classList.toggle('on', audible(idx)))
 }
-
 
 function select(idx) {
 	focus = clampIdx(idx)
@@ -155,7 +191,6 @@ function buildStrip() {
 	})
 }
 
-
 let gui, paramFolder
 
 function buildGui() {
@@ -170,14 +205,29 @@ function buildGui() {
 	tr.add(ui, 'root', Object.keys(ROOTS)).onChange((v) => (engine.key.root = v))
 	tr.add(ui, 'scale', Object.keys(SCALES)).onChange((v) => (engine.key.scale = v))
 	tr.add(ui, 'backing').name('backing beat')
-	tr.add(ui, 'master', 0, 1, 0.01).onChange((v) => engine.master.gain.setTargetAtTime(v, engine.audio.currentTime, 0.03))
+	tr.add(ui, 'master', 0, 1, 0.01).onChange((v) =>
+		engine.master.gain.setTargetAtTime(v, engine.audio.currentTime, 0.03),
+	)
 	tr.add(ui, 'solo').name('solo focused').onChange(updateGains)
 
 	const ln = gui.addFolder('seat')
-	ln.add(ui, 'instrument', instruments.map((m) => m.name)).onChange((name) => select(instruments.findIndex((m) => m.name === name)))
-	ln.add(ui, 'level', 0, 2, 0.01).onChange((v) => { seats[focus].level = v; updateGains() })
-	ln.add(ui, 'reverb', 0, 1, 0.01).onChange((v) => { seats[focus].reverb = v; updateGains() })
-	ln.add(ui, 'mute').onChange((v) => { seats[focus].mute = v; updateGains() })
+	ln.add(
+		ui,
+		'instrument',
+		instruments.map((m) => m.name),
+	).onChange((name) => select(instruments.findIndex((m) => m.name === name)))
+	ln.add(ui, 'level', 0, 2, 0.01).onChange((v) => {
+		seats[focus].level = v
+		updateGains()
+	})
+	ln.add(ui, 'reverb', 0, 1, 0.01).onChange((v) => {
+		seats[focus].reverb = v
+		updateGains()
+	})
+	ln.add(ui, 'mute').onChange((v) => {
+		seats[focus].mute = v
+		updateGains()
+	})
 	const actions = {
 		clear: () => seats[focus].inst.clear?.(),
 		randomize: () => seats[focus].inst.randomize?.(),
@@ -202,7 +252,6 @@ function buildParams() {
 	}
 }
 
-
 const serialize = (idx) => {
 	const l = seats[idx]
 	return { id: l.mod.id, params: l.params, state: l.inst.state }
@@ -211,12 +260,24 @@ const serialize = (idx) => {
 function save() {
 	try {
 		const data = { ui: { ...ui }, focus, seats: {} }
-		seats.forEach((l) => (data.seats[l.mod.id] = { params: l.params, state: l.inst.state, level: l.level, reverb: l.reverb }))
+		seats.forEach(
+			(l) =>
+				(data.seats[l.mod.id] = {
+					params: l.params,
+					state: l.inst.state,
+					level: l.level,
+					reverb: l.reverb,
+				}),
+		)
 		localStorage.setItem(STORE, JSON.stringify(data))
 	} catch {}
 }
 function load() {
-	try { return JSON.parse(localStorage.getItem(STORE)) } catch { return null }
+	try {
+		return JSON.parse(localStorage.getItem(STORE))
+	} catch {
+		return null
+	}
 }
 
 let lastStateDump = 0
@@ -225,15 +286,20 @@ function dumpState(now) {
 	lastStateDump = now
 	const json = JSON.stringify(seats[focus].inst.state)
 	$('#bytes').textContent = `${json.length} B`
-	if ($('#state').open) $('#state pre').textContent = JSON.stringify(serialize(focus), (k, v) => (typeof v === 'number' ? +v.toFixed(3) : v), 1)
+	if ($('#state').open)
+		$('#state pre').textContent = JSON.stringify(
+			serialize(focus),
+			(k, v) => (typeof v === 'number' ? +v.toFixed(3) : v),
+			1,
+		)
 }
-
 
 const stage = $('#stage')
 
 function fit(c) {
 	const dpr = Math.min(2, window.devicePixelRatio || 1)
-	const w = c.clientWidth, h = c.clientHeight
+	const w = c.clientWidth,
+		h = c.clientHeight
 	if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
 		c.width = Math.round(w * dpr)
 		c.height = Math.round(h * dpr)
@@ -247,29 +313,49 @@ function fit(c) {
 function frame(now) {
 	requestAnimationFrame(frame)
 	const [g, w, h] = fit(stage)
-	try { seats[focus].inst.frame(g, w, h, clock, 'sheet') } catch (e) { console.error(e) }
+	try {
+		seats[focus].inst.frame(g, w, h, clock, 'sheet')
+	} catch (e) {
+		console.error(e)
+	}
 	seats.forEach((l) => {
 		const [tg, tw, th] = fit(l.thumb)
-		try { l.inst.frame(tg, tw, th, clock) } catch {}
+		try {
+			l.inst.frame(tg, tw, th, clock)
+		} catch {}
 	})
 	const a = clock.abs()
 	const bar = Math.floor(a / clock.steps) + 1
 	const beat = Math.floor((((a % clock.steps) + clock.steps) % clock.steps) / 4) + 1
-	$('#pos').textContent = `${ui.bpm} bpm  ${engine.key.root} ${engine.key.scale}  ${clock.playing ? `${bar}.${beat}` : 'stopped'}`
+	$('#pos').textContent =
+		`${ui.bpm} bpm  ${engine.key.root} ${engine.key.scale}  ${clock.playing ? `${bar}.${beat}` : 'stopped'}`
 	dumpState(now)
 }
-
 
 function bindPointer() {
 	const send = (type, ev) => {
 		const r = stage.getBoundingClientRect()
-		const px = ev.clientX - r.left, py = ev.clientY - r.top
+		const px = ev.clientX - r.left,
+			py = ev.clientY - r.top
 		seats[focus].inst.pointer({
-			type, id: ev.pointerId, x: px / r.width, y: py / r.height, px, py, w: r.width, h: r.height,
-			pressed: ev.buttons > 0 || type === 'down', alt: ev.shiftKey || ev.altKey, pressure: ev.pressure,
+			type,
+			id: ev.pointerId,
+			x: px / r.width,
+			y: py / r.height,
+			px,
+			py,
+			w: r.width,
+			h: r.height,
+			pressed: ev.buttons > 0 || type === 'down',
+			alt: ev.shiftKey || ev.altKey,
+			pressure: ev.pressure,
 		})
 	}
-	stage.addEventListener('pointerdown', (ev) => { stage.setPointerCapture(ev.pointerId); engine.audio.resume(); send('down', ev) })
+	stage.addEventListener('pointerdown', (ev) => {
+		stage.setPointerCapture(ev.pointerId)
+		engine.audio.resume()
+		send('down', ev)
+	})
 	stage.addEventListener('pointermove', (ev) => send('move', ev))
 	stage.addEventListener('pointerup', (ev) => send('up', ev))
 	stage.addEventListener('pointercancel', (ev) => send('up', ev))
@@ -279,7 +365,10 @@ function bindPointer() {
 function bindKeys() {
 	window.addEventListener('keydown', (ev) => {
 		if (ev.target.closest?.('input, select, textarea')) return
-		if (ev.code === 'Space') { ev.preventDefault(); play(!ui.playing) }
+		if (ev.code === 'Space') {
+			ev.preventDefault()
+			play(!ui.playing)
+		}
 		const n = '1234567890'.indexOf(ev.key)
 		if (n >= 0) select(n)
 		if (ev.key === 'ArrowRight') select((focus + 1) % seats.length)
@@ -287,4 +376,17 @@ function bindKeys() {
 	})
 }
 
-window.lab = { get seats() { return seats }, get clock() { return clock }, get engine() { return engine }, select, play, serialize }
+window.lab = {
+	get seats() {
+		return seats
+	},
+	get clock() {
+		return clock
+	},
+	get engine() {
+		return engine
+	},
+	select,
+	play,
+	serialize,
+}

@@ -8,23 +8,30 @@ export const TAU = Math.PI * 2
 
 // xorshift: same seed, same motion on every client
 export function rng(seed = 1) {
-	let s = (seed >>> 0) || 1
+	let s = seed >>> 0 || 1
 	return () => {
-		s ^= s << 13; s ^= s >>> 17; s ^= s << 5
+		s ^= s << 13
+		s ^= s >>> 17
+		s ^= s << 5
 		return (s >>> 0) / 4294967296
 	}
 }
 
 export function subSlots(i, time, dur, steps, fn) {
 	const per = SLOTS / steps
-	const a = Math.ceil(i * per - 1e-9), b = Math.ceil((i + 1) * per - 1e-9)
+	const a = Math.ceil(i * per - 1e-9),
+		b = Math.ceil((i + 1) * per - 1e-9)
 	for (let s = a; s < b; s++) fn(s, time + (s / per - i) * dur)
 }
 
 export const absOf = (clock, time) => Math.round((time - clock.startTime) / clock.stepDur)
 
 export const absNow = (clock) =>
-	clock.abs ? clock.abs() : clock.playing === false ? clock.pos() : (clock.now() - clock.startTime) / clock.stepDur
+	clock.abs
+		? clock.abs()
+		: clock.playing === false
+			? clock.pos()
+			: (clock.now() - clock.startTime) / clock.stepDur
 
 export function view(clock) {
 	const pos = clock.pos()
@@ -46,10 +53,17 @@ export const THEME = {
 	font: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
 }
 export function tint(c, a) {
-	if (c[0] === '#') { const n = parseInt(c.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})` }
+	if (c[0] === '#') {
+		const n = parseInt(c.slice(1), 16)
+		return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`
+	}
 	return c.replace(/rgba?\(([^,]+),([^,]+),([^,)]+).*\)/, `rgba($1,$2,$3,${a})`)
 }
-export const theme = (ctx) => ({ ...THEME, ...(ctx.theme || {}), ...(typeof ctx.color === 'string' ? { accent: ctx.color } : {}) })
+export const theme = (ctx) => ({
+	...THEME,
+	...(ctx.theme || {}),
+	...(typeof ctx.color === 'string' ? { accent: ctx.color } : {}),
+})
 
 export function intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
 	const d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
@@ -60,7 +74,8 @@ export function intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
 }
 
 export function segDist(px, py, x1, y1, x2, y2) {
-	const dx = x2 - x1, dy = y2 - y1
+	const dx = x2 - x1,
+		dy = y2 - y1
 	const l = dx * dx + dy * dy || 1e-9
 	const t = clamp(((px - x1) * dx + (py - y1) * dy) / l, 0, 1)
 	return dist(px, py, x1 + t * dx, y1 + t * dy)
@@ -69,7 +84,9 @@ export function segDist(px, py, x1, y1, x2, y2) {
 export function flashes() {
 	const m = new Map()
 	return {
-		hit(key, time) { m.set(key, time) },
+		hit(key, time) {
+			m.set(key, time)
+		},
 		glow(key, now, len = 0.35) {
 			const t = m.get(key)
 			if (t === undefined || now < t) return 0
@@ -83,8 +100,16 @@ export function withPointer(size, fn) {
 	let pressed = false
 	return (e) => {
 		if (e.type === 'down') pressed = true
-		const w = e.w ?? size[0], h = e.h ?? size[1]
-		const ev = { ...e, pressed: e.pressed ?? pressed, w, h, px: e.px ?? e.x * w, py: e.py ?? e.y * h }
+		const w = e.w ?? size[0],
+			h = e.h ?? size[1]
+		const ev = {
+			...e,
+			pressed: e.pressed ?? pressed,
+			w,
+			h,
+			px: e.px ?? e.x * w,
+			py: e.py ?? e.y * h,
+		}
 		if (e.type === 'up' || e.type === 'cancel') pressed = false
 		return fn(ev)
 	}
@@ -149,30 +174,58 @@ export function rgba(hex, a) {
 // when time isn't a straight axis; then show it your own way.
 export const playhead = {
 	under(g, w, h, clock, { color, axis = 'x' }) {
-		const n = clock.steps, pos = clock.pos(), L = axis === 'y' ? h : w, cell = L / n, at = (pos / n) * L
+		const n = clock.steps,
+			pos = clock.pos(),
+			L = axis === 'y' ? h : w,
+			cell = L / n,
+			at = (pos / n) * L
 		const trail = Math.min(L * 0.25, cell * 4)
-		const band = (a, b, fill) => { g.fillStyle = fill; axis === 'y' ? g.fillRect(0, a, w, b - a) : g.fillRect(a, 0, b - a, h) }
-		for (const shift of [0, L]) { // wraps round the loop start
-			const a = at - trail + shift, b = at + shift
+		const band = (a, b, fill) => {
+			g.fillStyle = fill
+			axis === 'y' ? g.fillRect(0, a, w, b - a) : g.fillRect(a, 0, b - a, h)
+		}
+		for (const shift of [0, L]) {
+			// wraps round the loop start
+			const a = at - trail + shift,
+				b = at + shift
 			if (b <= 0 || a >= L) continue
-			const gr = axis === 'y' ? g.createLinearGradient(0, a, 0, b) : g.createLinearGradient(a, 0, b, 0)
-			gr.addColorStop(0, rgba(color, 0)); gr.addColorStop(1, rgba(color, 0.2))
+			const gr =
+				axis === 'y' ? g.createLinearGradient(0, a, 0, b) : g.createLinearGradient(a, 0, b, 0)
+			gr.addColorStop(0, rgba(color, 0))
+			gr.addColorStop(1, rgba(color, 0.2))
 			band(a, b, gr)
 		}
 		const s = Math.floor(pos) % n
 		band(s * cell, (s + 1) * cell, rgba(color, 0.14))
 	},
 	over(g, w, h, clock, { color, ink, axis = 'x' }) {
-		const n = clock.steps, at = (clock.pos() / n) * (axis === 'y' ? h : w), k = 6
+		const n = clock.steps,
+			at = (clock.pos() / n) * (axis === 'y' ? h : w),
+			k = 6
 		g.save()
-		g.shadowColor = color; g.shadowBlur = 14
+		g.shadowColor = color
+		g.shadowBlur = 14
 		g.fillStyle = ink
 		if (axis === 'y') {
 			g.fillRect(0, at - 1.25, w, 2.5)
-			g.beginPath(); g.moveTo(0, at - k); g.lineTo(k * 1.4, at); g.lineTo(0, at + k); g.moveTo(w, at - k); g.lineTo(w - k * 1.4, at); g.lineTo(w, at + k); g.fill()
+			g.beginPath()
+			g.moveTo(0, at - k)
+			g.lineTo(k * 1.4, at)
+			g.lineTo(0, at + k)
+			g.moveTo(w, at - k)
+			g.lineTo(w - k * 1.4, at)
+			g.lineTo(w, at + k)
+			g.fill()
 		} else {
 			g.fillRect(at - 1.25, 0, 2.5, h)
-			g.beginPath(); g.moveTo(at - k, 0); g.lineTo(at, k * 1.4); g.lineTo(at + k, 0); g.moveTo(at - k, h); g.lineTo(at, h - k * 1.4); g.lineTo(at + k, h); g.fill()
+			g.beginPath()
+			g.moveTo(at - k, 0)
+			g.lineTo(at, k * 1.4)
+			g.lineTo(at + k, 0)
+			g.moveTo(at - k, h)
+			g.lineTo(at, h - k * 1.4)
+			g.lineTo(at + k, h)
+			g.fill()
 		}
 		g.restore()
 	},

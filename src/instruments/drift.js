@@ -7,12 +7,18 @@ import { tap, line } from './lib/demo.js'
 const MAX = 5
 
 function gen() {
-	return { stones: Array.from({ length: 3 + Math.floor(Math.random() * 2) }, () => ({ x: +Math.random().toFixed(3), y: +(0.3 + Math.random() * 0.6).toFixed(3) })) }
+	return {
+		stones: Array.from({ length: 3 + Math.floor(Math.random() * 2) }, () => ({
+			x: +Math.random().toFixed(3),
+			y: +(0.3 + Math.random() * 0.6).toFixed(3),
+		})),
+	}
 }
 
 export default {
 	id: 'drift',
-	glyph: '<circle class="f" cx="16" cy="16" r="2.6"/><circle cx="16" cy="16" r="7"/><circle cx="16" cy="16" r="12" stroke-dasharray="2 3"/>',
+	glyph:
+		'<circle class="f" cx="16" cy="16" r="2.6"/><circle cx="16" cy="16" r="7"/><circle cx="16" cy="16" r="12" stroke-dasharray="2 3"/>',
 	name: 'Drift',
 	playhead: false,
 	how: 'Tap to drop a stone, drag it to bend, tap it again to lift it out.',
@@ -45,19 +51,23 @@ export default {
 			const g = audio.createGain()
 			g.gain.value = 0
 			const p = audio.createStereoPanner()
-			a.connect(f); b.connect(f)
+			a.connect(f)
+			b.connect(f)
 			f.connect(g).connect(p).connect(out)
-			a.start(); b.start()
+			a.start()
+			b.start()
 			return { a, b, f, g, p, amp: 0 }
 		}
-		const freqOf = (s) => 440 * Math.pow(2, (engine.degree(Math.round(s.x * params.range), params.octave) - 69) / 12)
+		const freqOf = (s) =>
+			440 * Math.pow(2, (engine.degree(Math.round(s.x * params.range), params.octave) - 69) / 12)
 
 		function sync(time = audio.currentTime) {
 			while (voices.length < state.stones.length) voices.push(voice())
 			while (voices.length > state.stones.length) {
 				const v = voices.pop()
 				v.g.gain.setTargetAtTime(0, time, 0.3)
-				v.a.stop(time + 2); v.b.stop(time + 2)
+				v.a.stop(time + 2)
+				v.b.stop(time + 2)
 			}
 			state.stones.forEach((s, k) => {
 				const v = voices[k]
@@ -71,10 +81,14 @@ export default {
 		}
 
 		const near = (e) => {
-			let best = -1, bd = Infinity
+			let best = -1,
+				bd = Infinity
 			state.stones.forEach((s, k) => {
 				const d = dist(s.x * e.w, s.y * e.h, e.px, e.py)
-				if (d < bd) { bd = d; best = k }
+				if (d < bd) {
+					bd = d
+					best = k
+				}
 			})
 			return bd < Math.min(e.w, e.h) * 0.07 ? best : -1
 		}
@@ -95,11 +109,15 @@ export default {
 					sync()
 				} else if (e.type === 'move' && drag) {
 					const s = state.stones[drag.k]
-					s.x = clamp(e.x, 0, 1); s.y = clamp(e.y, 0, 1)
+					s.x = clamp(e.x, 0, 1)
+					s.y = clamp(e.y, 0, 1)
 					drag.moved = Math.max(drag.moved, dist(drag.x0, drag.y0, e.px, e.py))
 					sync()
 				} else if (e.type === 'up' && drag) {
-					if (!drag.fresh && drag.moved < 5) { state.stones.splice(drag.k, 1); sync() }
+					if (!drag.fresh && drag.moved < 5) {
+						state.stones.splice(drag.k, 1)
+						sync()
+					}
 					drag = null
 				}
 			}),
@@ -116,36 +134,59 @@ export default {
 				})
 			},
 			frame(g, w, h, clock) {
-				size[0] = w; size[1] = h
+				size[0] = w
+				size[1] = h
 				const t = view(clock)
 				const m = Math.min(w, h)
 				g.strokeStyle = th.faint
 				for (let d = 0; d <= params.range; d++) {
 					const x = Math.round((d / params.range) * (w - 1)) + 0.5
-					g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke()
+					g.beginPath()
+					g.moveTo(x, 0)
+					g.lineTo(x, h)
+					g.stroke()
 				}
 				const n = Math.max(1, state.stones.length)
 				state.stones.forEach((s, k) => {
-					const x = s.x * w, y = s.y * h
+					const x = s.x * w,
+						y = s.y * h
 					const ph = t.abs / t.steps + k / n
 					const amp = 1 - params.breathe * 0.5 * (1 + Math.cos(TAU * ph))
 					const gap = m * (0.03 + s.y * 0.05)
 					const off = (t.now * 20 * (1.2 - s.y)) % gap
 					for (let r = off; r < m * 0.35; r += gap) {
 						g.strokeStyle = tint(th.fg, 0.35 * amp * (1 - r / (m * 0.35)))
-						g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke()
+						g.beginPath()
+						g.arc(x, y, r, 0, TAU)
+						g.stroke()
 					}
 					const qx = (Math.round(s.x * params.range) / params.range) * w
 					g.strokeStyle = th.dim
-					g.beginPath(); g.moveTo(qx, y - 6); g.lineTo(qx, y + 6); g.stroke()
+					g.beginPath()
+					g.moveTo(qx, y - 6)
+					g.lineTo(qx, y + 6)
+					g.stroke()
 					g.fillStyle = drag && drag.k === k ? th.accent : th.fg
-					g.beginPath(); g.arc(x, y, Math.max(3, m * 0.012 * (1 + amp)), 0, TAU); g.fill()
+					g.beginPath()
+					g.arc(x, y, Math.max(3, m * 0.012 * (1 + amp)), 0, TAU)
+					g.fill()
 				})
 			},
-			setState(s) { state.stones = s.stones.map((p) => ({ ...p })); sync() },
-			clear() { state.stones = []; sync() },
-			randomize() { this.setState(gen(clock.steps, params)) },
-			dispose() { state.stones = []; sync() },
+			setState(s) {
+				state.stones = s.stones.map((p) => ({ ...p }))
+				sync()
+			},
+			clear() {
+				state.stones = []
+				sync()
+			},
+			randomize() {
+				this.setState(gen(clock.steps, params))
+			},
+			dispose() {
+				state.stones = []
+				sync()
+			},
 		}
 	},
 }

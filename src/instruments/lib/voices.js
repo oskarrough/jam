@@ -74,7 +74,12 @@ function partial(S, out, t, f, opt) {
 	o.connect(g)
 	return end
 }
-function noise(S, out, t, { type = 'bandpass', f = 2000, q = 1, a = 0.001, tau = 0.01, peak = 0.1 }) {
+function noise(
+	S,
+	out,
+	t,
+	{ type = 'bandpass', f = 2000, q = 1, a = 0.001, tau = 0.01, peak = 0.1 },
+) {
 	const src = S.ctx.createBufferSource()
 	src.buffer = S.noise
 	src.loop = true
@@ -142,7 +147,8 @@ function ks(S, f, cfg) {
 		for (let i = 0; i < N; i++) y[i] /= pk
 		const b = cfg.b,
 			dk = cfg.decay
-		for (let i = N; i < len; i++) y[i] = dk * ((1 - b) * y[i - N] + b * (i - N - 1 >= 0 ? y[i - N - 1] : 0))
+		for (let i = N; i < len; i++)
+			y[i] = dk * ((1 - b) * y[i - N] + b * (i - N - 1 >= 0 ? y[i - N - 1] : 0))
 		const fade = Math.floor(len * 0.25)
 		for (let i = 0; i < fade; i++) {
 			const k = i / fade
@@ -160,7 +166,13 @@ function pluck(S, out, t, d, f, v, cfg, chain) {
 	const rate = f / e.f0
 	src.playbackRate.value = rate
 	const g = G(S)
-	const end = perc(g.gain, t, { a: 0.001, tau: 50, peak: v, damp: t + d + cfg.hang, dampTau: cfg.dampTau })
+	const end = perc(g.gain, t, {
+		a: 0.001,
+		tau: 50,
+		peak: v,
+		damp: t + d + cfg.hang,
+		dampTau: cfg.dampTau,
+	})
 	let node = src
 	for (const n of chain) {
 		node.connect(n)
@@ -207,7 +219,13 @@ const INST = {
 			const tau = clamp(1.6 * Math.pow(440 / f, 0.35), 0.5, 3)
 			const g = G(S)
 			g.connect(trem)
-			const end = perc(g.gain, t, { a: 0.003, tau, peak: v * 0.62, damp: t + d + (p.rel || 0.12), dampTau: 0.09 })
+			const end = perc(g.gain, t, {
+				a: 0.003,
+				tau,
+				peak: v * 0.62,
+				damp: t + d + (p.rel || 0.12),
+				dampTau: 0.09,
+			})
 			const lfo = S.ctx.createOscillator()
 			lfo.frequency.value = 4.6
 			const lg = G(S, 0.1)
@@ -284,7 +302,13 @@ const INST = {
 		level: 0.72,
 		play(S, out, t, d, f, v, p) {
 			pluck(S, out, t, d, f, v * 0.5, PLUCK.upright, [F(S, 'lowpass', 1400 * p.bright, 0.6)])
-			partial(S, out, t, f, { a: 0.004, tau: 0.5, peak: v * 0.45, damp: t + d + 0.04, dampTau: 0.07 })
+			partial(S, out, t, f, {
+				a: 0.004,
+				tau: 0.5,
+				peak: v * 0.45,
+				damp: t + d + 0.04,
+				dampTau: 0.07,
+			})
 			noise(S, out, t, { type: 'lowpass', f: 900, q: 0.5, tau: 0.01, peak: v * 0.12 })
 		},
 	},
@@ -300,7 +324,13 @@ const INST = {
 				.connect(F(S, 'lowpass', 1800 * p.bright * (1 + k), 0.5))
 				.connect(g)
 				.connect(out)
-			const end = adsr(g.gain, t, d, { a: p.att || 0.003, dc: 1.2, s: 0.55, r: p.rel || 0.12, peak: (v * 0.55) / (1 + 0.1 * k) })
+			const end = adsr(g.gain, t, d, {
+				a: p.att || 0.003,
+				dc: 1.2,
+				s: 0.55,
+				r: p.rel || 0.12,
+				peak: (v * 0.55) / (1 + 0.1 * k),
+			})
 			const o = O(S, 'sine', f, t, end, p)
 			if (!p.from) {
 				o.frequency.setValueAtTime(f * 2.2, t)
@@ -323,7 +353,13 @@ const INST = {
 				.connect(g)
 				.connect(out)
 			const tau = clamp(0.3 * Math.pow(110 / f, 0.3), 0.12, 0.45)
-			const end = perc(g.gain, t, { a: 0.002, tau, peak: (v * 0.5) / (1 + 0.1 * k), damp: t + d + (p.rel || 0.04), dampTau: 0.03 })
+			const end = perc(g.gain, t, {
+				a: 0.002,
+				tau,
+				peak: (v * 0.5) / (1 + 0.1 * k),
+				damp: t + d + (p.rel || 0.04),
+				dampTau: 0.03,
+			})
 			const os = [
 				[O(S, 'triangle', f, t, end, p), 0.7],
 				[O(S, 'sine', f, t, end, p), 0.6],
@@ -346,7 +382,13 @@ const INST = {
 			const g = G(S)
 			const lp = F(S, 'lowpass', 300, 5)
 			lp.connect(g).connect(out)
-			const end = adsr(g.gain, t, d, { a: p.att || 0.003, dc: 0.35, s: 0.55, r: p.rel || 0.06, peak: v * 0.5 })
+			const end = adsr(g.gain, t, d, {
+				a: p.att || 0.003,
+				dc: 0.35,
+				s: 0.55,
+				r: p.rel || 0.06,
+				peak: v * 0.5,
+			})
 			lp.frequency.setValueAtTime(Math.min(5000, 2600 * p.bright * v), t)
 			lp.frequency.setTargetAtTime(f * 2 + 80, t, 0.07)
 			O(S, 'sawtooth', f, t, end, p).connect(lp)
@@ -361,7 +403,13 @@ const INST = {
 			const g = G(S)
 			const lp = F(S, 'lowpass', 6000 * p.bright, 0.5)
 			lp.connect(g).connect(out)
-			const end = adsr(g.gain, t, d, { a: p.att || 0.003, dc: 0.1, s: 0.8, r: p.rel || 0.04, peak: v * 0.3 })
+			const end = adsr(g.gain, t, d, {
+				a: p.att || 0.003,
+				dc: 0.1,
+				s: 0.8,
+				r: p.rel || 0.04,
+				peak: v * 0.3,
+			})
 			const o = O(S, 'square', f, t, end, p)
 			o.connect(lp)
 			vibrato(S, t, end, [o], { rate: 6, depth: 12, delay: 0.25, rise: 0.1 })
@@ -386,7 +434,10 @@ const trims = new WeakMap()
 function input(S, out, name, trim) {
 	let m = trims.get(out)
 	if (!m) trims.set(out, (m = {}))
-	if (!m[name]) { m[name] = G(S, INST[name].level * Math.pow(10, trim / 20)); m[name].connect(out) }
+	if (!m[name]) {
+		m[name] = G(S, INST[name].level * Math.pow(10, trim / 20))
+		m[name].connect(out)
+	}
 	return m[name]
 }
 const P = { bright: 1, att: null, rel: null, glide: null, drive: 0, from: null }
@@ -397,6 +448,10 @@ export function voice(name, trim = 0) {
 	return ({ audio, out }, m, t, dur, vel = 0.7) => {
 		const S = state(audio)
 		if (Object.keys(S.ks).length > 160) S.ks = {}
-		try { def.play(S, input(S, out, name, trim), t, dur, mtof(m), vel, P) } catch (e) { console.warn(name, e) }
+		try {
+			def.play(S, input(S, out, name, trim), t, dur, mtof(m), vel, P)
+		} catch (e) {
+			console.warn(name, e)
+		}
 	}
 }
