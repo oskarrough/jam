@@ -110,6 +110,7 @@ view = createView(document.getElementById('c'), engine, {
 		return ok
 	},
 	canHand: (from, to) => from === me.seat && to !== from && !!occupant(to).bot,
+	onWipe: () => wipe(),
 	onPointer(i, e) {
 		const L = seats[i]
 		if (e.type === 'down') ghost?.stop() // your own hand takes over
@@ -157,8 +158,8 @@ setInterval(() => {
 /* ───────── DOM chrome ───────── */
 const $ = (id) => document.getElementById(id)
 
-// Jams: the open one at /, your own at /j/<words>. In your own, its name sits top left and copies the
-// link when tapped, and 'leave' goes back to the open jam. The deck's sprout token starts a new one.
+// Jams: the open one at /, your own at /j/<words>. Top left, as words: in the open jam 'start your own';
+// in your own, its name (tap to copy the link), 'leave' back to the open jam, and 'another' for a fresh one.
 const JAM_A = ['dusk', 'amber', 'moss', 'salt', 'velvet', 'copper', 'hollow', 'paper', 'lantern', 'violet']
 const JAM_B = ['moth', 'heron', 'fern', 'kettle', 'orchard', 'tide', 'comet', 'wren', 'ember', 'quarry']
 const pick = (a) => a[Math.floor(Math.random() * a.length)]
@@ -171,9 +172,9 @@ if (replay) {
 	jamline.append('a recording', ...from, ' · ', live())
 } else if (replayId) jamline.append('that recording is gone · ', live())
 else if (transport.kind === 'ws') {
-	$('newjam').closest('li').hidden = false
-	$('newjam').onclick = () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))
-	if (!isOpenJam) {
+	const fresh = (text) => Object.assign(word(text, () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))), { title: 'a new jam with its own link, for you and whoever you send it to' })
+	if (isOpenJam) jamline.append(fresh('start your own jam'))
+	else {
 		const b = word(room, async () => {
 			try { await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room)); b.textContent = 'link copied' } catch { b.textContent = location.host + '/j/' + room }
 			setTimeout(() => (b.textContent = room), 1600)
@@ -181,7 +182,7 @@ else if (transport.kind === 'ws') {
 		b.title = 'copy the link to this jam'
 		const out = word('leave', () => (location.href = '/'))
 		out.title = 'back to the jam everyone lands in'
-		jamline.append(b, ' · ', out)
+		jamline.append(b, ' · ', out, ' · ', fresh('another'))
 	}
 }
 // seats live on the dial (view.js draws them from occupant(i) every frame); this only keeps the peers line current
@@ -230,18 +231,39 @@ const setErase = (on) => {
 	document.body.classList.toggle('erasing', on)
 }
 $('erase').onclick = () => setErase(!me.erase)
+// Tempo lands on the next loop for everyone. Taps add up from the tempo already on its way, and the number
+// shows what you asked for straight away, before the relay has echoed it back (want, kept up to 2 s).
+let want = null // { bpm, t }
+const heading = () => {
+	const next = transport.clock.pending?.().at(-1)?.bpm ?? transport.clock.loopAt().bpm
+	if (want && (want.bpm === next || performance.now() - want.t > 2000)) want = null
+	return want ? want.bpm : next
+}
 const tempo = (d) => {
-	const l = transport.clock.loopAt()
-	transport.setLoop({ bpm: Math.max(50, Math.min(180, l.bpm + d)) })
+	const bpm = Math.max(50, Math.min(180, heading() + d))
+	want = { bpm, t: performance.now() }
+	transport.setLoop({ bpm })
+	showTempo()
 }
 $('slower').onclick = () => tempo(-4)
 $('faster').onclick = () => tempo(4)
-$('clear').onclick = () => {
-	const L = seats[me.seat]
-	if (!L) return
-	undo.remember(me.seat)
-	L.instance.clear ? L.instance.clear() : L.instance.setState(null)
-	engine.push(L)
+// The broom beside your badge (view.js draws it) wipes your ring; undo brings it back. Tap it again straight
+// away for a clean slate: it sweeps every ring no other person sits at too (empty seats, robots). The rings it
+// would take glow in between. Other people's rings are theirs.
+const SWEEP_AGAIN_MS = 1600
+let swept = 0
+function wipe() {
+	if (!seats[me.seat]) return
+	const again = performance.now() - swept < SWEEP_AGAIN_MS
+	const rest = seats.map((_, i) => i).filter((i) => i !== me.seat && !humanAt(i))
+	for (const i of again ? rest : [me.seat]) {
+		const L = seats[i]
+		undo.remember(i)
+		L.instance.clear ? L.instance.clear() : L.instance.setState(null)
+		engine.push(L)
+	}
+	swept = again ? 0 : performance.now()
+	view.offerSweep(again ? [] : rest, SWEEP_AGAIN_MS)
 }
 // robots are off unless someone in the jam turns them on; the choice rides on the loop so everyone shares it
 function setRobots(on) {
@@ -273,13 +295,12 @@ addEventListener('keydown', (e) => {
 	else if (e.key === 'k' || e.key === 'ArrowRight') { e.preventDefault(); cycleInstrument(1) }
 	else if (e.key === 'Escape' && view.focus.on) view.setFocus(-1)
 })
-setInterval(() => {
-	const l = transport.clock.loopAt()
-	const next = transport.clock.pending?.().at(-1)
-	const pending = next && next.bpm !== l.bpm
-	$('bpm').textContent = pending ? next.bpm : l.bpm
-	$('bpm').classList.toggle('pending', !!pending)
-}, 200)
+function showTempo() {
+	const now = transport.clock.loopAt().bpm, bpm = heading()
+	$('bpm').textContent = bpm
+	$('bpm').classList.toggle('pending', bpm !== now)
+}
+setInterval(showTempo, 200)
 
 // the panel loads lazily; the jam plays without it
 let debug = { toggle() {} }

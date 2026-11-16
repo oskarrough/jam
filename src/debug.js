@@ -101,6 +101,7 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	zF.add(Z, 'inMs', 100, 2000, 10).name('in ms').onChange(zc)
 	zF.add(Z, 'outMs', 100, 2000, 10).name('out ms').onChange(zc)
 	zF.add(Z, 'machineEnd', 0.1, 1, 0.01).name('machine done at').onChange(zc)
+	zF.add(Z, 'outMachineEnd', 0.1, 1, 0.01).name('out: machine spans').onChange(zc)
 	zF.add(Z, 'sheetStart', 0, 0.9, 0.01).name('sheet starts at').onChange(zc)
 	zF.add(Z, 'machineEase', view.easeNames).name('machine ease').onChange(zc)
 	zF.add(Z, 'machineBezier').name('machine bezier').onFinishChange(zc)
@@ -126,6 +127,13 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 		setTimeout(() => copyCtl.name('copy values'), 1500)
 	} }, 'copy').name('copy values')
 	zF.add({ reset() { Object.assign(Z, view.zoomDefaults); zc(); zF.controllersRecursive().forEach((c) => c.updateDisplay()) } }, 'reset').name('reset')
+	// ── intro: the opening's beats in ms from the first frame, kept in this browser; 'play' runs it again
+	const iF = gui.addFolder('intro').close()
+	const I = view.intro, ic = () => view.introChanged()
+	const beats = { capMs: 'hold for fonts, at most', land: 'land fades up at', landMs: '… over', dial: 'dial lands at', dialMs: '… over', rings: 'first ring at', ringMs: '… each over', ringGap: '… then every', seatMs: 'each player pops over', menu: 'deck at', menuGap: '… a token every', hand: 'hand at', handMs: '… over' }
+	for (const [k, label] of Object.entries(beats)) iF.add(I, k, 0, k === 'capMs' ? 1500 : 1200, 5).name(label).onChange(ic)
+	iF.add({ play: () => view.replayIntro() }, 'play').name('play')
+	iF.add({ reset() { Object.assign(I, view.introDefaults); ic(); iF.controllersRecursive().forEach((c) => c.updateDisplay()) } }, 'reset').name('reset')
 	const botF = gui.addFolder('robots')
 	botF.add(bots.opts, 'on').onChange(() => { document.getElementById('bots')?.setAttribute('aria-pressed', bots.opts.on); renderSeats() }).listen()
 	botF.add(bots.opts, 'minLoops', 1, 16, 1).name('min loops between')

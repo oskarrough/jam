@@ -1,5 +1,6 @@
 // Drums: kick, snare and hat in three rows, 808 style. Tap a step to set or clear a hit;
-// drag up or down on it to set how loud it hits; drag sideways to paint. Shift or right-drag erases.
+// drag up or down on it to set how loud it hits; drag sideways to paint, where the pen's height in the row is how loud
+// each hit lands, so a curve drawn along a row is its dynamics. Shift or right-drag erases.
 //
 // state = { hits, vel }
 //   hits[s]  bitmask per step: 1 kick, 2 snare, 4 hat
@@ -66,7 +67,7 @@ export default {
 	id: 'drums',
 	glyph: '<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
-	how: 'Kick, snare and hat in three rows. Tap a step for a hit, drag it up or down for how loud it hits, sideways to paint. Shift-drag erases.',
+	how: 'Kick, snare and hat in three rows. Tap a step for a hit, drag it up or down for how loud it hits, sideways to paint: higher in the row hits louder. Shift-drag erases.',
 	demo: () => [tap(0.07, 0.84), tap(0.32, 0.84), tap(0.57, 0.84), line(0.32, 0.84, 0.32, 0.72, 6), line(0.07, 0.17, 0.6, 0.17, 16)],
 	params: { decay: { value: 0.045, min: 0.01, max: 0.3, step: 0.005 } },
 	generate: (steps) => { const { d, v } = drumGen(); return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) } },
@@ -87,6 +88,8 @@ export default {
 			if (on && lv) vel[s][row] = lv
 		}
 		const lvOf = (s, row) => vel[s]?.[row] || LV
+		// how loud a hit drawn at height y would be in this row: the pen sits where the stem's top would (see frame)
+		const lvAt = (y, row) => clamp(Math.round((((1 - y) * ROWS - row - 0.1) / 0.68) * 9), 1, 9)
 		return {
 			get state() { return { hits, vel } },
 			setState(s) {
@@ -119,7 +122,11 @@ export default {
 					let d = s - g.s
 					if (d > n / 2) d -= n
 					if (d < -n / 2) d += n
-					for (let j = 1; j <= Math.abs(d); j++) put((g.s + Math.sign(d) * j + n) % n, g.row, g.mode !== 'erase', g.lv)
+					// painting: each step's level follows the pen, eased across any steps skipped in one move
+					const lv = g.mode === 'paint' ? lvAt(e.y, g.row) : g.lv, from = g.paintLv ?? lv
+					if (g.mode === 'paint' && !g.paintLv) put(g.s, g.row, true, lv) // the step you started on, too
+					for (let j = 1; j <= Math.abs(d); j++) put((g.s + Math.sign(d) * j + n) % n, g.row, g.mode !== 'erase', Math.round(from + ((lv - from) * j) / Math.abs(d)))
+					if (g.mode === 'paint') g.paintLv = lv
 					g.s = s
 				} else if (e.type === 'up' && g) {
 					// a plain tap on a hit that was already there takes it away

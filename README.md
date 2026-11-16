@@ -1,5 +1,3 @@
-# roughjam
-
 A loop machine for a few friends and some strange instruments.
 
 Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Tap your own seat to zoom into your instrument, and its glyph token to swap it for another. Empty seats are taken by robots who redraw their ring every few loops until a person sits down. Drag your own seat badge onto a robot's and it takes your ring as a motif and improvises on it in its own instrument: echo, a variation or two, then a call-and-response, round again.
