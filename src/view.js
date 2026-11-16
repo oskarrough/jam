@@ -838,9 +838,22 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			if (opts.mode === 'dial' && focus.on && c.seat === focus.seat) { x = sheet.x + c.x * sheet.w; y = sheet.y + c.y * sheet.h }
 			else if (opts.mode === 'dial') [x, y] = polar(angOf(c.x), ringIn(c.seat) + (1 - c.y) * ringT())
 			else { const R = stripRect(c.seat); x = R.x + c.x * R.w; y = R.y + c.y * R.h }
+			// on the dark sheet a cursor is drawn pale, or it vanishes into the chamber
+			const pale = opts.mode === 'dial' && focus.on && c.seat === focus.seat && canFilter()
+			if (key === 'ghost') {
+				// the ghost hand showing an instrument's gesture: a soft fingertip, larger than a cursor
+				const r = Math.max(9, (S || 600) * 0.016)
+				g.globalAlpha = 0.35; g.fillStyle = L.color
+				g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill()
+				g.globalAlpha = 0.9; g.strokeStyle = pale ? PALE : INK; g.lineWidth = 1.4
+				g.setLineDash([3, 3]); g.lineDashOffset = reduce ? 0 : -now / 90
+				g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke()
+				g.setLineDash([]); g.globalAlpha = 1
+				continue
+			}
 			g.fillStyle = L.color
 			g.beginPath(); g.arc(x, y, 3, 0, TAU); g.fill()
-			g.strokeStyle = INK; g.lineWidth = 1
+			g.strokeStyle = pale ? PALE : INK; g.lineWidth = 1
 			g.beginPath(); g.arc(x, y, 7, 0, TAU); g.stroke()
 			g.font = serif(Math.max(12, (S || 600) * 0.02))
 			g.textAlign = 'left'; g.textBaseline = 'alphabetic'

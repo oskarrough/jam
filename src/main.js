@@ -9,6 +9,7 @@ import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
 import { createHeart } from './heart.js'
 import { createUndo } from './undo.js'
+import { createGhost } from './ghost.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
 
 const SEAT_IDS = ['seat1', 'seat2', 'seat3', 'seat4']
@@ -111,6 +112,7 @@ view = createView(document.getElementById('c'), engine, {
 	canHand: (from, to) => from === me.seat && to !== from && !!occupant(to).bot,
 	onPointer(i, e) {
 		const L = seats[i]
+		if (e.type === 'down') ghost?.stop() // your own hand takes over
 		if (me.erase) e.alt = true
 		e.shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
 		if (e.type === 'down') undo.remember(i)
@@ -121,6 +123,7 @@ view = createView(document.getElementById('c'), engine, {
 		transport.cursor(e.x, e.y, e.type !== 'up', L.id)
 	},
 })
+const ghost = createGhost({ engine, view, me })
 const heart = createHeart({ engine, geom: () => { const c = view.center(); if (c) c.moving = view.moving; return c } })
 bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 if (replay) bots.opts.on = false
@@ -140,6 +143,7 @@ transport.on('welcome', () => {
 		const L = seats[me.seat]
 		if (L.module !== want) { engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps()) }); engine.push(L) }
 		view.setFocus?.(me.seat)
+		ghost.play()
 	}
 	renderSeats()
 })
@@ -283,7 +287,7 @@ jellify(document.querySelector('.tempo'), { amount: 0.08 })
 
 /* ───────── zoom: tap your badge and your instrument opens big, in its own form; the machine shrinks beside it ───────── */
 const sheetbar = $('sheetbar')
-const strip = createStrip({ engine, registry, me, el: sheetbar, before: () => undo.remember(me.seat) })
+const strip = createStrip({ engine, registry, me, el: sheetbar, before: () => undo.remember(me.seat), chosen: () => ghost.play() })
 function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.seat) }
 addEventListener('zoom', (e) => {
 	const { on, sheet } = e.detail

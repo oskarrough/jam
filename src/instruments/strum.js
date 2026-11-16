@@ -3,6 +3,7 @@
 // and replay on whatever chord the loop is on, so a rhythm turns into a progression.
 import { kit, mtof } from './lib/kit.js'
 import { withPointer, view, absNow, absOf, theme, subSlots, SLOTS, clamp } from './lib/util.js'
+import { line } from './lib/demo.js'
 
 const STRINGS = 6
 const MAX_HITS = 96
@@ -23,6 +24,7 @@ export default {
   name: 'Strum',
   playhead: 'y', // time runs top to bottom
   how: 'Swipe sideways across the strings. Fast swipes are loud. Strums record into the loop; the eraser or Shift rubs them out.',
+  demo: () => [line(0.04, 0.25, 0.96, 0.28, 10), line(0.96, 0.55, 0.04, 0.58, 10)],
   params: {
     record: { value: true },
     decay: { value: 0.995, min: 0.98, max: 0.9995, step: 0.0005 },

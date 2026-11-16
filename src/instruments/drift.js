@@ -3,6 +3,7 @@
 // Voices breathe with the loop, each one offset, so the chord slowly rotates.
 import { kit } from './lib/kit.js'
 import { withPointer, view, absOf, theme, clamp, dist, TAU, tint } from './lib/util.js'
+import { tap, line } from './lib/demo.js'
 
 const MAX = 5
 
@@ -16,6 +17,7 @@ export default {
   name: 'Drift',
   playhead: false, // a pond, not a timeline
   how: 'Tap to drop a stone, drag it to bend, tap it again to lift it out.',
+  demo: () => [tap(0.25, 0.6), tap(0.6, 0.35), line(0.6, 0.35, 0.72, 0.6, 10)],
   params: {
     range: { value: 10, min: 4, max: 16, step: 1 },
     octave: { value: -1, min: -2, max: 1, step: 1 },

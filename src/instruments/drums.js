@@ -7,6 +7,7 @@
 
 import { env, osc, noiseSrc, fit, rgba, val, clamp, isStrip } from './lib/util.js'
 import { INK, SERIF } from '../palette.js'
+import { tap, line } from './lib/demo.js'
 
 const ROWS = 3
 const LV = 6
@@ -66,6 +67,7 @@ export default {
 	glyph: '<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
 	how: 'Kick, snare and hat in three rows. Tap a step for a hit, drag it up or down for how loud it hits, sideways to paint. Shift-drag erases.',
+	demo: () => [tap(0.07, 0.84), tap(0.32, 0.84), tap(0.57, 0.84), line(0.32, 0.84, 0.32, 0.72, 6), line(0.07, 0.17, 0.6, 0.17, 16)],
 	params: { decay: { value: 0.045, min: 0.01, max: 0.3, step: 0.005 } },
 	generate: (steps) => { const { d, v } = drumGen(); return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) } },
 	sample: (steps) => { const { d, v } = drumSample(); return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) } },

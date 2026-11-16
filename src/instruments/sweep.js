@@ -19,6 +19,7 @@ export default {
   glyph: '<path d="M5 25A13 13 0 0 1 27 12"/><path d="M23 9l4 3-3 4"/><path d="M8 19h4M11 14h4" stroke-dasharray="1 2"/>',
   name: 'Sweep',
   how: 'Hold and move to sweep the filter: up is brighter, right is more resonant. It records as you play; the eraser or Shift rubs it out.',
+  demo: () => [Array.from({ length: 24 }, (_, k) => [0.2 + k * 0.025, 0.75 - 0.5 * Math.sin((k / 23) * Math.PI)])],
   params: {
     record: { value: true },
     detune: { value: 9, min: 0, max: 40, step: 1 },

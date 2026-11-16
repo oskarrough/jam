@@ -52,6 +52,7 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`
     src/backdrop.js         the landscape and sky squiggles, painted once per resize in the heart's dithered, stroked hand
     src/picker.js           the glyph sheet for choosing your instrument
     src/jelly.js            the springy presses on buttons and badges
+    src/ghost.js            the ghost hand: shows an instrument's gesture once when you switch to it
     src/undo.js             undo and redo for your own ring, for any instrument
     src/bots.js             the robots, and riffing on a motif you hand them
     src/phrase.js           parts as neutral phrases, and the musical moves robots vary them with

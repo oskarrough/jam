@@ -2,6 +2,7 @@
 // Ring lengths that differ from 16 drift against the loop (polymeter).
 import { kit } from './lib/kit.js'
 import { isStrip, withPointer, view, absOf, theme, clamp, TAU, flashes } from './lib/util.js'
+import { tap, line, arc } from './lib/demo.js'
 
 const RADII = [1, 0.7, 0.42]
 const VOICES = ['hat', 'snare', 'kick']
@@ -19,6 +20,7 @@ export default {
   name: 'Rings',
   playhead: false, // time goes round each ring
   how: 'Drag around a ring to rotate it, drag outward or inward to add or remove pulses, tap to add one.',
+  demo: (shape, aspect) => shape === 'ring' ? [tap(0.2, 0.17), line(0.2, 0.5, 0.45, 0.5, 10)] : [tap(...arc(0.5, 0.5, 0.44, 0.1, 0.1, aspect, 1)[0]), arc(0.5, 0.5, 0.31, 0.05, 0.3, aspect, 16)],
   params: {
     outer: { value: 16, min: 3, max: 16, step: 1 },
     middle: { value: 12, min: 3, max: 16, step: 1 },

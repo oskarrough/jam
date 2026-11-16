@@ -3,6 +3,7 @@
 
 import { fit, val, rgba } from './util.js'
 import { kit } from './kit.js'
+import { wave } from './demo.js'
 import { INK } from '../../palette.js'
 
 export function stepline({ id, name, how, glyph, base, voice, params = {}, generate, sample }) {
@@ -10,6 +11,7 @@ export function stepline({ id, name, how, glyph, base, voice, params = {}, gener
 		id,
 		name,
 		how,
+		demo: () => [wave(0.06, 0.6, 0.55, 0.25, 1, 20)],
 		glyph,
 		params: { octave: { value: 0, min: -1, max: 1, step: 1 }, ...params },
 		// optional hooks used by bots and first load

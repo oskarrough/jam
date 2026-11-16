@@ -4,6 +4,7 @@
 import { kit, mtof } from './lib/kit.js'
 import { SEAT_COLORS } from '../palette.js'
 import { withPointer, view, theme, subSlots, SLOTS, clamp, rng, intersect, segDist, flashes, tint, isStrip, TAU } from './lib/util.js'
+import { line } from './lib/demo.js'
 
 const MAX_WIRES = 8
 
@@ -39,6 +40,7 @@ export default {
   name: 'Swarm',
   playhead: false, // time is the fireflies' flight
   how: 'Drag to string a wire across the fireflies’ paths; tap a wire to cut it. Seed reshuffles the flight paths.',
+  demo: () => [line(0.15, 0.3, 0.75, 0.62, 14)],
   params: {
     count: { value: 9, min: 1, max: 24, step: 1 },
     seed: { value: 7, min: 1, max: 99, step: 1 },

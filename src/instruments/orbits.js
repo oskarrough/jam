@@ -4,6 +4,7 @@
 // Planet size sets pitch: big is low.
 import { kit, mtof } from './lib/kit.js'
 import { isStrip, withPointer, view, absNow, theme, subSlots, SLOTS, clamp, dist, flashes, TAU } from './lib/util.js'
+import { tap, line, arc } from './lib/demo.js'
 
 export const REVS = [8, 6, 4, 3, 2, 1]
 const MAX = 10
@@ -19,6 +20,7 @@ export default {
   name: 'Orbits',
   playhead: false, // time goes round the orbits
   how: 'Press to place a planet and drag outward to grow it (bigger is lower). Drag a planet to another orbit; tap it to remove.',
+  demo: (shape, aspect) => shape === 'ring' ? [line(0.3, 0.5, 0.36, 0.35, 8), tap(0.6, 0.7)] : [line(...arc(0.5, 0.5, 0.25, 0.15, 0.15, aspect, 1)[0], ...arc(0.5, 0.5, 0.36, 0.15, 0.15, aspect, 1)[0], 10), arc(0.5, 0.5, 0.36, 0.15, 0.4, aspect, 12)],
   params: {
     range: { value: 9, min: 3, max: 16, step: 1 },
     octave: { value: 0, min: -1, max: 2, step: 1 },

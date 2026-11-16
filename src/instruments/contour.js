@@ -2,6 +2,7 @@
 // One gliding monophonic voice follows the line; gaps are rests.
 import { kit } from './lib/kit.js'
 import { withPointer, view, theme, SLOTS, clamp, subSlots } from './lib/util.js'
+import { wave } from './lib/demo.js'
 
 function gen() {
   const ys = []
@@ -18,6 +19,7 @@ export default {
   glyph: '<path d="M3 22l5-7 4 3 6-11 5 7 6-4"/>',
   name: 'Contour',
   how: 'Draw a line left to right; height is pitch. Shift-drag erases.',
+  demo: () => [wave(0.08, 0.62, 0.5, 0.22, 1.2, 26)],
   params: {
     range: { value: 12, min: 5, max: 20, step: 1 },
     octave: { value: 0, min: -2, max: 1, step: 1 },

@@ -60,6 +60,7 @@ export default {
   name: 'Scribble',
   playhead: false, // replays in stroke order
   how: 'Scribble anywhere. The drawing replays once per loop in stroke order; left is oo, right is ee, height is pitch. The eraser or Shift rubs it out.',
+  demo: () => [Array.from({ length: 30 }, (_, k) => [0.15 + k * 0.022 + 0.06 * Math.sin(k * 0.9), 0.5 + 0.2 * Math.sin(k * 0.55) * Math.cos(k * 0.21)])],
   params: {
     range: { value: 10, min: 3, max: 16, step: 1 },
     octave: { value: 0, min: -2, max: 1, step: 1 },

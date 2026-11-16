@@ -8,6 +8,7 @@
 import { kit } from './lib/kit.js'
 import { withPointer, absNow, absOf, clamp, flashes, tint, mtof, isStrip, TAU } from './lib/util.js'
 import { INK, SANS } from '../palette.js'
+import { tap, line } from './lib/demo.js'
 
 const N = 16
 const PMAX = 14
@@ -51,6 +52,7 @@ export default {
   glyph: '<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
   name: 'Grid',
   how: 'Tap a step to switch it. Drag to draw pitch, length, loud or chance (pick one along the bottom). Drag the bracket to shorten the pattern.',
+  demo: () => [tap(0.03, 0.45), tap(0.28, 0.45), tap(0.53, 0.45), line(0.03, 0.3, 0.6, 0.6, 14)],
   params: {
     wave: { value: 'square', options: ['square', 'triangle', 'sawtooth', 'bell'] },
     octave: { value: 0, min: -2, max: 1, step: 1 },
