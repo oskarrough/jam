@@ -9,6 +9,7 @@
 //   comet    rides the band once per loop. The band has one side, so it comes home every second loop.
 //   band     breathes on the beat, ripples on the downbeat; hatching follows the light as it turns.
 //   motes    thrown off the comet whenever a lane sounds, in that lane's colour.
+//   chamber  a dark engraved well under the eye, so its light has something to glow against.
 //   eye      the core swells with the mix; its ink pupil tightens on low end.
 // Rotation and the comet come from the shared clock, so every seat sees the same heart.
 //
@@ -78,7 +79,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	const opts = {
 		on: true,
 		// placement and raster
-		scale: 0.95, reach: 2.2, pixel: 1.5, levels: 3, dither: 0.85,
+		scale: 0.86, reach: 2.2, pixel: 1.5, levels: 3, dither: 0.85,
 		// blend: 0 = pigment laid over the ground (paper), 1 = light added to it (dusk)
 		additive: 0,
 		// motion
@@ -88,7 +89,9 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		// reaction
 		sensitivity: 1, burst: 26, fling: 1, moteLife: 2, moteSize: 1, eye: 1, shadow: 0.35,
 		// palette
-		ochre: '#d9a03c', violet: '#5a3f8e', cream: '#f3e8cf', ink: '#211a2e', shade: '#211a2e', comet: '#d24b2a', scratch: false,
+		ochre: '#e0a63a', rose: '#cf6f9a', violet: '#5a3f8e', cream: '#f3e8cf', ink: '#211a2e', shade: '#211a2e', comet: '#d24b2a', scratch: false,
+		// chamber: the heart's own ground, a dark engraved well that the eye glows in. Off = sit on the view's ground.
+		chamber: true, well: '#211943',
 		// counts (rebuild)
 		nBody: 2400, nHatch: 1500, nEdge: 800, nComet: 220, nCore: 260, nMotes: 1400,
 	}
@@ -119,6 +122,23 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false })
 	if (!gl) return stub
 	after ? after.after(canvas) : document.body.prepend(canvas)
+	const well = document.createElement('div')
+	well.setAttribute('aria-hidden', 'true')
+	Object.assign(well.style, { position: 'fixed', left: '0', top: '0', pointerEvents: 'none', borderRadius: '50%' })
+	canvas.before(well)
+	let wellKey = ''
+	function paintWell() {
+		if (wellKey === opts.well) return
+		wellKey = opts.well
+		const pale = 'rgba(243,232,207,'
+		well.style.background = [
+			'radial-gradient(circle at 50% 47%, rgba(255,205,140,.20), rgba(255,205,140,0) 38%)', // warmth behind the iris
+			`repeating-radial-gradient(circle, ${pale}.06) 0 1px, ${pale}0) 1px 6px)`, // engraved rings
+			`repeating-conic-gradient(${pale}.045) 0 1deg, ${pale}0) 1deg 5deg)`, // and rays: guilloché
+			`radial-gradient(circle, ${mixHex(opts.well, '#ffffff', 0.14)} 0%, ${opts.well} 50%, ${mixHex(opts.well, '#000000', 0.55)} 100%)`,
+		].join(',')
+		well.style.boxShadow = `inset 0 0 0 1.5px ${mixHex(opts.well, '#000000', 0.6)}, inset 0 10px 26px rgba(0,0,0,.55)`
+	}
 
 	function shader(type, src) {
 		const s = gl.createShader(type)
@@ -257,7 +277,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	const M = new Float64Array(9)
 	const LX = -0.45, LY = 0.66, LZ = 0.6
-	let last = performance.now(), raf = 0, side = 0, placed = ''
+	let last = performance.now(), raf = 0, side = 0, placed = '', wellU = 1
 
 	function place(G) {
 		const size = Math.round(2 * G.r * opts.reach), px = Math.max(48, Math.round(size / Math.max(0.5, opts.pixel)))
@@ -268,6 +288,11 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		canvas.style.transform = `translate(${Math.round(G.x - size / 2)}px, ${Math.round(G.y - size / 2)}px)`
 		if (canvas.width !== px) canvas.width = canvas.height = px
 		side = px
+		// the well sits just inside the dial's inner rims
+		const wr = Math.max(8, Math.round(G.r * 0.9125 - 7))
+		well.style.width = well.style.height = 2 * wr + 'px'
+		well.style.transform = `translate(${Math.round(G.x - wr)}px, ${Math.round(G.y - wr)}px)`
+		wellU = wr / (G.r * opts.scale)
 	}
 
 	// point on the band and its frame, in view space. w runs across the band; th + TAU with -w is the same point.
@@ -287,10 +312,11 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	function frame(now) {
 		raf = requestAnimationFrame(frame)
 		const G = opts.on ? geom() : null
-		if (!G || !(G.r > 4)) { canvas.style.display = 'none'; last = now; return }
+		if (!G || !(G.r > 4)) { canvas.style.display = well.style.display = 'none'; last = now; return }
 		canvas.style.display = ''
+		well.style.display = opts.chamber ? '' : 'none'
 		place(G)
-		if (G.ground) setGround(G.ground)
+		if (opts.chamber) { paintWell(); setGround(opts.well) } else if (G.ground) setGround(G.ground)
 		const t0 = performance.now()
 		const dt = Math.min(0.05, (now - last) / 1000)
 		last = now
@@ -313,14 +339,14 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		const bob = 0.035 * Math.sin(T * 0.9 * slow), lift = 0.06 + bob
 
 		const R = opts.radius, hw = opts.width * (1 + opts.breathe * beatEnv + 0.25 * level)
-		const ochre = hex(opts.ochre), violet = hex(opts.violet), cream = hex(opts.cream), ink = hex(opts.ink), shd = hex(opts.shade), cometC = hex(opts.comet)
+		const ochre = hex(opts.ochre), rose = hex(opts.rose), violet = hex(opts.violet), cream = hex(opts.cream), ink = hex(opts.ink), shd = hex(opts.shade), cometC = hex(opts.comet)
 		const add = opts.additive
 		const headTh = mod(phi, TAU), headW = phi < TAU ? 0.5 : -0.5
 		const rip = opts.ripple * (0.3 + barEnv + level)
 		count = 0
 
 		// shadow on the ground, drawn first
-		for (let i = 0; i < shade.n; i++) {
+		for (let i = 0; i < shade.n && !opts.chamber; i++) {
 			const sc = 0.62 * (1 - bob * 2)
 			put(-99, shade.x[i] * sc, -0.86 + shade.y[i] * 0.05, 0, 0.05 + shade.rnd[i] * 0.09, 0, 0, 0, 0.006, 0, shd[0] * 0.5, shd[1] * 0.5, shd[2] * 0.5, opts.shadow * (0.55 + 0.45 * shade.rnd[i]) * (1 - bob * 6), 0)
 		}
@@ -340,7 +366,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			const near = Math.exp(-(da > 0 ? da * da * 2.2 : da * da * 60)) * Math.exp(-(w - headW) * (w - headW) * 1.6)
 			if (kind === BODY) {
 				const m = 0.5 + 0.5 * b.c[i], sz = b.size[i] * (1 + 0.5 * near)
-				let r = violet[0] + (ochre[0] - violet[0]) * m, g = violet[1] + (ochre[1] - violet[1]) * m, bl = violet[2] + (ochre[2] - violet[2]) * m
+				let r = violet[0] + (rose[0] - violet[0]) * m, g = violet[1] + (rose[1] - violet[1]) * m, bl = violet[2] + (rose[2] - violet[2]) * m
 				const dk = 0.5 - 0.5 * lit, hi = lit * lit * lit * 0.35 + near * 0.6
 				r = (r + (shd[0] - r) * dk) * (1 - hi) + cream[0] * hi
 				g = (g + (shd[1] - g) * dk) * (1 - hi) + cream[1] * hi
@@ -403,7 +429,8 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			const sp = Math.hypot(vx, vy, vz) + 1e-6, f = Math.max(0, m.life[i] / m.max[i])
 			const len = (0.012 + sp * 0.07) * m.size[i] * opts.moteSize, th = 0.011 * m.size[i] * opts.moteSize * (0.5 + 0.5 * f)
 			const il = 1 / (Math.hypot(vx, vy) + 1e-6)
-			put(z, x, y, z, (vx / sp) * len, (vy / sp) * len, (vz / sp) * len, -vy * il * th, vx * il * th, 0, m.col[o], m.col[o + 1], m.col[o + 2], Math.min(1, f * 2.2) * 0.9, add)
+			const inw = opts.chamber && add > 0 ? 0.35 * Math.min(1, Math.max(0, (wellU - Math.hypot(x, y)) * 6 + 0.5)) : 0
+			put(z, x, y, z, (vx / sp) * len, (vy / sp) * len, (vz / sp) * len, -vy * il * th, vx * il * th, 0, m.col[o] + (cream[0] - m.col[o]) * inw, m.col[o + 1] + (cream[1] - m.col[o + 1]) * inw, m.col[o + 2] + (cream[2] - m.col[o + 2]) * inw, Math.min(1, f * 2.2) * 0.9, opts.chamber ? add * (0.15 + 2.4 * inw) : add)
 		}
 
 		// back to front, then one instanced draw
@@ -434,6 +461,8 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		const f = (gui = g0.addFolder('heart').close())
 		f.add(opts, 'on')
 		f.add(opts, 'additive', 0, 1, 0.01).name('ink ↔ light')
+		f.add(opts, 'chamber').onChange(() => { ground = ''; placed = '' })
+		f.addColor(opts, 'well').name('chamber colour').onChange(() => (ground = ''))
 		const ras = f.addFolder('raster')
 		ras.add(opts, 'pixel', 0.5, 8, 0.5).name('pixel size')
 		ras.add(opts, 'levels', 1, 8, 1).name('tone levels')
@@ -462,7 +491,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		re.add(opts, 'eye', 0, 2.5, 0.05)
 		re.add({ poke: () => engine.lanes.forEach((L) => emit(L, 0.8)) }, 'poke')
 		const pal = f.addFolder('palette').close()
-		for (const k of ['ochre', 'violet', 'cream', 'ink', 'shade', 'comet']) pal.addColor(opts, k)
+		for (const k of ['ochre', 'rose', 'violet', 'cream', 'ink', 'shade', 'comet']) pal.addColor(opts, k)
 		const cn = f.addFolder('counts').close()
 		for (const k of ['nBody', 'nHatch', 'nEdge', 'nComet', 'nCore', 'nMotes']) cn.add(opts, k, 0, 6000, 20).onFinishChange(build)
 		const sd = { get splats() { return stats.splats }, get cpu() { return stats.ms.toFixed(2) + ' ms' } }
@@ -473,6 +502,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 
 	return {
 		opts, stats, canvas, addGui, emit, setGround,
-		destroy() { cancelAnimationFrame(raf); taps.forEach((t) => t.L.out.disconnect(t.an)); canvas.remove() },
+		destroy() { cancelAnimationFrame(raf); taps.forEach((t) => t.L.out.disconnect(t.an)); canvas.remove(); well.remove() },
 	}
 }
