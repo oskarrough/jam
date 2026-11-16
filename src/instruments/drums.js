@@ -1,80 +1,8 @@
-// The four instruments a jam starts with. Synthesis only, no samples.
+// Drums: paint kick, snare and hat in three bands. Shift or right-drag clears.
 
-import { stepline } from './stepline.js'
-import { mtof, env, osc, noiseSrc, fit, rgba, rnd, val } from './util.js'
+import { env, osc, noiseSrc, fit, rgba, val } from './lib/util.js'
 import { INK, SERIF } from '../palette.js'
 
-const gen = {
-	bass() {
-		const a = new Array(32).fill(-1)
-		for (const h of [0, 3, 6, 10, 14, 16, 19, 22, 26, 28, 30]) if (h % 16 === 0 || Math.random() < 0.7) a[h] = [0, 0, 3, 4, 2, 5, 0][rnd(7)]
-		a[0] = 0
-		return a
-	},
-	keys() {
-		const a = new Array(32).fill(-1)
-		let v = 2 + rnd(3)
-		for (let i = 0; i < 32; i += 2) if (Math.random() < (i % 8 === 0 ? 0.9 : 0.35)) { v = Math.max(0, Math.min(7, v + rnd(5) - 2)); a[i + (Math.random() < 0.2 ? 1 : 0)] = v }
-		return a
-	},
-	bell() {
-		const a = new Array(32).fill(-1)
-		let v = 4 + rnd(3)
-		for (let i = 0; i < 32; i++) if (Math.random() < (i >= 16 ? 0.32 : 0.16)) { v = Math.max(0, Math.min(7, v + rnd(5) - 2)); a[i] = v }
-		return a
-	},
-}
-
-export const bass = stepline({
-	id: 'bass', name: 'Bass', base: 33,
-	params: { cutoff: { value: 9, min: 2, max: 24, step: 0.5 } },
-	generate: gen.bass,
-	sample: [0, -1, -1, 0, -1, -1, 3, -1, -1, -1, 4, -1, -1, -1, 2, -1, 0, -1, -1, 0, -1, -1, 3, -1, -1, -1, 5, -1, 4, -1, 2, -1],
-	voice({ audio: ac, out, params }, m, t, dur) {
-		const f = mtof(m), g = ac.createGain(), lp = ac.createBiquadFilter()
-		lp.type = 'lowpass'; lp.Q.value = 7
-		lp.frequency.setValueAtTime(f * val(params.cutoff), t)
-		lp.frequency.exponentialRampToValueAtTime(f * 1.6, t + 0.22)
-		env(g, t, 0.006, 0.32, dur * 2.4)
-		lp.connect(g); g.connect(out)
-		osc(ac, 'sawtooth', f, t, 0.9, lp); osc(ac, 'sine', f / 2, t, 0.9, g)
-	},
-})
-
-export const keys = stepline({
-	id: 'keys', name: 'Keys', base: 57,
-	params: { decay: { value: 0.8, min: 0.1, max: 3, step: 0.05 } },
-	generate: gen.keys,
-	sample: [4, -1, -1, -1, 5, -1, -1, 4, -1, -1, 3, -1, -1, -1, -1, -1, 2, -1, -1, -1, 3, -1, -1, 4, -1, -1, 5, -1, -1, -1, -1, -1],
-	voice({ audio: ac, out, params }, m, t) {
-		const f = mtof(m), g = ac.createGain(), lp = ac.createBiquadFilter()
-		lp.type = 'lowpass'; lp.frequency.value = 2600
-		env(g, t, 0.012, 0.15, val(params.decay))
-		lp.connect(g); g.connect(out)
-		const d = val(params.decay) + 0.3
-		osc(ac, 'triangle', f, t, d, lp).detune.value = -7
-		osc(ac, 'triangle', f, t, d, lp).detune.value = 7
-		osc(ac, 'sine', f * 2, t, d, lp)
-	},
-})
-
-export const bell = stepline({
-	id: 'bell', name: 'Bell', base: 69,
-	params: { ratio: { value: 3.5, min: 1, max: 8, step: 0.01 }, index: { value: 2.2, min: 0, max: 8, step: 0.1 } },
-	generate: gen.bell,
-	sample: [-1, -1, -1, -1, -1, -1, -1, -1, 6, -1, 5, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, 6, -1, 5, -1, 3, -1],
-	voice({ audio: ac, out, params }, m, t) {
-		const f = mtof(m), g = ac.createGain(), mg = ac.createGain()
-		env(g, t, 0.002, 0.12, 1.5); g.connect(out)
-		const car = osc(ac, 'sine', f, t, 1.8, g)
-		mg.gain.setValueAtTime(f * val(params.index) + 1, t)
-		mg.gain.exponentialRampToValueAtTime(1, t + 0.7)
-		osc(ac, 'sine', f * val(params.ratio), t, 1.8, mg)
-		mg.connect(car.frequency)
-	},
-})
-
-// Drums: three rows (kick low, snare middle, hat high). Paint to set hits, Shift or right-drag to clear.
 const ROWS = 3
 function drumSample() {
 	const d = new Array(32).fill(0)
@@ -110,9 +38,11 @@ const hitVoice = {
 	},
 }
 
-export const drums = {
+export default {
 	id: 'drums',
+	glyph: '<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
+	how: 'Paint hits in three bands: kick inside, snare in the middle, hat outside. Shift-drag erases.',
 	params: { hatDecay: { value: 0.045, min: 0.01, max: 0.3, step: 0.005 } },
 	generate: (steps) => ({ hits: fit(drumGen(), steps, 0) }),
 	sample: (steps) => ({ hits: fit(drumSample(), steps, 0) }),

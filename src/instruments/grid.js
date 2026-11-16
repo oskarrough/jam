@@ -1,6 +1,6 @@
 // 02 Grid: the plain step sequencer, as a baseline to compare the others against.
-import { kit } from './kit.js'
-import { withPointer, view, theme, clamp, flashes } from './util.js'
+import { kit } from './lib/kit.js'
+import { withPointer, view, theme, clamp, flashes } from './lib/util.js'
 
 const COLS = 16
 const ROWS = 8
@@ -13,6 +13,7 @@ function gen() {
 
 export default {
   id: 'grid',
+  glyph: '<path class="f" d="M7 7h4v4H7zM19 13h4v4h-4zM13 21h4v4h-4zM21 21h4v4h-4z"/><path d="M5 16h22M16 5v22" stroke-dasharray="1 3"/>',
   name: 'Grid',
   how: 'Click or drag to paint cells; the first cell decides paint or erase.',
   params: {

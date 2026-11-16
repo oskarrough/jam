@@ -1,6 +1,6 @@
 # instrument lab
 
-Ten ways to play one ring of the jam. The modules live in `src/instruments/lab/` and are
+Ten ways to play one ring of the jam. The modules live in `src/instruments/` and are
 registered with the jam, so any seat can pick them. This page plays them one at a time with
 their own debug panel: serve the repo root (`python3 -m http.server`), open `/lab/`, click,
 and press 1–0 to switch.
@@ -45,7 +45,7 @@ instance = {
 clock = { bpm, steps, stepDur, startTime, now(), pos(), playing?, abs()? }
 ```
 
-Shared sound comes from `kit(audio)` in `src/instruments/lab/kit.js`: voices (bell, pluck, marimba,
+Shared sound comes from `kit(audio)` in `src/instruments/lib/kit.js`: voices (bell, pluck, marimba,
 kick, snare, hat, noise), the key (`degree(n, oct)`), and a four-chord progression
 that advances once per loop (`chord(absStep, steps)`).
 

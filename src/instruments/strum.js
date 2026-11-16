@@ -1,8 +1,8 @@
 // 07 Strum: six strings standing upright. Swipe across them to strum.
 // Strums are recorded where they happened in the loop (time runs top to bottom)
 // and replay on whatever chord the loop is on, so a rhythm turns into a progression.
-import { kit, mtof } from './kit.js'
-import { withPointer, view, absNow, absOf, theme, subSlots, SLOTS, clamp } from './util.js'
+import { kit, mtof } from './lib/kit.js'
+import { withPointer, view, absNow, absOf, theme, subSlots, SLOTS, clamp } from './lib/util.js'
 
 const STRINGS = 6
 const MAX_HITS = 96
@@ -19,6 +19,7 @@ function gen() {
 
 export default {
   id: 'strum',
+  glyph: '<path d="M4 9h24M4 13h24M4 17h24M4 21h24" stroke-width="1"/><path d="M9 26L23 5" stroke-width="2.2"/>',
   name: 'Strum',
   how: 'Swipe sideways across the strings. Fast swipes are loud. Strums record into the loop.',
   params: {

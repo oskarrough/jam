@@ -1,7 +1,11 @@
 import GUI from '../src/vendor/lil-gui.esm.min.js'
 import { createEngine, createClock, SCALES, ROOTS } from './engine.js'
-import { instruments } from '../src/instruments/lab/index.js'
-import { THEME } from '../src/instruments/lab/util.js'
+import { instruments as all } from '../src/instruments/index.js'
+
+// the lab is the bench for the ten drawable instruments; the jam has them all
+const LAB = ['contour', 'grid', 'rings', 'sweep', 'drift', 'scribble', 'strum', 'swarm', 'orbits', 'embers']
+const instruments = LAB.map((id) => all.find((m) => m.id === id)).filter(Boolean)
+import { THEME } from '../src/instruments/lib/util.js'
 
 const $ = (s) => document.querySelector(s)
 const STORE = 'roughjam.lab.v1'
@@ -256,7 +260,7 @@ function fit(c) {
 function frame(now) {
   requestAnimationFrame(frame)
   const [g, w, h] = fit(stage)
-  try { lanes[focus].inst.frame(g, w, h, clock) } catch (e) { console.error(e) }
+  try { lanes[focus].inst.frame(g, w, h, clock, 'sheet') } catch (e) { console.error(e) }
   lanes.forEach((l) => {
     const [tg, tw, th] = fit(l.thumb)
     try { l.inst.frame(tg, tw, th, clock) } catch {}

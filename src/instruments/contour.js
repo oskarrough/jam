@@ -1,7 +1,7 @@
 // 01 Contour: draw a melody line across the loop. x is time, y is pitch.
 // One gliding monophonic voice follows the line; gaps are rests.
-import { kit } from './kit.js'
-import { withPointer, view, theme, SLOTS, clamp, subSlots } from './util.js'
+import { kit } from './lib/kit.js'
+import { withPointer, view, theme, SLOTS, clamp, subSlots } from './lib/util.js'
 
 function gen() {
   const ys = []
@@ -15,6 +15,7 @@ function gen() {
 
 export default {
   id: 'contour',
+  glyph: '<path d="M3 22l5-7 4 3 6-11 5 7 6-4"/>',
   name: 'Contour',
   how: 'Draw a line left to right; height is pitch. Shift-drag erases.',
   params: {

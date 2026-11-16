@@ -5,22 +5,6 @@
 import { jellify } from './jelly.js'
 
 // one small drawing per instrument, 32×32, ink strokes; `f` marks filled bits
-const GLYPHS = {
-	bass: '<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/>',
-	keys: '<path d="M7 7v18M13 7v18M19 7v18M25 7v18"/><path class="f" d="M9.5 7h2v10h-2zM21.5 7h2v10h-2z"/>',
-	bell: '<path d="M10 21c0-8 2-13 6-13s6 5 6 13z"/><path d="M7 21h18M16 24v2"/>',
-	drums: '<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
-	contour: '<path d="M3 22l5-7 4 3 6-11 5 7 6-4"/>',
-	grid: '<path class="f" d="M7 7h4v4H7zM19 13h4v4h-4zM13 21h4v4h-4zM21 21h4v4h-4z"/><path d="M5 16h22M16 5v22" stroke-dasharray="1 3"/>',
-	rings: '<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="8.5"/><circle cx="16" cy="16" r="13"/><circle class="f" cx="16" cy="3" r="1.8"/>',
-	sweep: '<path d="M5 25A13 13 0 0 1 27 12"/><path d="M23 9l4 3-3 4"/><path d="M8 19h4M11 14h4" stroke-dasharray="1 2"/>',
-	drift: '<circle class="f" cx="16" cy="16" r="2.6"/><circle cx="16" cy="16" r="7"/><circle cx="16" cy="16" r="12" stroke-dasharray="2 3"/>',
-	scribble: '<path d="M4 21c3-11 6 6 8-5s4 11 7 0 3 9 9-7"/>',
-	strum: '<path d="M4 9h24M4 13h24M4 17h24M4 21h24" stroke-width="1"/><path d="M9 26L23 5" stroke-width="2.2"/>',
-	swarm: '<circle class="f" cx="8" cy="9" r="1.6"/><circle class="f" cx="22" cy="7" r="1.6"/><circle class="f" cx="13" cy="21" r="1.6"/><circle class="f" cx="25" cy="19" r="1.6"/><circle class="f" cx="17" cy="13" r="1.6"/><path d="M4 27L28 12"/>',
-	orbits: '<ellipse cx="16" cy="16" rx="12" ry="6" transform="rotate(-25 16 16)"/><circle class="f" cx="16" cy="16" r="2.4"/><circle class="f" cx="26.5" cy="11" r="2"/>',
-	embers: '<path class="f" d="M16 22l2 3-2 3-2-3zM10 13l1.5 2.2L10 17.5 8.5 15.2zM21 7l1.5 2.2L21 11.5 19.5 9.2z"/><path d="M11 28c3-2 7-2 10 0"/>',
-}
 const fallback = '<circle cx="16" cy="16" r="9"/>'
 
 export function createPicker({ engine, registry, view, me }) {
@@ -42,7 +26,7 @@ export function createPicker({ engine, registry, view, me }) {
 		b.className = 'glyph'
 		b.dataset.id = id
 		b.setAttribute('aria-label', mod.name)
-		b.innerHTML = `<svg viewBox="0 0 32 32" aria-hidden="true">${GLYPHS[id] || fallback}</svg>`
+		b.innerHTML = `<svg viewBox="0 0 32 32" aria-hidden="true">${registry.get(id)?.glyph || fallback}</svg>`
 		const say = () => (caption.textContent = mod.name.toLowerCase())
 		b.addEventListener('pointerenter', say)
 		b.addEventListener('focus', say)
@@ -105,6 +89,6 @@ export function createPicker({ engine, registry, view, me }) {
 		if (step) { e.preventDefault(); buttons[(i + step + buttons.length) % buttons.length].focus() }
 	})
 
-	const glyph = (id) => `<svg viewBox="0 0 32 32" aria-hidden="true">${GLYPHS[id] || fallback}</svg>`
+	const glyph = (id) => `<svg viewBox="0 0 32 32" aria-hidden="true">${registry.get(id)?.glyph || fallback}</svg>`
 	return { open, close, toggle, glyph, get isOpen() { return !el.hidden } }
 }

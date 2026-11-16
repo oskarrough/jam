@@ -1,8 +1,8 @@
 // 06 Scribble: scribble anywhere; the whole scribble is replayed once per loop
 // in the order you drew it, as grains of a slowly morphing vowel.
 // x picks where in the vowel the grain is read (oo .. ah .. ee), y picks the pitch.
-import { kit, mtof } from './kit.js'
-import { withPointer, view, theme, subSlots, SLOTS, clamp, dist, flashes, TAU, tint } from './util.js'
+import { kit, mtof } from './lib/kit.js'
+import { withPointer, view, theme, subSlots, SLOTS, clamp, dist, flashes, TAU, tint } from './lib/util.js'
 
 const MAX_PTS = 400
 const SRC_SECONDS = 3
@@ -56,6 +56,7 @@ function gen() {
 
 export default {
   id: 'scribble',
+  glyph: '<path d="M4 21c3-11 6 6 8-5s4 11 7 0 3 9 9-7"/>',
   name: 'Scribble',
   how: 'Scribble anywhere. The drawing replays once per loop in stroke order; left is oo, right is ee, height is pitch.',
   params: {

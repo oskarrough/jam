@@ -1,8 +1,8 @@
 // 05 Drift: place up to five stones in a pond; each one is a sustained drone voice.
 // x picks the pitch, y the colour (low = dark and still, high = bright and beating).
 // Voices breathe with the loop, each one offset, so the chord slowly rotates.
-import { kit } from './kit.js'
-import { withPointer, view, absOf, theme, clamp, dist, TAU, tint } from './util.js'
+import { kit } from './lib/kit.js'
+import { withPointer, view, absOf, theme, clamp, dist, TAU, tint } from './lib/util.js'
 
 const MAX = 5
 
@@ -12,6 +12,7 @@ function gen() {
 
 export default {
   id: 'drift',
+  glyph: '<circle class="f" cx="16" cy="16" r="2.6"/><circle cx="16" cy="16" r="7"/><circle cx="16" cy="16" r="12" stroke-dasharray="2 3"/>',
   name: 'Drift',
   how: 'Tap to drop a stone, drag it to bend, tap it again to lift it out.',
   params: {

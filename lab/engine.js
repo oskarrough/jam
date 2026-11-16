@@ -1,6 +1,6 @@
 // Standalone audio engine and clock for the instrument lab page.
-import { kit } from '../src/instruments/lab/kit.js'
-export { SCALES, ROOTS, mtof } from '../src/instruments/lab/kit.js'
+import { kit } from '../src/instruments/lib/kit.js'
+export { SCALES, ROOTS, mtof } from '../src/instruments/lib/kit.js'
 
 export function createClock(audio, { bpm = 96, steps = 16 } = {}) {
   const c = {

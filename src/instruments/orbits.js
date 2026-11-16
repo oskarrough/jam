@@ -2,8 +2,8 @@
 // passes the line at 12 o'clock. Inner orbits are faster (8, 6, 4, 3, 2, 1 laps per
 // loop), so 3 and 6 lap planets fall between the 16ths: easy polyrhythm.
 // Planet size sets pitch: big is low.
-import { kit, mtof } from './kit.js'
-import { isStrip, withPointer, view, absNow, theme, subSlots, SLOTS, clamp, dist, flashes, TAU } from './util.js'
+import { kit, mtof } from './lib/kit.js'
+import { isStrip, withPointer, view, absNow, theme, subSlots, SLOTS, clamp, dist, flashes, TAU } from './lib/util.js'
 
 const REVS = [8, 6, 4, 3, 2, 1]
 const MAX = 10
@@ -15,6 +15,7 @@ function gen() {
 
 export default {
   id: 'orbits',
+  glyph: '<ellipse cx="16" cy="16" rx="12" ry="6" transform="rotate(-25 16 16)"/><circle class="f" cx="16" cy="16" r="2.4"/><circle class="f" cx="26.5" cy="11" r="2"/>',
   name: 'Orbits',
   how: 'Press to place a planet and drag outward to grow it (bigger is lower). Drag a planet to another orbit; tap it to remove.',
   params: {
@@ -103,7 +104,7 @@ export default {
     return {
       state,
       pointer: withPointer(size, (e) => {
-        if (isStrip(e.w, e.h)) return stripPointer(e)
+        if (isStrip(e.w, e.h, e.shape)) return stripPointer(e)
         const ph = phaseNow()
         if (e.type === 'down') {
           const k = state.planets.findIndex((p) => {
@@ -150,9 +151,9 @@ export default {
           })
         })
       },
-      frame(g, w, h, clock) {
+      frame(g, w, h, clock, shape) {
         size[0] = w; size[1] = h
-        if (isStrip(w, h)) return frameStrip(g, w, h, view(clock))
+        if (isStrip(w, h, shape)) return frameStrip(g, w, h, view(clock))
         const t = view(clock)
         const ph = ((t.phase % 1) + 1) % 1
         const RR = R(w, h)

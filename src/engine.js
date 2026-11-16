@@ -2,7 +2,7 @@
 // Talks to a transport (local.js or sync/sync.js, same API) and to instruments (see instruments/index.js).
 
 import { registry } from './instruments/index.js'
-import { val } from './instruments/util.js'
+import { val } from './instruments/lib/util.js'
 
 import { LANE_COLORS, INK_THEME } from './palette.js'
 export { LANE_COLORS }

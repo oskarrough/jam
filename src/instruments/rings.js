@@ -1,7 +1,7 @@
 // 03 Rings: three euclidean rhythms on concentric rings, each with its own length.
 // Ring lengths that differ from 16 drift against the loop (polymeter).
-import { kit } from './kit.js'
-import { isStrip, withPointer, view, absOf, theme, clamp, TAU, flashes } from './util.js'
+import { kit } from './lib/kit.js'
+import { isStrip, withPointer, view, absOf, theme, clamp, TAU, flashes } from './lib/util.js'
 
 const RADII = [1, 0.7, 0.42]
 const VOICES = ['hat', 'snare', 'kick']
@@ -15,6 +15,7 @@ function gen(steps, p = {}) {
 
 export default {
   id: 'rings',
+  glyph: '<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="8.5"/><circle cx="16" cy="16" r="13"/><circle class="f" cx="16" cy="3" r="1.8"/>',
   name: 'Rings',
   how: 'Drag around a ring to rotate it, drag outward or inward to add or remove pulses, tap to add one.',
   params: {
@@ -90,7 +91,7 @@ export default {
     return {
       state,
       pointer: withPointer(size, (e) => {
-        if (isStrip(e.w, e.h)) return stripPointer(e)
+        if (isStrip(e.w, e.h, e.shape)) return stripPointer(e)
         const { R, r, a } = geom(e)
         if (e.type === 'down') {
           let best = 0, bd = Infinity
@@ -126,9 +127,9 @@ export default {
           fx.hit(`${r}:${j}`, time)
         })
       },
-      frame(g, w, h, clock) {
+      frame(g, w, h, clock, shape) {
         size[0] = w; size[1] = h
-        if (isStrip(w, h)) return frameStrip(g, w, h, view(clock))
+        if (isStrip(w, h, shape)) return frameStrip(g, w, h, view(clock))
         const t = view(clock)
         const R = Math.min(w, h) * 0.44
         const cx = w / 2, cy = h / 2

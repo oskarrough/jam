@@ -5,7 +5,7 @@
 // a wandering ink line), and the machine on top: a paper dial pasted on with a flat offset shadow,
 // one ring per player, ink on paper. The centre is left bare for src/heart.js.
 
-import { rgba } from './instruments/util.js'
+import { rgba } from './instruments/lib/util.js'
 import { INK, SERIF, GROUNDS } from './palette.js'
 import { spring, dentAt } from './jelly.js'
 import { paintLandscape, makeWisps } from './backdrop.js'
@@ -282,7 +282,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		lg.clearRect(0, 0, L.canvas.width, L.canvas.height)
 		lg.setTransform(DPR, 0, 0, DPR, 0, 0)
 		lg.save()
-		try { L.instance.frame(lg, L.w, L.h, engine.iclock) } catch (e) { if (!L.err) console.error(L.module.id, e); L.err = true }
+		const shape = opts.mode === 'dial' && focus.on && L.index === focus.lane ? 'sheet' : 'ring'
+		try { L.instance.frame(lg, L.w, L.h, engine.iclock, shape) } catch (e) { if (!L.err) console.error(L.module.id, e); L.err = true }
 		lg.restore()
 	}
 

@@ -45,20 +45,21 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `d` th
     src/bots.js             the robots
     src/debug.js            the panel (lil-gui, vendored)
     src/transport/local.js  tabs in one browser, same API as sync/sync.js, with fake latency, jitter and skew
-    src/instruments/        instruments and the registry
+    src/instruments/        one file per instrument, the registry, and README.md with the contract
+    scripts/new-instrument.js  npm run new-instrument <name>
     sync/                   the network: shared clock, quantized edits, relay for Node and Cloudflare
     lab/                    the ten lab instruments one at a time, each with its own panel
 
 ### Write an instrument
 
-An instrument is one ES module. Register it in `src/instruments/index.js` (the full contract is there) and it shows up in every ring's menu.
+Every instrument is one file in `src/instruments/`, and there's room for more. To start one:
 
-    export default { id, name, params, create(ctx), generate?(steps), sample?(steps) }
-    ctx      = { audio, out, clock, params, color }
-    clock    = { bpm, steps, stepDur, startTime, now(), pos(), playing }   // AudioContext seconds
-    instance = { state, setState(s), pointer(e), step(i, time, dur), frame(g, w, h, clock), clear?(), dispose() }
+    npm run new-instrument pebbles
+    open 'http://localhost:8000/?instrument=pebbles'
 
-`frame` draws a plain rectangle; the dial wraps it round a ring, with x as loop phase clockwise from twelve and y = 0 on the outside. `pointer` gets `{type, x, y, alt}` in the same 0..1 space. `step` is called slightly ahead of time for each 16th. `state` is plain JSON and is the only thing that goes over the network. `params` become knobs in the panel. `generate` lets robots play it.
+That writes a small working instrument, registers it, and the link seats you with it, zoomed in. An instrument does five things: keep its drawing as plain JSON (that's all that goes over the network), take pointer input, schedule notes ahead of time, draw itself twice (a thin summary round its ring, and a big sheet when zoomed), and tidy up. The contract is in [src/instruments/README.md](src/instruments/README.md).
+
+`?instrument=<id>` works for any of them: `/?instrument=strum` sits you down at the strings.
 
 ### Swap the transport
 

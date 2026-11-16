@@ -1,8 +1,8 @@
 // 08 Swarm: fireflies fly fixed looping paths (the same on every screen, from a seed).
 // Draw wires across their paths; a firefly crossing a wire plays a note set by the
 // wire's height. You compose by placing tripwires, not notes.
-import { kit, mtof } from './kit.js'
-import { withPointer, view, theme, subSlots, SLOTS, clamp, rng, intersect, segDist, flashes, TAU } from './util.js'
+import { kit, mtof } from './lib/kit.js'
+import { withPointer, view, theme, subSlots, SLOTS, clamp, rng, intersect, segDist, flashes, TAU } from './lib/util.js'
 
 const MAX_WIRES = 8
 
@@ -17,6 +17,7 @@ function gen() {
 
 export default {
   id: 'swarm',
+  glyph: '<circle class="f" cx="8" cy="9" r="1.6"/><circle class="f" cx="22" cy="7" r="1.6"/><circle class="f" cx="13" cy="21" r="1.6"/><circle class="f" cx="25" cy="19" r="1.6"/><circle class="f" cx="17" cy="13" r="1.6"/><path d="M4 27L28 12"/>',
   name: 'Swarm',
   how: 'Drag to string a wire across the fireflies’ paths; tap a wire to cut it. Seed reshuffles the flight paths.',
   params: {

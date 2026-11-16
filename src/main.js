@@ -91,6 +91,7 @@ view = createView(document.getElementById('c'), engine, {
 	onPointer(i, e) {
 		const L = lanes[i]
 		if (me.erase) e.alt = true
+		e.shape = view.focus.on && view.focus.lane === i ? 'sheet' : 'ring'
 		L.instance.pointer(e)
 		engine.pushSoon(L)
 		view.showCursor('me', i, e.x, e.y, '')
@@ -111,6 +112,13 @@ transport.on('peers', renderSeats)
 transport.on('welcome', () => {
 	// take the first lane nobody is sitting at, keys first
 	if (me.lane < 0) for (const i of [1, 2, 0, 3]) if (!humanAt(i)) { sit(i); break }
+	// ?instrument=strum: put that instrument in your ring and open it up
+	const want = registry.get(q.get('instrument'))
+	if (want && me.lane >= 0) {
+		const L = lanes[me.lane]
+		if (L.module !== want) { engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps()) }); engine.push(L) }
+		view.setFocus?.(me.lane)
+	}
 	renderSeats()
 })
 engine.on('lanes', renderSeats)

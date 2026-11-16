@@ -1,8 +1,8 @@
 // 04 Sweep: a held chord pad you play only through its filter.
 // Hold and move: height is cutoff, left/right is resonance. The gesture is recorded
 // at the playhead and loops, so you overdub automation by performing it.
-import { kit } from './kit.js'
-import { withPointer, view, absOf, theme, SLOTS, clamp, subSlots } from './util.js'
+import { kit } from './lib/kit.js'
+import { withPointer, view, absOf, theme, SLOTS, clamp, subSlots } from './lib/util.js'
 
 const cutoffOf = (y) => 60 * Math.pow(2, (1 - y) * 7.5)
 const qOf = (x) => 0.4 + x * 16
@@ -16,6 +16,7 @@ function gen() {
 
 export default {
   id: 'sweep',
+  glyph: '<path d="M5 25A13 13 0 0 1 27 12"/><path d="M23 9l4 3-3 4"/><path d="M8 19h4M11 14h4" stroke-dasharray="1 2"/>',
   name: 'Sweep',
   how: 'Hold and move to sweep the filter: up is brighter, right is more resonant. It records as you play.',
   params: {

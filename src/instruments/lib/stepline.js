@@ -2,12 +2,14 @@
 // Factory used by the bass, keys and bell instruments; they differ only in voice and range.
 
 import { SCALE, fit, val, rgba } from './util.js'
-import { INK } from '../palette.js'
+import { INK } from '../../palette.js'
 
-export function stepline({ id, name, base, voice, params = {}, generate, sample }) {
+export function stepline({ id, name, how, glyph, base, voice, params = {}, generate, sample }) {
 	return {
 		id,
 		name,
+		how,
+		glyph,
 		params: { octave: { value: 0, min: -1, max: 1, step: 1 }, ...params },
 		// optional hooks used by bots and first load
 		generate: (steps) => ({ notes: fit(generate(), steps, -1) }),
