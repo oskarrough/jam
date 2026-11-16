@@ -3,6 +3,7 @@
 // Self-contained: owns a WebGL2 canvas layered over the view, reads only the shared clock and the lanes' audio.
 //   const heart = createHeart({ engine, geom: () => view.center() })   // geom -> {x, y, r} in CSS px, or null to hide
 //   heart.addGui(gui)                                                   // lil-gui folder
+//   heart.setGround('#2b2142')                                          // or return {ground} from geom: adapts ink, highlight, blend
 //
 // What moves and why:
 //   comet    rides the band once per loop. The band has one side, so it comes home every second loop.
@@ -70,6 +71,7 @@ const TAU = Math.PI * 2
 const STRIDE = 14
 const mod = (a, n) => ((a % n) + n) % n
 const hex = (h) => { const n = parseInt(h.slice(1), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255] }
+const mixHex = (a, b, t) => { const x = hex(a), y = hex(b); return '#' + x.map((v, i) => Math.round((v + (y[i] - v) * t) * 255).toString(16).padStart(2, '0')).join('') }
 const randn = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.87
 
 export function createHeart({ engine, geom, after = document.querySelector('canvas') }) {
@@ -86,11 +88,29 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		// reaction
 		sensitivity: 1, burst: 26, fling: 1, moteLife: 2, moteSize: 1, eye: 1, shadow: 0.35,
 		// palette
-		ochre: '#d9a03c', violet: '#5a3f8e', cream: '#f3e8cf', ink: '#211a2e', comet: '#d24b2a',
+		ochre: '#d9a03c', violet: '#5a3f8e', cream: '#f3e8cf', ink: '#211a2e', shade: '#211a2e', comet: '#d24b2a', scratch: false,
 		// counts (rebuild)
 		nBody: 2400, nHatch: 1500, nEdge: 800, nComet: 220, nCore: 260, nMotes: 1400,
 	}
 	const stats = { splats: 0, ms: 0 }
+
+	// Tell the heart what it sits on and it picks its own line, highlight and blend.
+	// Light ground: dark ink laid over, highlights lift toward the ground. Dark ground: pale line, light added.
+	let ground = ''
+	function setGround(h, { ink = '#211a2e', pale = '#f3e8cf' } = {}) {
+		if (!/^#[0-9a-f]{6}$/i.test(h || '') || h === ground) return
+		ground = h
+		const [r, g, b] = hex(h), lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+		const dark = lum < 0.32
+		opts.ink = dark ? pale : ink
+		opts.cream = dark ? pale : mixHex(h, '#ffffff', 0.55)
+		opts.additive = dark ? 0.55 : 0
+		opts.scratch = dark // pale line on dark: hatch the lit side, like scratchboard
+		opts.shadow = dark ? 0.18 : 0.35
+		opts.shade = dark ? mixHex(h, '#000000', 0.35) : ink
+		gui?.controllersRecursive().forEach((c) => c.updateDisplay())
+	}
+	let gui = null
 	const stub = { opts, stats, canvas: null, addGui() {}, destroy() {} }
 
 	const canvas = document.createElement('canvas')
@@ -270,6 +290,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		if (!G || !(G.r > 4)) { canvas.style.display = 'none'; last = now; return }
 		canvas.style.display = ''
 		place(G)
+		if (G.ground) setGround(G.ground)
 		const t0 = performance.now()
 		const dt = Math.min(0.05, (now - last) / 1000)
 		last = now
@@ -292,7 +313,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		const bob = 0.035 * Math.sin(T * 0.9 * slow), lift = 0.06 + bob
 
 		const R = opts.radius, hw = opts.width * (1 + opts.breathe * beatEnv + 0.25 * level)
-		const ochre = hex(opts.ochre), violet = hex(opts.violet), cream = hex(opts.cream), ink = hex(opts.ink), cometC = hex(opts.comet)
+		const ochre = hex(opts.ochre), violet = hex(opts.violet), cream = hex(opts.cream), ink = hex(opts.ink), shd = hex(opts.shade), cometC = hex(opts.comet)
 		const add = opts.additive
 		const headTh = mod(phi, TAU), headW = phi < TAU ? 0.5 : -0.5
 		const rip = opts.ripple * (0.3 + barEnv + level)
@@ -301,7 +322,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		// shadow on the ground, drawn first
 		for (let i = 0; i < shade.n; i++) {
 			const sc = 0.62 * (1 - bob * 2)
-			put(-99, shade.x[i] * sc, -0.86 + shade.y[i] * 0.05, 0, 0.05 + shade.rnd[i] * 0.09, 0, 0, 0, 0.006, 0, ink[0], ink[1], ink[2], opts.shadow * (0.55 + 0.45 * shade.rnd[i]) * (1 - bob * 6), 0)
+			put(-99, shade.x[i] * sc, -0.86 + shade.y[i] * 0.05, 0, 0.05 + shade.rnd[i] * 0.09, 0, 0, 0, 0.006, 0, shd[0] * 0.5, shd[1] * 0.5, shd[2] * 0.5, opts.shadow * (0.55 + 0.45 * shade.rnd[i]) * (1 - bob * 6), 0)
 		}
 
 		// band
@@ -321,14 +342,14 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 				const m = 0.5 + 0.5 * b.c[i], sz = b.size[i] * (1 + 0.5 * near)
 				let r = violet[0] + (ochre[0] - violet[0]) * m, g = violet[1] + (ochre[1] - violet[1]) * m, bl = violet[2] + (ochre[2] - violet[2]) * m
 				const dk = 0.5 - 0.5 * lit, hi = lit * lit * lit * 0.35 + near * 0.6
-				r = (r + (ink[0] - r) * dk) * (1 - hi) + cream[0] * hi
-				g = (g + (ink[1] - g) * dk) * (1 - hi) + cream[1] * hi
-				bl = (bl + (ink[2] - bl) * dk) * (1 - hi) + cream[2] * hi
+				r = (r + (shd[0] - r) * dk) * (1 - hi) + cream[0] * hi
+				g = (g + (shd[1] - g) * dk) * (1 - hi) + cream[1] * hi
+				bl = (bl + (shd[2] - bl) * dk) * (1 - hi) + cream[2] * hi
 				const a = 0.085 * sz, c2 = 0.05 * sz
 				put(pz, px, py, pz, ax * a, ay * a, az * a, wx * c2, wy * c2, wz * c2, r, g, bl, opts.body, near * add)
 			} else if (kind === HATCH) {
 				const thr = 0.25 + b.rnd[i] * 0.6
-				const al = opts.hatch * Math.min(1, Math.max(0, (thr - lit) * 6)) * (1 - near)
+				const al = opts.hatch * Math.min(1, Math.max(0, (thr - (opts.scratch ? 1 - lit : lit)) * 6)) * (1 - near)
 				if (al < 0.01) continue
 				const len = hw * (0.25 + 0.3 * b.size[i]), tw = 0.0055
 				// strokes run across the band, leaning a little
@@ -366,7 +387,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 				const fl = 0.75 + 0.25 * Math.sin(T * 3.1 + core.rnd[i] * 40), sz = (0.022 + 0.03 * core.rnd[i]) * swell * fl
 				const m = Math.min(1, Math.hypot(ox, oy, oz) / (0.16 * swell))
 				put(z, x, y, z, sz, 0, 0, 0, sz, 0, cometC[0] + (ochre[0] - cometC[0]) * m, cometC[1] + (ochre[1] - cometC[1]) * m, cometC[2] + (ochre[2] - cometC[2]) * m, 0.4 * fl, add)
-			} else put(z + 0.22, x, y, z, 0.018, 0, 0, 0, 0.018, 0, ink[0], ink[1], ink[2], 0.85, 0)
+			} else put(z + 0.22, x, y, z, 0.018, 0, 0, 0, 0.018, 0, shd[0] * 0.6, shd[1] * 0.6, shd[2] * 0.6, 0.85, 0)
 		}
 
 		// motes: streaks along their velocity, dragging and curling round the axis
@@ -409,8 +430,8 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	}
 	raf = requestAnimationFrame(frame)
 
-	function addGui(gui) {
-		const f = gui.addFolder('heart').close()
+	function addGui(g0) {
+		const f = (gui = g0.addFolder('heart').close())
 		f.add(opts, 'on')
 		f.add(opts, 'additive', 0, 1, 0.01).name('ink ↔ light')
 		const ras = f.addFolder('raster')
@@ -429,6 +450,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		bd.add(opts, 'width', 0.05, 0.5, 0.01)
 		bd.add(opts, 'body', 0, 1, 0.01).name('pigment')
 		bd.add(opts, 'hatch', 0, 1, 0.01)
+		bd.add(opts, 'scratch').name('hatch the light')
 		bd.add(opts, 'outline', 0, 1, 0.01)
 		bd.add(opts, 'shadow', 0, 1, 0.01)
 		const re = f.addFolder('reaction')
@@ -440,7 +462,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		re.add(opts, 'eye', 0, 2.5, 0.05)
 		re.add({ poke: () => engine.lanes.forEach((L) => emit(L, 0.8)) }, 'poke')
 		const pal = f.addFolder('palette').close()
-		for (const k of ['ochre', 'violet', 'cream', 'ink', 'comet']) pal.addColor(opts, k)
+		for (const k of ['ochre', 'violet', 'cream', 'ink', 'shade', 'comet']) pal.addColor(opts, k)
 		const cn = f.addFolder('counts').close()
 		for (const k of ['nBody', 'nHatch', 'nEdge', 'nComet', 'nCore', 'nMotes']) cn.add(opts, k, 0, 6000, 20).onFinishChange(build)
 		const sd = { get splats() { return stats.splats }, get cpu() { return stats.ms.toFixed(2) + ' ms' } }
@@ -450,7 +472,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	}
 
 	return {
-		opts, stats, canvas, addGui, emit,
+		opts, stats, canvas, addGui, emit, setGround,
 		destroy() { cancelAnimationFrame(raf); taps.forEach((t) => t.L.out.disconnect(t.an)); canvas.remove() },
 	}
 }
