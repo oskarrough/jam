@@ -7,6 +7,7 @@
 
 import { rgba } from './instruments/util.js'
 import { INK, SERIF, GROUNDS } from './palette.js'
+import { spring, dentAt } from './jelly.js'
 
 const TAU = Math.PI * 2
 const VERMILION = '#d64a28'
@@ -34,6 +35,11 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	let G = GROUNDS.vallotton, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
 	const cursors = new Map() // key -> {lane, x, y, name, until}
 	let heat = 0, lastT = performance.now(), lastBeat = -1, hover = null, drag = null
+	// jelly: each ring and seat has a spring; pressing dents it where you pressed, release wobbles it back
+	const ringJelly = lanes.map(() => ({ s: spring({ k: 420, c: 9 }), a: 0 }))
+	const seatJelly = lanes.map(() => ({ s: spring({ k: 700, c: 10 }), a: 0 }))
+	const press = (j, a) => { j.a = a; j.s.target = 1 }
+	const release = (j) => { if (j.s.target) { j.s.target = 0; j.s.v -= 3 } }
 
 	function resize() {
 		DPR = Math.min(2, devicePixelRatio || 1)
@@ -107,9 +113,17 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	canvas.addEventListener('pointerdown', (e) => {
 		for (let i = 0; i < lanes.length; i++) {
 			const [x, y] = seatPos(i)
-			if (Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6) return onSit(i)
+			if (Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6) {
+				press(seatJelly[i], Math.atan2(e.clientY - y, e.clientX - x))
+				setTimeout(() => release(seatJelly[i]), 110)
+				return onSit(i)
+			}
 		}
 		const h = hit(e.clientX, e.clientY)
+		if (h && opts.mode === 'dial') {
+			press(ringJelly[h.lane], Math.atan2(e.clientY - CY, e.clientX - CX))
+			if (!canDraw(h.lane)) setTimeout(() => release(ringJelly[h.lane]), 120) // a poke at someone else's ring
+		}
 		if (!h || !canDraw(h.lane)) return
 		canvas.setPointerCapture(e.pointerId)
 		drag = { lane: h.lane, id: e.pointerId, alt: e.shiftKey, button: e.button }
@@ -120,12 +134,14 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		canvas.style.cursor = hover && canDraw(hover.lane) ? '' : 'default'
 		if (!drag || e.pointerId !== drag.id) return
 		const h = hit(e.clientX, e.clientY, drag.lane)
+		ringJelly[drag.lane].a = Math.atan2(e.clientY - CY, e.clientX - CX) // the dent follows the pen
 		onPointer(drag.lane, { type: 'move', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
 	})
 	const up = (e) => {
 		if (!drag || e.pointerId !== drag.id) return
 		const h = hit(e.clientX, e.clientY, drag.lane)
 		onPointer(drag.lane, { type: 'up', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
+		release(ringJelly[drag.lane])
 		drag = null
 	}
 	canvas.addEventListener('pointerup', up)
@@ -137,12 +153,14 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	/* ───────── backdrop: painted once per resize ───────── */
 
 	// a hand-drawn closed circle: radius wobbles a little, the same way every frame
-	function wobble(c, cx, cy, r, seed, amp = 0.8) {
+	// dent: optional { a, depth, w } pushes the outline in (depth > 0) or out around angle a; that's the jelly
+	function wobble(c, cx, cy, r, seed, amp = 0.8, dent = null) {
 		const p = [(seed * 1.7) % TAU, (seed * 2.9) % TAU, (seed * 4.3) % TAU]
 		c.beginPath()
 		for (let k = 0; k <= 160; k++) {
 			const a = (k / 160) * TAU
-			const rr = r + amp * (Math.sin(a * 3 + p[0]) * 0.6 + Math.sin(a * 7 + p[1]) * 0.3 + Math.sin(a * 13 + p[2]) * 0.2)
+			let rr = r + amp * (Math.sin(a * 3 + p[0]) * 0.6 + Math.sin(a * 7 + p[1]) * 0.3 + Math.sin(a * 13 + p[2]) * 0.2)
+			if (dent && dent.depth) rr -= dent.depth * dentAt(a, dent.a, dent.w)
 			const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr
 			k ? c.lineTo(x, y) : c.moveTo(x, y)
 		}
@@ -328,6 +346,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		const beatIdx = p ? Math.floor(p.beats) : 0
 		if (beatIdx !== lastBeat) { if (lastBeat !== -1) heat = Math.min(1, heat + (p.beat === 0 ? 0.25 : 0.08)); lastBeat = beatIdx }
 		heat = Math.max(heat * Math.pow(0.04, dt), Math.min(0.9, engine.level() * 2.5))
+		for (const j of ringJelly) j.s.step(dt)
+		for (const j of seatJelly) j.s.step(dt)
 
 		// cycling grounds: every few loops the next one fades in over a couple of seconds
 		if (opts.ground === 'cycle' && p) {
@@ -432,18 +452,52 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	function drawSeat(i, x, y, label) {
 		const L = lanes[i], st = seat(i), r = seatR()
 		if (st.me) { g.fillStyle = 'rgba(40,25,60,.45)'; g.beginPath(); g.arc(x + 3, y + 4, r, 0, TAU); g.fill() }
+		const J = seatJelly[i]
+		wobble(g, x, y, r, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 })
 		g.fillStyle = st.name ? L.color : PAPER
-		g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill()
+		g.fill()
 		g.strokeStyle = INK
 		g.lineWidth = st.me ? 2.4 : 1.1
 		if (!st.name) g.setLineDash([2.5, 3])
-		wobble(g, x, y, r, i * 5 + 2, 0.6); g.stroke()
+		g.stroke()
 		g.setLineDash([])
 		g.font = serif(r * 1.05, 600, false)
 		g.textAlign = 'center'; g.textBaseline = 'middle'
 		g.fillStyle = st.name ? PAPER : ink(0.6)
 		g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
-		if (label) slip(`${L.module.name.toLowerCase()}, ${st.label}`, x, y > CY ? y + r + 13 : y - r - 13, Math.max(11, S * 0.019))
+		if (label) arcCaption(`${L.module.name.toLowerCase()} · ${st.label}`, Math.atan2(y - CY, x - CX), medallion() + Math.max(9, S * 0.02), Math.max(12, S * 0.021), st.me)
+	}
+
+	// hand-set caption riding the outside of the dial's rim, centred on angle a. Upright on both halves:
+	// on the top half letters run clockwise with their feet on the rim, on the bottom half anticlockwise.
+	function arcCaption(text, a, R, px, strong) {
+		g.save()
+		g.font = serif(px, strong ? 600 : 400)
+		g.textAlign = 'center'; g.textBaseline = 'middle'
+		const chars = [...text]
+		const ws = chars.map((ch) => g.measureText(ch).width + px * 0.04)
+		const total = ws.reduce((x, y) => x + y, 0)
+		const bottom = Math.sin(a) > 0, dir = bottom ? -1 : 1
+		let t = a - (dir * total) / R / 2
+		const col = G.dark ? G.paper : INK
+		// a soft halo in the sky colour keeps it legible over hills and crescents
+		g.lineJoin = 'round'
+		g.lineWidth = Math.max(2.5, px * 0.28)
+		g.strokeStyle = rgba(G.sky[G.dark ? 0 : 2], 0.85)
+		for (const pass of ['stroke', 'fill']) {
+			let u = t
+			for (let k = 0; k < ws.length; k++) {
+				const mid = u + (dir * ws[k]) / R / 2
+				g.save()
+				g.translate(CX + Math.cos(mid) * R, CY + Math.sin(mid) * R)
+				g.rotate(mid + (bottom ? -Math.PI / 2 : Math.PI / 2))
+				if (pass === 'stroke') g.strokeText(chars[k], 0, 0)
+				else { g.fillStyle = col; g.fillText(chars[k], 0, 0) }
+				g.restore()
+				u += (dir * ws[k]) / R
+			}
+		}
+		g.restore()
 	}
 
 	// one flame tongue: round foot, curling tip
@@ -512,8 +566,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 			if (own) { g.fillStyle = hatch(L.color, 0.3); g.fill() }
 			g.strokeStyle = ink(own ? 0.9 : 0.4)
 			g.lineWidth = own ? 1.3 : 0.9
-			wobble(g, CX, CY, r0, i * 3 + 11, own ? 0.9 : 0.6); g.stroke()
-			wobble(g, CX, CY, r1, i * 3 + 12, own ? 0.9 : 0.6); g.stroke()
+			// pressed: the band pinches where you press, outer edge in, inner edge out
+			const J = ringJelly[i], depth = J.s.x * ringT() * 0.28
+			wobble(g, CX, CY, r0, i * 3 + 11, own ? 0.9 : 0.6, { a: J.a, depth: -depth * 0.6, w: 0.3 }); g.stroke()
+			wobble(g, CX, CY, r1, i * 3 + 12, own ? 0.9 : 0.6, { a: J.a, depth, w: 0.32 }); g.stroke()
 			if (own && hover && hover.lane === i && !drag) {
 				const a0 = angOf(Math.floor(hover.x * steps) / steps), a1 = angOf((Math.floor(hover.x * steps) + 1) / steps)
 				g.fillStyle = rgba(L.color, 0.28)

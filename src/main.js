@@ -3,6 +3,7 @@
 import { createLocalTransport } from './transport/local.js'
 import { createEngine } from './engine.js'
 import { createView } from './view.js'
+import { jellify } from './jelly.js'
 import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
 import { createHeart } from './heart.js'
@@ -191,6 +192,10 @@ import('./debug.js')
 	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart })))
 	.catch((e) => console.warn('debug panel unavailable', e))
 renderSeats()
+
+// paper tokens give where you press them
+document.querySelectorAll('.token').forEach((el) => jellify(el))
+jellify(document.querySelector('.tempo'), { amount: 0.08 })
 
 // handy in the console
 Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart } })
