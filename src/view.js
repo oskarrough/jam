@@ -39,6 +39,11 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	// ground state: current G, and while cycling an incoming one fading in
 	let G = GROUNDS.vallotton, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
 	const cursors = new Map() // key -> {lane, x, y, name, until}
+	// Ghost trail of the last loop, so someone arriving can read the jam:
+	//  - trails: every pen stroke (yours and everyone's) stays on its ring as thin ink, fading out over one loop
+	//  - ghosts: when a ring changed during the loop, what it held before lingers faintly through the next one
+	const trails = new Map() // key -> [{lane, pts: [{x, y, t}]}]
+	let lastPhase = 0, loopMs = 5000
 	let heat = 0, lastT = performance.now(), lastBeat = -1, hover = null, drag = null
 	// handing your part to a robot: press your own badge, drag the thread onto theirs
 	let handing = null // {from, id, x, y, x0, y0, moved}
@@ -245,7 +250,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			if (to >= 0 && canHand?.(from, to)) {
 				press(seatJelly[to], Math.atan2(e.clientY - seatPos(to)[1], e.clientX - seatPos(to)[0]))
 				setTimeout(() => release(seatJelly[to]), 160)
-				onHand(from, to)
+				if (onHand(from, to) !== false) handHintDone()
 			}
 			return
 		}
@@ -272,7 +277,65 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	canvas.addEventListener('pointercancel', up)
 	canvas.addEventListener('pointerleave', () => (hover = null))
 
-	function showCursor(key, lane, x, y, name) { cursors.set(key, { lane, x, y, name, until: performance.now() + 700 }) }
+	function showCursor(key, lane, x, y, name) {
+		const now = performance.now()
+		cursors.set(key, { lane, x, y, name, until: now + 700 })
+		let segs = trails.get(key)
+		if (!segs) trails.set(key, (segs = []))
+		let seg = segs[segs.length - 1]
+		const last = seg?.pts[seg.pts.length - 1]
+		// a new segment after a pause, a lane change, or a jump across the seam
+		if (!seg || seg.lane !== lane || now - last.t > 250 || Math.abs(x - last.x) > 0.5) segs.push((seg = { lane, pts: [] }))
+		if (!last || seg.pts.length === 0 || Math.hypot(x - last.x, y - last.y) > 0.002) seg.pts.push({ x, y, t: now })
+		if (seg.pts.length > 800) seg.pts.splice(0, 200)
+	}
+	// where a lane point lands on screen right now
+	function lanePoint(lane, x, y) {
+		if (opts.mode === 'dial' && focus.on && lane === focus.lane && eSheet() >= 1) return [dev.x + x * dev.w, dev.y + y * dev.h]
+		if (opts.mode === 'dial') return polar(angOf(x), ringIn(lane) + (1 - y) * ringT())
+		const R = stripRect(lane); return [R.x + x * R.w, R.y + y * R.h]
+	}
+	function drawTrails() {
+		const now = performance.now(), life = loopMs
+		g.lineCap = 'round'; g.lineJoin = 'round'
+		for (const [key, segs] of trails) {
+			for (let k = segs.length - 1; k >= 0; k--) {
+				const seg = segs[k]
+				while (seg.pts.length && now - seg.pts[0].t > life) seg.pts.shift()
+				if (seg.pts.length < 2) { if (!seg.pts.length || now - seg.pts[0].t > life) segs.splice(k, 1); continue }
+				const L = lanes[seg.lane]
+				if (!L) continue
+				const onSheet = opts.mode === 'dial' && focus.on && seg.lane === focus.lane && eSheet() >= 1
+				g.strokeStyle = onSheet ? rgba('#efe6f4', 1) : L.color
+				g.lineWidth = onSheet ? 1.6 : 1.1
+				// draw in short runs so each run can fade by its own age
+				for (let i = 1; i < seg.pts.length; i++) {
+					const a = seg.pts[i - 1], b = seg.pts[i], age = (now - b.t) / life
+					g.globalAlpha = 0.55 * (1 - age) ** 1.5
+					// follow the ring between samples instead of cutting a chord across the dial
+					const n = onSheet ? 1 : Math.max(1, Math.ceil(Math.abs(b.x - a.x) / 0.008))
+					g.beginPath(); g.moveTo(...lanePoint(seg.lane, a.x, a.y))
+					for (let j = 1; j <= n; j++) g.lineTo(...lanePoint(seg.lane, a.x + ((b.x - a.x) * j) / n, a.y + ((b.y - a.y) * j) / n))
+					g.stroke()
+				}
+			}
+			if (!segs.length) trails.delete(key)
+		}
+		g.globalAlpha = 1
+	}
+	// at the loop's turn: if a ring changed, keep a picture of what it held, to fade through the next loop
+	const sigOf = (L) => { try { return L.module.id + JSON.stringify(L.instance?.state ?? null) } catch { return L.module.id + Math.random() } }
+	function loopTurned() {
+		for (const L of lanes) {
+			if (!L.canvas) continue
+			const sig = sigOf(L)
+			L.ghost = L.snap && L.snapSig !== sig && L.snap.width === L.canvas.width && L.snap.height === L.canvas.height ? L.snap : null
+			const c = L.ghost === L.snap || !L.snap ? document.createElement('canvas') : L.snap
+			c.width = L.canvas.width; c.height = L.canvas.height
+			const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.drawImage(L.canvas, 0, 0)
+			L.snap = c; L.snapSig = sig
+		}
+	}
 
 	/* ───────── backdrop: painted once per resize ───────── */
 
@@ -350,12 +413,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 
 	// wrap a lane strip onto the annulus [r0, r1] as thin rotated slices
-	function warp(L, r0, r1) {
-		const N = moving ? 48 : opts.slices, sw = L.canvas.width / N, dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
+	function warp(L, r0, r1, src = L.canvas) {
+		const N = moving ? 48 : opts.slices, sw = src.width / N, dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
 		for (let k = 0; k < N; k++) {
 			const th = angOf((k + 0.5) / N) + Math.PI / 2, c = Math.cos(th), s = Math.sin(th)
 			g.setTransform(DPR * c, DPR * s, -DPR * s, DPR * c, DPR * CX, DPR * CY)
-			g.drawImage(L.canvas, k * sw, 0, sw, L.canvas.height, -dw / 2, -r1, dw, r1 - r0)
+			g.drawImage(src, k * sw, 0, sw, src.height, -dw / 2, -r1, dw, r1 - r0)
 		}
 		g.setTransform(DPR, 0, 0, DPR, 0, 0)
 	}
@@ -366,6 +429,9 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		const p = clock.pos()
 		const phase = p ? p.loopPhase : 0
 		const loop = p?.loop
+		if (loop) loopMs = (loop.bars * loop.beatsPerBar * 60000) / loop.bpm
+		if (p && phase < lastPhase - 0.5) { loopTurned(); maybeHint() }
+		lastPhase = phase
 		const beatIdx = p ? Math.floor(p.beats) : 0
 		if (beatIdx !== lastBeat) { if (lastBeat !== -1) heat = Math.min(1, heat + (p.beat === 0 ? 0.25 : 0.08)); lastBeat = beatIdx }
 		heat = Math.max(heat * Math.pow(0.04, dt), Math.min(0.9, engine.level() * 2.5))
@@ -399,8 +465,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		if (opts.mode === 'dial') drawDial(t, dt, phase, loop)
 		else drawStrips(phase)
 		if (opts.mode === 'dial' && eSheet() > 0) drawDevice(phase)
+		drawTrails()
 		drawCursors()
 		drawHanding()
+		drawHandHint()
 		requestAnimationFrame(frame)
 	}
 
@@ -657,6 +725,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 				g.fillStyle = rgba(L.color, 0.28)
 				g.beginPath(); g.arc(CX, CY, r1, a0, a1); g.arc(CX, CY, r0, a1, a0, true); g.fill()
 			}
+			// what this ring held last loop, fading out as the hand comes round again
+			if (L.ghost && !moving) { g.globalAlpha = 0.3 * (1 - phase) ** 1.2; warp(L, r0, r1, L.ghost); g.globalAlpha = 1 }
 			warp(L, r0, r1)
 			if (small()) return
 			g.save()
@@ -687,6 +757,50 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 
 	// the thread you pull from your badge while handing your part over; robots that can take it ring dashed
+	// A hint, no words: now and then a ghost of the gesture plays itself. A small token in your colour slides
+	// from your badge to a robot's on a slack dashed thread, the robot's badge rings, and it all fades.
+	// Twice a session at most, and never again once you've handed a part over yourself.
+	let hint = null, hintsShown = 0, loopsSeated = 0
+	let hintOff = false
+	try { hintOff = localStorage.getItem('roughjam.handHint') === 'done' } catch {}
+	function handHintDone() { hintOff = true; hint = null; try { localStorage.setItem('roughjam.handHint', 'done') } catch {} }
+	function maybeHint() {
+		const mine = lanes.findIndex((_, i) => canDraw(i))
+		if (mine < 0) { loopsSeated = 0; return }
+		loopsSeated++
+		if (hintOff || hint || hintsShown >= 2 || focus.on || handing || drag) return
+		if (loopsSeated !== 3 && loopsSeated !== 12) return
+		const targets = lanes.map((_, j) => j).filter((j) => canHand?.(mine, j))
+		if (!targets.length) return
+		// the nearest robot round the dial
+		const [mx, my] = seatPos(mine)
+		const to = targets.sort((a, b) => Math.hypot(seatPos(a)[0] - mx, seatPos(a)[1] - my) - Math.hypot(seatPos(b)[0] - mx, seatPos(b)[1] - my))[0]
+		hint = { from: mine, to, t0: performance.now() }
+		hintsShown++
+	}
+	function drawHandHint() {
+		if (!hint || reduce) return
+		const t = (performance.now() - hint.t0) / 1000
+		if (t > 3.2 || focus.on || handing || !canHand?.(hint.from, hint.to)) { hint = null; return }
+		const [sx, sy] = seatPos(hint.from), [tx, ty] = seatPos(hint.to), r = seatR()
+		const go = Math.min(1, t / 1.3), e = go * go * (3 - 2 * go)
+		const fade = t < 2.2 ? 1 : 1 - (t - 2.2) / 1
+		const x = sx + (tx - sx) * e, y = sy + (ty - sy) * e, d = Math.hypot(x - sx, y - sy)
+		// the thread bows outward, away from the dial, like it's carried round the rim
+		const mx = (sx + x) / 2, my = (sy + y) / 2, om = Math.hypot(mx - CX, my - CY) || 1, bow = d * 0.22
+		g.save()
+		g.globalAlpha = 0.75 * fade
+		g.strokeStyle = INK; g.lineWidth = 1.1; g.lineCap = 'round'
+		g.setLineDash([3, 5])
+		g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo(mx + ((mx - CX) / om) * bow, my + ((my - CY) / om) * bow, x, y); g.stroke()
+		if (go >= 1) { g.lineDashOffset = performance.now() / 90; wobble(g, tx, ty, r + 9, hint.to * 11 + 5, 0.8); g.stroke() }
+		g.setLineDash([])
+		g.fillStyle = lanes[hint.from].color
+		g.beginPath(); g.arc(x, y, r * 0.42, 0, TAU); g.fill()
+		g.strokeStyle = INK; g.lineWidth = 1.1; g.stroke()
+		g.restore()
+	}
+
 	function drawHanding() {
 		if (!handing?.moved) return
 		const L = lanes[handing.from], [sx, sy] = seatPos(handing.from), r = seatR()
@@ -752,6 +866,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		setFocus,
 		// true while zooming in or out; a cue for anything expensive to rest for half a second
 		get moving() { return moving },
+		get handHint() { return hint }, // the wordless drag-to-robot hint while it plays (tests)
 		// how far the sheet is still off to the right, in px (0 when it has arrived); DOM chrome on the sheet rides with it
 		get sheetShift() { return sheetLane < 0 ? Infinity : (1 - eBar()) * slideDist() },
 		// zoom tuning (debug panel): the live knobs, their defaults, and a hook to apply a change
