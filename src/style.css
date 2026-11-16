@@ -107,6 +107,7 @@ output.pending { color: var(--vermilion) }
 	.token, .tempo { height: 44px }
 	.token { width: 44px }
 	.lil-gui.root { top: auto !important; bottom: 80px }
+	body.zoomed .lil-gui.root { display: none } /* the zoomed sheet needs the room; d still works on the dial */
 }
 
 /* zoom: the bar on your instrument's sheet, and the instrument picker */
