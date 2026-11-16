@@ -70,18 +70,22 @@ const stepline = {
 	},
 }
 
-// drums: per-step bitmask, 1 kick, 2 snare, 4 hat
+// drums: per-step bitmask, 1 kick, 2 snare, 4 hat; vel[s][row] is how hard, 1..9
 const drums = {
 	to(state, n) {
-		const a = state?.hits || []
+		const a = state?.hits || [], vel = state?.vel || []
 		const notes = []
-		a.forEach((m, i) => { for (let r = 0; r < 3; r++) if (m & (1 << r)) notes.push({ s: (i * n) / a.length, p: r, v: 0.8 }) })
+		a.forEach((m, i) => { for (let r = 0; r < 3; r++) if (m & (1 << r)) notes.push({ s: (i * n) / a.length, p: r, v: (vel[i]?.[r] || 6) / 9 }) })
 		return { n, drums: true, notes }
 	},
 	from(ph, n) {
-		const hits = new Array(n).fill(0)
-		for (const x of asDrums(retime(ph, n)).notes) hits[mod(Math.round(x.s), n)] |= 1 << x.p
-		return { hits }
+		const hits = new Array(n).fill(0), vel = Array.from({ length: n }, () => [6, 6, 6])
+		for (const x of asDrums(retime(ph, n)).notes) {
+			const s = mod(Math.round(x.s), n)
+			hits[s] |= 1 << x.p
+			vel[s][x.p] = Math.max(1, Math.min(9, Math.round((x.v ?? 0.67) * 9)))
+		}
+		return { hits, vel }
 	},
 }
 
