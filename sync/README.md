@@ -9,6 +9,8 @@ Multiplayer layer for the campfire: presence, shared loop clock, per-lane state,
     npm test                             # headless: two peers, one with a +5 s skewed clock, plus the jam page
     BASE=http://127.0.0.1:8788 npm test  # same tests against a local Worker dev server on :8788 (Durable Object)
 
+Jams: `/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "start your own" makes one). Both `server.js` and the Worker serve the page there with `<base href="/">`. The page goes multiplayer on its own when the host answers `/sync/relay`; `?ws=off` keeps it to this browser.
+
 Other devices on the LAN: `http://<your-ip>:8787/?ws=ws://<your-ip>:8787`.
 
 ## Deploy (Cloudflare)

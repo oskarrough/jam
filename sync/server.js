@@ -15,6 +15,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.md': 'text/plain', '.svg': 'image/svg+xml' }
 
 const http = createServer(async (req, res) => {
+	if (req.url.split('?')[0].endsWith('/sync/relay')) return res.writeHead(204, { 'x-roughjam-relay': '1', 'cache-control': 'no-store' }).end()
 	const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname))
 	const file = join(ROOT, path.endsWith('/') ? path + 'index.html' : path)
 	if (!file.startsWith(ROOT) || file.split(sep).some((p) => p === 'node_modules' || p.startsWith('.'))) return res.writeHead(403).end()
@@ -22,6 +23,10 @@ const http = createServer(async (req, res) => {
 		const body = await readFile(file)
 		res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' }).end(body)
 	} catch {
+		// /j/<name> is your own jam: serve the page with <base href="/">, as the Worker does.
+		const m = path.match(/^[/\\]j[/\\]([\w-]{1,48})([/\\]?)$/)
+		if (m && m[2]) return res.writeHead(301, { location: '/j/' + m[1] }).end()
+		if (m) return res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' }).end(String(await readFile(join(ROOT, 'index.html'))).replace('<head>', '<head>\n<base href="/">'))
 		res.writeHead(404).end('not found')
 	}
 })

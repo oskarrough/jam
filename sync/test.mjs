@@ -58,17 +58,23 @@ check((await c.evaluate(() => JSON.stringify(jam.laneAt('bass')))) === la, 'late
 
 // The real jam page (repo root) on the network transport.
 const wsUrl = BASE.replace(/^http/, 'ws')
-const jamPage = async (name) => {
+const jamPage = async (name, path) => {
 	const p = await (await browser.newContext()).newPage()
 	p.on('pageerror', (e) => console.error(name, e))
-	await p.goto(`${BASE}/?ws=${wsUrl}&room=fire${process.pid}&name=${name}`)
+	await p.goto(`${BASE}${path}?name=${name}`) // no ?ws: the page finds the same-origin relay itself
 	return p
 }
-const j1 = await jamPage('dora'), j2 = await jamPage('eli')
+const peersText = (p) => p.evaluate(() => [document.getElementById('peers')?.textContent, document.getElementById('jamline')?.textContent])
+const jam = `/j/t${process.pid}-jam`
+const j1 = await jamPage('dora', jam), j2 = await jamPage('eli', jam), j3 = await jamPage('fay', '/')
 await new Promise((r) => setTimeout(r, 2500))
-const kinds = await Promise.all([j1, j2].map((p) => p.evaluate(() => document.getElementById('peers')?.textContent)))
-console.log('jam page:', kinds)
-check(kinds.every((k) => /^2 at the fire/.test(k || '')), 'jam page over ws: both see 2 at the fire')
+const seen = await Promise.all([j1, j2, j3].map(peersText))
+console.log('jam pages:', seen)
+check(/eli/.test(seen[0][0]) && /you/.test(seen[0][0]) && /dora/.test(seen[1][0]) && /you/.test(seen[1][0]), `private jam ${jam} auto-joins the relay: dora and eli see each other`)
+check(!/dora|eli/.test(seen[2][0] || '') && /open jam/.test(seen[2][1]), 'the open jam at / is a different room')
+check(new RegExp(jam.slice(3)).test(seen[0][1]), 'jam line names the private jam')
+const redirect = await fetch(`${BASE}${jam}/`, { redirect: 'manual' })
+check(redirect.status === 301, '/j/<jam>/ redirects to /j/<jam>')
 if (process.env.SHOT) await j2.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-jam.png') })
 
 await b.screenshot({ path: process.env.SHOT || '/tmp/roughjam-sync.png' })

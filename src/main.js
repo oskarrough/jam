@@ -12,17 +12,30 @@ const LANE_IDS = ['lane1', 'lane2', 'lane3', 'lane4']
 const START = ['bass', 'keys', 'bell', 'drums']
 
 const q = new URLSearchParams(location.search)
-const room = q.get('room') || 'campfire'
+// Jam: everyone lands in the one open jam at /. Your own lives at /j/<name> (root paths stay reserved); ?room= also works.
+const pathJam = decodeURIComponent(location.pathname.match(/\/j\/([\w-]{1,48})\/?$/)?.[1] || '')
+const room = (q.get('room') || pathJam || 'campfire').toLowerCase().slice(0, 48)
 const name = q.get('name') || NAMES[Math.floor(Math.random() * NAMES.length)]
 
-// Transport is the swappable part: ?ws=ws://host:8787 uses the network layer in sync/, if present.
-// On the deployed site (jam.0sk.ar) the relay is the same origin, so it connects by default; ?ws=off stays local.
-const wsUrl = q.get('ws') === 'off' ? null : q.get('ws') || (/(^|\.)0sk\.ar$/.test(location.hostname) ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/` : null)
+// Transport is the swappable part. Network when there's a relay: ?ws=url, the deployed site (jam.0sk.ar),
+// or any same-origin relay that answers /sync/relay (sync/server.js locally). Otherwise tabs in this browser; ?ws=off forces that.
+const sameOrigin = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/`
+async function relayUrl() {
+	if (q.get('ws') === 'off' || !/^https?:$/.test(location.protocol)) return null
+	if (q.get('ws')) return q.get('ws')
+	if (/(^|\.)0sk\.ar$/.test(location.hostname)) return sameOrigin()
+	try {
+		const r = await fetch('/sync/relay', { cache: 'no-store', signal: AbortSignal.timeout(1500) })
+		if (r.headers.get('x-roughjam-relay')) return sameOrigin()
+	} catch {}
+	return null
+}
 async function makeTransport() {
-	if (wsUrl) {
+	const url = await relayUrl()
+	if (url) {
 		try {
 			const { createTransport } = await import('../sync/sync.js')
-			const t = createTransport({ url: wsUrl, room, name })
+			const t = createTransport({ url, room, name })
 			t.kind = 'ws'
 			return t
 		} catch (e) {
@@ -86,6 +99,25 @@ engine.on('lanes', renderSeats)
 
 /* ───────── DOM chrome ───────── */
 const $ = (id) => document.getElementById(id)
+
+// The jam line: the open jam by default, or your own at /<name>. Words, not widgets.
+const JAM_A = ['dusk', 'amber', 'moss', 'salt', 'velvet', 'copper', 'hollow', 'paper', 'lantern', 'violet']
+const JAM_B = ['moth', 'heron', 'fern', 'kettle', 'orchard', 'tide', 'comet', 'wren', 'ember', 'quarry']
+const pick = (a) => a[Math.floor(Math.random() * a.length)]
+const isOpenJam = room === 'campfire'
+const jamline = $('jamline')
+const word = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; return b }
+if (transport.kind !== 'ws') jamline.textContent = 'just this browser'
+else if (isOpenJam) jamline.append('the open jam · ', word('start your own', () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))))
+else {
+	const b = document.createElement('b')
+	b.textContent = room
+	const copy = word('copy link', async () => {
+		try { await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room)); copy.textContent = 'copied' } catch { copy.textContent = location.host + '/j/' + room }
+		setTimeout(() => (copy.textContent = 'copy link'), 1600)
+	})
+	jamline.append('jam ', b, ' · ', copy, ' · ', word('open jam', () => (location.href = '/')))
+}
 function renderSeats() {
 	const ol = $('seats')
 	if (!ol) return

@@ -38,6 +38,12 @@ h1 em { font-style: italic; font-weight: 300; opacity: 0.75 }
 .seat.empty .who { opacity: 0.4 }
 .seat.mine .who { opacity: 1; font-weight: 600 }
 .seat.mine .who::before { content: '☞ ' ; font-weight: 400 }
+/* which jam you're in, and a way to start your own: a line of text, links as words */
+.jamline { margin: 0.55rem 0 0; font: italic 400 15px/1.3 var(--serif); opacity: 0.85 }
+.jamline b { font-weight: 600 }
+.jamline button { all: unset; cursor: pointer; text-decoration: underline wavy color-mix(in srgb, currentColor 45%, transparent) 1px; text-underline-offset: 3px }
+.jamline button:hover, .jamline button:focus-visible { text-decoration-color: currentColor }
+.jamline button:focus-visible { outline: 1.5px solid currentColor; outline-offset: 2px }
 
 .peers { position: fixed; margin: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); right: max(16px, env(safe-area-inset-right, 0px)); max-width: 15rem; text-align: right; font: italic 400 14px/1.3 var(--serif); background: var(--paper); border: 1px solid var(--ink); padding: 0.25rem 0.55rem; box-shadow: 3px 4px 0 var(--shadow) }
 .peers:empty { display: none }

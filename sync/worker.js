@@ -68,6 +68,15 @@ export default {
 			const room = (new URL(req.url).searchParams.get('room') || 'campfire').slice(0, 64)
 			return env.ROOMS.get(env.ROOMS.idFromName(room)).fetch(req)
 		}
+		// The page probes this to find out it can go multiplayer. Reaches the Worker because no asset matches.
+		if (new URL(req.url).pathname.endsWith('/sync/relay')) return new Response(null, { status: 204, headers: { 'x-roughjam-relay': '1', 'cache-control': 'no-store' } })
+		// /j/<name> is your own jam: serve the page with <base href="/"> so its relative asset paths still resolve.
+		const m = new URL(req.url).pathname.match(/^\/j\/([\w-]{1,48})(\/?)$/)
+		if (m && m[2]) return Response.redirect(new URL('/j/' + m[1], req.url), 301)
+		if (m) {
+			const page = await env.ASSETS.fetch(new Request(new URL('/', req.url), req))
+			return new HTMLRewriter().on('head', { element: (el) => el.prepend('<base href="/">', { html: true }) }).transform(page)
+		}
 		return env.ASSETS.fetch(req)
 	},
 }
