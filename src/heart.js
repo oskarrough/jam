@@ -1,6 +1,6 @@
 // Heart: the machine's centrepiece. A Möbius band of Gaussian splats turning round a stippled eye.
 //
-// Self-contained: owns a WebGL2 canvas layered over the view, reads only the shared clock and the lanes' audio.
+// Self-contained: owns a WebGL2 canvas layered over the view, reads only the shared clock and the seats' audio.
 //   const heart = createHeart({ engine, geom: () => view.center() })   // geom -> {x, y, r} in CSS px, or null to hide
 //   heart.addGui(gui)                                                   // lil-gui folder
 //   heart.setGround('#2b2142')                                          // or return {ground} from geom: adapts ink, highlight, blend
@@ -8,10 +8,10 @@
 // What moves and why:
 //   comet    rides the band once per loop. The band has one side, so it comes home every second loop.
 //   band     breathes on the beat, ripples on the downbeat; hatching follows the light as it turns.
-//   motes    thrown off the comet whenever a lane sounds, in that lane's colour.
+//   motes    thrown off the comet whenever a seat sounds, in that seat's colour.
 //   chamber  a dark engraved well under the eye, so its light has something to glow against.
 //   eye      the core swells with the mix; its ink pupil tightens on low end. It looks at whoever just
-//            played (glance(lane, holdMs)), and holds on you while you draw.
+//            played (glance(seat, holdMs)), and holds on you while you draw.
 // Rotation and the comet come from the shared clock, so every seat sees the same heart.
 //
 // Splats are flat 3D Gaussians (centre + two tangent axes), projected to a 2D covariance in the vertex shader,
@@ -228,7 +228,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 
 	/* ───────── listening ───────── */
 	const { clock } = engine.transport
-	const taps = engine.lanes.map((L) => {
+	const taps = engine.seats.map((L) => {
 		const an = engine.audio.createAnalyser()
 		an.fftSize = 256
 		an.smoothingTimeConstant = 0.3
@@ -261,8 +261,8 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	// gaze: the eye looks at whoever just played. A glance holds briefly so busy moments read as
 	// looking from one player to the next; after a quiet spell it drifts home.
 	const gaze = { x: 0, y: 0, tx: 0, ty: 0, hold: 0, at: 0 }
-	// screen angle of a lane's seat, matching the view (first lane bottom-left, then round)
-	const seatAngle = (i) => (opts.seatAngle ? opts.seatAngle(i) : Math.PI * 0.75 - (i * TAU) / engine.lanes.length)
+	// screen angle of a seat's seat, matching the view (first seat bottom-left, then round)
+	const seatAngle = (i) => (opts.seatAngle ? opts.seatAngle(i) : Math.PI * 0.75 - (i * TAU) / engine.seats.length)
 	function glance(i, holdMs = 280) {
 		const now = performance.now()
 		if (now < gaze.hold && holdMs <= 280) return
@@ -522,7 +522,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		re.add(opts, 'moteSize', 0.3, 3, 0.05).name('mote size')
 		re.add(opts, 'eye', 0, 2.5, 0.05)
 		re.add(opts, 'gaze', 0, 0.3, 0.01)
-		re.add({ poke: () => engine.lanes.forEach((L) => emit(L, 0.8)) }, 'poke')
+		re.add({ poke: () => engine.seats.forEach((L) => emit(L, 0.8)) }, 'poke')
 		const pal = f.addFolder('palette').close()
 		for (const k of ['ochre', 'rose', 'violet', 'cream', 'ink', 'shade', 'comet']) pal.addColor(opts, k)
 		const cn = f.addFolder('counts').close()

@@ -12,7 +12,7 @@ const STORE = 'roughjam.lab.v1'
 const LOOKAHEAD = 0.12
 const TICK_MS = 25
 
-let engine, clock, lanes, focus = 0
+let engine, clock, seats, focus = 0
 const ui = {
   playing: false,
   bpm: 92,
@@ -45,18 +45,18 @@ function boot() {
   engine.key.scale = ui.scale
   engine.master.gain.value = ui.master
 
-  lanes = instruments.map((mod, idx) => {
+  seats = instruments.map((mod, idx) => {
     const params = Object.fromEntries(Object.entries(mod.params).map(([k, d]) => [k, d.value]))
-    const s = saved?.lanes?.[mod.id]
+    const s = saved?.seats?.[mod.id]
     if (s?.params) for (const k in s.params) if (k in params) params[k] = s.params[k]
-    const { out, send } = engine.lane()
+    const { out, send } = engine.seat()
     const inst = mod.create({ audio: engine.audio, out, clock, params, theme: { ...THEME, sheet: { ink: THEME.fg } } })
     if (s?.state) try { inst.setState(s.state) } catch (e) { console.warn('bad saved state', mod.id, e) }
     else inst.randomize?.()
     return { mod, inst, params, out, send, level: s?.level ?? 1, reverb: s?.reverb ?? 0.25, mute: false, heard: idx === 0 }
   })
   focus = clampIdx(saved?.focus ?? 0)
-  lanes[focus].heard = true
+  seats[focus].heard = true
 
   buildStrip()
   buildGui()
@@ -103,7 +103,7 @@ function tick() {
   }
   while (nextTime < ac.currentTime + LOOKAHEAD) {
     const i = ((nextStep % clock.steps) + clock.steps) % clock.steps
-    lanes.forEach((l, idx) => {
+    seats.forEach((l, idx) => {
       if (!audible(idx)) return
       try { l.inst.step(i, nextTime, clock.stepDur) } catch (e) { console.error(l.mod.id, e) }
     })
@@ -120,15 +120,15 @@ function backing(i, time) {
   if (i % q === q / 2) v.hat(engine.master, { time, gain: 0.05 })
 }
 
-const audible = (idx) => !lanes[idx].mute && (ui.solo ? idx === focus : lanes[idx].heard)
+const audible = (idx) => !seats[idx].mute && (ui.solo ? idx === focus : seats[idx].heard)
 
 function updateGains() {
   const t = engine.audio.currentTime
-  lanes.forEach((l, idx) => {
+  seats.forEach((l, idx) => {
     l.out.gain.setTargetAtTime(audible(idx) ? l.level : 0, t, 0.04)
     l.send.gain.setTargetAtTime(l.reverb, t, 0.04)
   })
-  document.querySelectorAll('.lane').forEach((el, idx) => el.classList.toggle('on', audible(idx)))
+  document.querySelectorAll('.seat').forEach((el, idx) => el.classList.toggle('on', audible(idx)))
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ function updateGains() {
 
 function select(idx) {
   focus = clampIdx(idx)
-  const l = lanes[focus]
+  const l = seats[focus]
   l.heard = true
   ui.instrument = l.mod.name
   ui.level = l.level
@@ -144,7 +144,7 @@ function select(idx) {
   ui.mute = l.mute
   $('#how').textContent = l.mod.how
   $('#title').textContent = `${String(focus + 1).padStart(2, '0')} ${l.mod.name.toLowerCase()}`
-  document.querySelectorAll('.lane').forEach((el, i) => el.classList.toggle('focus', i === focus))
+  document.querySelectorAll('.seat').forEach((el, i) => el.classList.toggle('focus', i === focus))
   buildParams()
   gui.controllersRecursive().forEach((c) => c.updateDisplay())
   updateGains()
@@ -152,9 +152,9 @@ function select(idx) {
 
 function buildStrip() {
   const strip = $('#strip')
-  lanes.forEach((l, idx) => {
+  seats.forEach((l, idx) => {
     const el = document.createElement('button')
-    el.className = 'lane'
+    el.className = 'seat'
     el.innerHTML = `<canvas></canvas><span><b>${String(idx + 1).padStart(2, '0')}</b> ${l.mod.name.toLowerCase()}</span>`
     el.addEventListener('click', () => select(idx))
     strip.append(el)
@@ -182,17 +182,17 @@ function buildGui() {
   tr.add(ui, 'master', 0, 1, 0.01).onChange((v) => engine.master.gain.setTargetAtTime(v, engine.audio.currentTime, 0.03))
   tr.add(ui, 'solo').name('solo focused').onChange(updateGains)
 
-  const ln = gui.addFolder('lane')
+  const ln = gui.addFolder('seat')
   ln.add(ui, 'instrument', instruments.map((m) => m.name)).onChange((name) => select(instruments.findIndex((m) => m.name === name)))
-  ln.add(ui, 'level', 0, 2, 0.01).onChange((v) => { lanes[focus].level = v; updateGains() })
-  ln.add(ui, 'reverb', 0, 1, 0.01).onChange((v) => { lanes[focus].reverb = v; updateGains() })
-  ln.add(ui, 'mute').onChange((v) => { lanes[focus].mute = v; updateGains() })
+  ln.add(ui, 'level', 0, 2, 0.01).onChange((v) => { seats[focus].level = v; updateGains() })
+  ln.add(ui, 'reverb', 0, 1, 0.01).onChange((v) => { seats[focus].reverb = v; updateGains() })
+  ln.add(ui, 'mute').onChange((v) => { seats[focus].mute = v; updateGains() })
   const actions = {
-    clear: () => lanes[focus].inst.clear?.(),
-    randomize: () => lanes[focus].inst.randomize?.(),
+    clear: () => seats[focus].inst.clear?.(),
+    randomize: () => seats[focus].inst.randomize?.(),
     'copy state': () => navigator.clipboard?.writeText(JSON.stringify(serialize(focus))),
     'reset params': () => {
-      const l = lanes[focus]
+      const l = seats[focus]
       for (const [k, d] of Object.entries(l.mod.params)) l.params[k] = d.value
       paramFolder.controllers.forEach((c) => c.updateDisplay())
     },
@@ -203,7 +203,7 @@ function buildGui() {
 
 function buildParams() {
   paramFolder.controllers.slice().forEach((c) => c.destroy())
-  const l = lanes[focus]
+  const l = seats[focus]
   for (const [k, d] of Object.entries(l.mod.params)) {
     if (d.options) paramFolder.add(l.params, k, d.options)
     else if (typeof d.value === 'boolean') paramFolder.add(l.params, k)
@@ -215,14 +215,14 @@ function buildParams() {
 // state
 
 const serialize = (idx) => {
-  const l = lanes[idx]
+  const l = seats[idx]
   return { id: l.mod.id, params: l.params, state: l.inst.state }
 }
 
 function save() {
   try {
-    const data = { ui: { ...ui }, focus, lanes: {} }
-    lanes.forEach((l) => (data.lanes[l.mod.id] = { params: l.params, state: l.inst.state, level: l.level, reverb: l.reverb }))
+    const data = { ui: { ...ui }, focus, seats: {} }
+    seats.forEach((l) => (data.seats[l.mod.id] = { params: l.params, state: l.inst.state, level: l.level, reverb: l.reverb }))
     localStorage.setItem(STORE, JSON.stringify(data))
   } catch {}
 }
@@ -234,7 +234,7 @@ let lastStateDump = 0
 function dumpState(now) {
   if (now - lastStateDump < 250) return
   lastStateDump = now
-  const json = JSON.stringify(lanes[focus].inst.state)
+  const json = JSON.stringify(seats[focus].inst.state)
   $('#bytes').textContent = `${json.length} B`
   if ($('#state').open) $('#state pre').textContent = JSON.stringify(serialize(focus), (k, v) => (typeof v === 'number' ? +v.toFixed(3) : v), 1)
 }
@@ -260,8 +260,8 @@ function fit(c) {
 function frame(now) {
   requestAnimationFrame(frame)
   const [g, w, h] = fit(stage)
-  try { lanes[focus].inst.frame(g, w, h, clock, 'sheet') } catch (e) { console.error(e) }
-  lanes.forEach((l) => {
+  try { seats[focus].inst.frame(g, w, h, clock, 'sheet') } catch (e) { console.error(e) }
+  seats.forEach((l) => {
     const [tg, tw, th] = fit(l.thumb)
     try { l.inst.frame(tg, tw, th, clock) } catch {}
   })
@@ -279,7 +279,7 @@ function bindPointer() {
   const send = (type, ev) => {
     const r = stage.getBoundingClientRect()
     const px = ev.clientX - r.left, py = ev.clientY - r.top
-    lanes[focus].inst.pointer({
+    seats[focus].inst.pointer({
       type, id: ev.pointerId, x: px / r.width, y: py / r.height, px, py, w: r.width, h: r.height,
       pressed: ev.buttons > 0 || type === 'down', alt: ev.shiftKey || ev.altKey, pressure: ev.pressure,
     })
@@ -297,10 +297,10 @@ function bindKeys() {
     if (ev.code === 'Space') { ev.preventDefault(); play(!ui.playing) }
     const n = '1234567890'.indexOf(ev.key)
     if (n >= 0) select(n)
-    if (ev.key === 'ArrowRight') select((focus + 1) % lanes.length)
-    if (ev.key === 'ArrowLeft') select((focus - 1 + lanes.length) % lanes.length)
+    if (ev.key === 'ArrowRight') select((focus + 1) % seats.length)
+    if (ev.key === 'ArrowLeft') select((focus - 1 + seats.length) % seats.length)
   })
 }
 
 // expose for poking from the console
-window.lab = { get lanes() { return lanes }, get clock() { return clock }, get engine() { return engine }, select, play, serialize }
+window.lab = { get seats() { return seats }, get clock() { return clock }, get engine() { return engine }, select, play, serialize }

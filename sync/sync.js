@@ -1,9 +1,9 @@
 // roughjam sync client. One module, no deps.
 //
-//   const t = createTransport({ url: 'ws://host:8787', room: 'open', name: 'oskar', instrument: 'bass' })
-//   t.on('apply', ({ lane, data, at }) => ...)   // fires LOOKAHEAD ms before `at` (server ms)
+//   const t = createTransport({ url: 'ws://host:8787', room: 'open', name: 'oskar', seat: 'bass' })
+//   t.on('apply', ({ seat, data, at }) => ...)   // fires LOOKAHEAD ms before `at` (server ms)
 //   const at = t.edit('bass', state)             // quantized to next bar, returns server ms
-//   t.laneAt('bass', serverMs)                   // what an audio scheduler should play at that time
+//   t.seatAt('bass', serverMs)                   // what an audio scheduler should play at that time
 //   t.clock.now() / toLocal() / toAudio(ctx, t) / pos() / nextBar()
 //   t.debug()                                    // {connected, peers, rtt, offset, drift, jitter, ...}
 //
@@ -103,14 +103,14 @@ export function createClock() {
 	return { addSample, pending, now, toLocal, fromLocal, toAudio, setLoop, loopAt, pos, nextBar, nextLoop, stats, instrumentClock, beatMs, barMs, loopMs }
 }
 
-export function createTransport({ url, room = 'open', name = 'anon', instrument = null, color = null } = {}) {
+export function createTransport({ url, room = 'open', name = 'anon', seat = null, color = null } = {}) {
 	const clock = createClock()
 	const listeners = {}
-	const lanes = {} // lane -> [{at, data, rev, from}] (short history so laneAt() can answer for near-future times)
-	const pending = new Map() // nonce -> {lane, data, at}
+	const seats = {} // seat -> [{at, data, rev, from}] (short history so seatAt() can answer for near-future times)
+	const pending = new Map() // nonce -> {seat, data, at}
 	const timers = new Set()
 	let ws = null, id = null, peers = [], connected = false, retry = 0, pingTimer = null, closed = false
-	let me = { name, instrument, color }
+	let me = { name, seat, color }
 	let sent = 0, recv = 0, lastLateMs = 0
 
 	const emit = (ev, d) => (listeners[ev] || []).forEach((fn) => fn(d))
@@ -126,15 +126,15 @@ export function createTransport({ url, room = 'open', name = 'anon', instrument 
 		timers.add(h)
 	}
 
-	function record(lane, entry) {
-		const h = (lanes[lane] ||= [])
+	function record(seat, entry) {
+		const h = (seats[seat] ||= [])
 		h.push(entry)
 		h.sort((a, b) => a.at - b.at || a.rev - b.rev)
 		while (h.length > 4) h.shift()
 		schedule(entry.at - LOOKAHEAD, () => {
 			const late = clock.now() - (entry.at - LOOKAHEAD)
 			if (late > 20) lastLateMs = late
-			emit('apply', { lane, ...entry, local: entry.from === id || entry.from === 'me' })
+			emit('apply', { seat, ...entry, local: entry.from === id || entry.from === 'me' })
 		})
 	}
 
@@ -161,8 +161,8 @@ export function createTransport({ url, room = 'open', name = 'anon', instrument 
 				id = m.id
 				peers = m.peers
 				clock.setLoop(m.loop, -Infinity)
-				for (const [lane, l] of Object.entries(m.lanes)) record(lane, { at: l.at, data: l.data, rev: l.rev, from: l.owner })
-				emit('welcome', { id, loop: m.loop, lanes: m.lanes, peers })
+				for (const [seat, l] of Object.entries(m.seats)) record(seat, { at: l.at, data: l.data, rev: l.rev, from: l.owner })
+				emit('welcome', { id, loop: m.loop, seats: m.seats, peers })
 				emit('peers', peers)
 			} else if (m.t === 'peers') {
 				peers = m.peers
@@ -172,12 +172,12 @@ export function createTransport({ url, room = 'open', name = 'anon', instrument 
 					// Our own edit: already scheduled locally. Server may have pushed `at` later if we were late.
 					pending.delete(m.nonce)
 					if (m.at !== m.proposed) {
-						lanes[m.lane] = (lanes[m.lane] || []).filter((e) => e.rev !== Infinity)
-						record(m.lane, { at: m.at, data: m.data, rev: m.rev, from: m.from })
+						seats[m.seat] = (seats[m.seat] || []).filter((e) => e.rev !== Infinity)
+						record(m.seat, { at: m.at, data: m.data, rev: m.rev, from: m.from })
 					}
 					return
 				}
-				record(m.lane, { at: m.at, data: m.data, rev: m.rev, from: m.from })
+				record(m.seat, { at: m.at, data: m.data, rev: m.rev, from: m.from })
 			} else if (m.t === 'cursor') emit('cursor', m)
 			else if (m.t === 'loop') {
 				clock.setLoop(m.loop, m.at)
@@ -194,21 +194,21 @@ export function createTransport({ url, room = 'open', name = 'anon', instrument 
 	connect()
 
 	/** Quantize an edit to the next bar that's safely beyond network latency. Returns server ms. */
-	function edit(lane, data) {
+	function edit(seat, data) {
 		const { rtt } = clock.stats()
 		const margin = Math.max(80, (rtt ?? 100) * 1.5 + 40) + LOOKAHEAD
 		const at = clock.nextBar(clock.now() + margin)
 		const nonce = Math.random().toString(36).slice(2)
-		pending.set(nonce, { lane, data, at })
-		record(lane, { at, data, rev: Infinity, from: id || 'me' }) // play our own edit even offline
-		tx({ t: 'edit', lane, data, at, nonce, proposed: at })
-		emit('pending', { lane, data, at })
+		pending.set(nonce, { seat, data, at })
+		record(seat, { at, data, rev: Infinity, from: id || 'me' }) // play our own edit even offline
+		tx({ t: 'edit', seat, data, at, nonce, proposed: at })
+		emit('pending', { seat, data, at })
 		return at
 	}
 
-	/** The lane data in effect at a given server time. Audio schedulers should call this per step. */
-	function laneAt(lane, t = clock.now()) {
-		const h = lanes[lane]
+	/** The seat data in effect at a given server time. Audio schedulers should call this per step. */
+	function seatAt(seat, t = clock.now()) {
+		const h = seats[seat]
 		if (!h) return undefined
 		let cur
 		for (const e of h) if (e.at <= t) cur = e
@@ -218,9 +218,9 @@ export function createTransport({ url, room = 'open', name = 'anon', instrument 
 	return {
 		on,
 		edit,
-		laneAt,
-		lanes: () => Object.fromEntries(Object.keys(lanes).map((k) => [k, laneAt(k)])),
-		cursor: (x, y, down = false, lane = me.instrument, name) => tx({ t: 'cursor', x, y, down, lane, name }),
+		seatAt,
+		seats: () => Object.fromEntries(Object.keys(seats).map((k) => [k, seatAt(k)])),
+		cursor: (x, y, down = false, seat = me.seat, name) => tx({ t: 'cursor', x, y, down, seat, name }),
 		setLoop: (loop) => tx({ t: 'loop', ...loop }),
 		setMe: (patch) => { Object.assign(me, patch); tx({ t: 'presence', ...patch }) },
 		clock,

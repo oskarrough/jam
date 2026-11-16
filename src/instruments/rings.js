@@ -32,7 +32,7 @@ export default {
     const { params, out, audio, clock } = ctx
     const { voices } = kit(audio)
     const th = theme(ctx)
-    const size = [1, 1] // lane size from the last frame, for pointer maths
+    const size = [1, 1] // seat size from the last frame, for pointer maths
     const state = { rings: [{ k: 7, rot: 0 }, { k: 3, rot: 3 }, { k: 4, rot: 0 }] }
     const fx = flashes()
     const ns = () => [params.outer, params.middle, params.inner]

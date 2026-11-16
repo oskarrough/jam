@@ -2,13 +2,13 @@
 // Lets the page run with no server, and lets the debug panel fake latency, jitter and clock skew
 // so we can hear what the network transport has to fix.
 //
-//   const t = createLocalTransport({ room, name, instrument, color })
+//   const t = createLocalTransport({ room, name, seat, color })
 //   t.on('welcome' | 'peers' | 'apply' | 'pending' | 'cursor' | 'loop' | 'status', fn)
-//   t.edit(lane, data)          -> server ms it lands at
-//   t.laneAt(lane, ms?)         -> data in effect then
-//   t.cursor(x, y, down, lane, name?)
+//   t.edit(seat, data)          -> server ms it lands at
+//   t.seatAt(seat, ms?)         -> data in effect then
+//   t.cursor(x, y, down, seat, name?)
 //   t.setLoop({ bpm, bars, beatsPerBar })   lands on the next loop boundary
-//   t.setMe({ name, instrument, color })
+//   t.setMe({ name, seat, color })
 //   t.clock.now() toLocal() toAudio(ctx, ms) pos() loopAt() nextBar() nextLoop() stats()
 //   t.debug()
 //   t.fake = { latency, jitter, skew, quantize }   local-only knobs
@@ -54,13 +54,13 @@ export function createLocalClock() {
 	return self
 }
 
-export function createLocalTransport({ room = 'open', name = 'anon', instrument = null, color = null } = {}) {
+export function createLocalTransport({ room = 'open', name = 'anon', seat = null, color = null } = {}) {
 	const clock = createLocalClock()
 	const id = Math.random().toString(36).slice(2, 9)
 	const listeners = {}
-	const lanes = {} // lane -> [{at, data, rev, from}]
-	const others = new Map() // id -> {id, name, instrument, color, last}
-	const me = { id, name, instrument, color }
+	const seats = {} // seat -> [{at, data, rev, from}]
+	const others = new Map() // id -> {id, name, seat, color, last}
+	const me = { id, name, seat, color }
 	const fake = { latency: 0, jitter: 0, quantize: 'bar' }
 	let welcomed = false, sent = 0, recv = 0, lastLateMs = 0, rev = 0
 
@@ -80,26 +80,26 @@ export function createLocalTransport({ room = 'open', name = 'anon', instrument 
 		else setTimeout(() => chan.postMessage(msg), d)
 	}
 
-	const peers = () => [me, ...others.values()].map(({ id, name, instrument, color }) => ({ id, name, instrument, color }))
+	const peers = () => [me, ...others.values()].map(({ id, name, seat, color }) => ({ id, name, seat, color }))
 
 	function schedule(ms, fn) { setTimeout(fn, Math.max(0, clock.toLocal(ms) - performance.now())) }
-	function record(lane, entry) {
-		const h = (lanes[lane] ||= [])
+	function record(seat, entry) {
+		const h = (seats[seat] ||= [])
 		h.push(entry)
 		h.sort((a, b) => a.at - b.at || a.rev - b.rev)
 		while (h.length > 4) h.shift()
 		schedule(entry.at - LOOKAHEAD, () => {
 			const late = clock.now() - (entry.at - LOOKAHEAD)
 			if (late > 20) lastLateMs = late
-			emit('apply', { lane, ...entry, local: entry.from === id })
+			emit('apply', { seat, ...entry, local: entry.from === id })
 		})
 	}
-	function laneAt(lane, t = clock.now()) {
+	function seatAt(seat, t = clock.now()) {
 		let cur
-		for (const e of lanes[lane] || []) if (e.at <= t) cur = e
+		for (const e of seats[seat] || []) if (e.at <= t) cur = e
 		return cur?.data
 	}
-	const snapshot = () => Object.fromEntries(Object.entries(lanes).map(([k, h]) => { const e = h.at(-1); return [k, { at: e.at, data: e.data, rev: e.rev, owner: e.from }] }))
+	const snapshot = () => Object.fromEntries(Object.entries(seats).map(([k, h]) => { const e = h.at(-1); return [k, { at: e.at, data: e.data, rev: e.rev, owner: e.from }] }))
 
 	if (chan) chan.onmessage = ({ data: m }) => {
 		if (!m || m.from === id) return
@@ -110,21 +110,21 @@ export function createLocalTransport({ room = 'open', name = 'anon', instrument 
 			case 'hello':
 			case 'presence': {
 				const p = known || { id: m.from, last: Date.now() }
-				for (const k of ['name', 'instrument', 'color']) if (k in m) p[k] = m[k]
+				for (const k of ['name', 'seat', 'color']) if (k in m) p[k] = m[k]
 				others.set(m.from, p)
-				if (m.t === 'hello') tx({ t: 'welcome', to: m.from, loop: clock.loopAt(), lanes: snapshot(), name: me.name, instrument: me.instrument, color: me.color })
+				if (m.t === 'hello') tx({ t: 'welcome', to: m.from, loop: clock.loopAt(), seats: snapshot(), name: me.name, seat: me.seat, color: me.color })
 				emit('peers', peers())
 				break
 			}
 			case 'welcome':
-				if (!others.has(m.from)) { others.set(m.from, { id: m.from, name: m.name, instrument: m.instrument, color: m.color, last: Date.now() }); emit('peers', peers()) }
+				if (!others.has(m.from)) { others.set(m.from, { id: m.from, name: m.name, seat: m.seat, color: m.color, last: Date.now() }); emit('peers', peers()) }
 				if (m.to !== id || welcomed) return
 				welcomed = true
 				clock.setLoop(m.loop, -Infinity)
-				for (const [lane, l] of Object.entries(m.lanes)) record(lane, { at: l.at, data: l.data, rev: l.rev, from: l.owner })
-				emit('welcome', { id, loop: m.loop, lanes: m.lanes, peers: peers() })
+				for (const [seat, l] of Object.entries(m.seats)) record(seat, { at: l.at, data: l.data, rev: l.rev, from: l.owner })
+				emit('welcome', { id, loop: m.loop, seats: m.seats, peers: peers() })
 				break
-			case 'edit': record(m.lane, { at: m.at, data: m.data, rev: m.rev, from: m.from }); break
+			case 'edit': record(m.seat, { at: m.at, data: m.data, rev: m.rev, from: m.from }); break
 			case 'cursor': emit('cursor', { ...m, name: m.name || others.get(m.from)?.name }); break
 			case 'loop': clock.setLoop(m.loop, m.at); schedule(m.at - LOOKAHEAD, () => emit('loop', { loop: m.loop, at: m.at })); break
 			case 'beat':
@@ -135,8 +135,8 @@ export function createLocalTransport({ room = 'open', name = 'anon', instrument 
 	}
 
 	// Join: ask for the room's state. Alone after 400 ms means we are the room.
-	tx({ t: 'hello', name: me.name, instrument: me.instrument, color: me.color })
-	setTimeout(() => { if (!welcomed) { welcomed = true; emit('welcome', { id, loop: clock.loopAt(), lanes: {}, peers: peers() }) } emit('status', { connected: !!chan }) }, 400)
+	tx({ t: 'hello', name: me.name, seat: me.seat, color: me.color })
+	setTimeout(() => { if (!welcomed) { welcomed = true; emit('welcome', { id, loop: clock.loopAt(), seats: {}, peers: peers() }) } emit('status', { connected: !!chan }) }, 400)
 	setInterval(() => {
 		tx({ t: 'beat' })
 		const cutoff = Date.now() - 4000
@@ -146,13 +146,13 @@ export function createLocalTransport({ room = 'open', name = 'anon', instrument 
 	}, 1000)
 	addEventListener('pagehide', () => tx({ t: 'bye' }))
 
-	function edit(lane, data, opts = {}) {
+	function edit(seat, data, opts = {}) {
 		const now = clock.now()
 		const at = opts.now || fake.quantize === 'off' ? now : clock.nextBar(now + Math.max(80, fake.latency * 1.5 + fake.jitter + 40) + LOOKAHEAD)
 		const r = ++rev
-		record(lane, { at, data, rev: r, from: id })
-		tx({ t: 'edit', lane, data, at, rev: r })
-		emit('pending', { lane, data, at })
+		record(seat, { at, data, rev: r, from: id })
+		tx({ t: 'edit', seat, data, at, rev: r })
+		emit('pending', { seat, data, at })
 		return at
 	}
 
@@ -170,9 +170,9 @@ export function createLocalTransport({ room = 'open', name = 'anon', instrument 
 		kind: 'local',
 		on,
 		edit,
-		laneAt,
-		lanes: () => Object.fromEntries(Object.keys(lanes).map((k) => [k, laneAt(k)])),
-		cursor: (x, y, down = false, lane = me.instrument, name) => tx({ t: 'cursor', x, y, down, lane, name }),
+		seatAt,
+		seats: () => Object.fromEntries(Object.keys(seats).map((k) => [k, seatAt(k)])),
+		cursor: (x, y, down = false, seat = me.seat, name) => tx({ t: 'cursor', x, y, down, seat, name }),
 		setLoop,
 		setMe: (patch) => { Object.assign(me, patch); tx({ t: 'presence', ...patch }); emit('peers', peers()) },
 		clock,

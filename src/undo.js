@@ -4,7 +4,7 @@
 // works for all of them without any of them knowing.
 
 export function createUndo(engine, { limit = 64 } = {}) {
-	const past = new Map(), future = new Map() // lane index -> snapshots, oldest first
+	const past = new Map(), future = new Map() // seat index -> snapshots, oldest first
 	const list = (m, i) => (m.has(i) || m.set(i, []), m.get(i))
 	const snap = (L) => ({ instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } })
 	const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -16,7 +16,7 @@ export function createUndo(engine, { limit = 64 } = {}) {
 	}
 	// step from one stack to the other, skipping snapshots that look just like now (a tap that changed nothing)
 	function move(from, to, i) {
-		const L = engine.lanes[i], a = list(from, i)
+		const L = engine.seats[i], a = list(from, i)
 		if (!L) return false
 		const cur = snap(L)
 		while (a.length && same(a.at(-1), cur)) a.pop()
@@ -27,9 +27,9 @@ export function createUndo(engine, { limit = 64 } = {}) {
 	}
 
 	return {
-		// call just before changing lane i
+		// call just before changing seat i
 		remember(i) {
-			const L = engine.lanes[i]
+			const L = engine.seats[i]
 			if (!L?.instance) return
 			const a = list(past, i), s = snap(L)
 			if (a.length && same(a.at(-1), s)) return
@@ -40,9 +40,9 @@ export function createUndo(engine, { limit = 64 } = {}) {
 		undo: (i) => move(past, future, i),
 		redo: (i) => move(future, past, i),
 		// a bookmark, and a silent return to it: a two-finger tap's first finger has already drawn a dot
-		mark: (i) => ({ i, n: list(past, i).length, f: list(future, i).slice(), s: engine.lanes[i]?.instance ? snap(engine.lanes[i]) : null }),
+		mark: (i) => ({ i, n: list(past, i).length, f: list(future, i).slice(), s: engine.seats[i]?.instance ? snap(engine.seats[i]) : null }),
 		rewind(m) {
-			const L = engine.lanes[m.i]
+			const L = engine.seats[m.i]
 			if (!L || !m.s) return
 			list(past, m.i).length = Math.min(m.n, list(past, m.i).length)
 			future.set(m.i, m.f.slice())

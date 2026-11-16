@@ -17,7 +17,7 @@ export default {
   playhead: false, // a pond, not a timeline
   how: 'Tap to drop a stone, drag it to bend, tap it again to lift it out.',
   params: {
-    span: { value: 10, min: 4, max: 16, step: 1 },
+    range: { value: 10, min: 4, max: 16, step: 1 },
     octave: { value: -1, min: -2, max: 1, step: 1 },
     breathe: { value: 0.7, min: 0, max: 1, step: 0.01 },
     glide: { value: 0.25, min: 0.01, max: 2, step: 0.01 },
@@ -29,7 +29,7 @@ export default {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
-    const size = [1, 1] // lane size from the last frame, for pointer maths
+    const size = [1, 1] // seat size from the last frame, for pointer maths
     const state = { stones: [] }
     const voices = []
     let drag = null
@@ -49,7 +49,7 @@ export default {
       a.start(); b.start()
       return { a, b, f, g, p, amp: 0 }
     }
-    const freqOf = (s) => 440 * Math.pow(2, (engine.degree(Math.round(s.x * params.span), params.octave) - 69) / 12)
+    const freqOf = (s) => 440 * Math.pow(2, (engine.degree(Math.round(s.x * params.range), params.octave) - 69) / 12)
 
     // keep voices in step with stones; called after any state change
     function sync(time = audio.currentTime) {
@@ -121,8 +121,8 @@ export default {
         const m = Math.min(w, h)
         // pitch columns
         g.strokeStyle = th.faint
-        for (let d = 0; d <= params.span; d++) {
-          const x = Math.round((d / params.span) * (w - 1)) + 0.5
+        for (let d = 0; d <= params.range; d++) {
+          const x = Math.round((d / params.range) * (w - 1)) + 0.5
           g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke()
         }
         const n = Math.max(1, state.stones.length)
@@ -138,7 +138,7 @@ export default {
             g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke()
           }
           // snapped pitch tick
-          const qx = (Math.round(s.x * params.span) / params.span) * w
+          const qx = (Math.round(s.x * params.range) / params.range) * w
           g.strokeStyle = th.dim
           g.beginPath(); g.moveTo(qx, y - 6); g.lineTo(qx, y + 6); g.stroke()
           g.fillStyle = drag && drag.k === k ? th.accent : th.fg

@@ -1,5 +1,5 @@
 // Phrase adapters for the lab instruments: state <-> { n, drums, notes: [{ s, p, v }] }.
-// See src/phrase.js. `to` reads what a lane plays over one loop; `from` writes a phrase
+// See src/phrase.js. `to` reads what a seat plays over one loop; `from` writes a phrase
 // back in the instrument's own terms, as close as its gestures allow.
 import { SLOTS, clamp, intersect } from './util.js'
 import { hit } from '../rings.js'
@@ -115,9 +115,9 @@ export const adapters = {
 
   // stones have no time; the robot keeps the motif's strongest distinct pitches as a chord
   drift: {
-    to: (st, n, params, m) => ({ n, drums: false, notes: st.stones.map((x, i) => ({ s: (i * n) / Math.max(1, st.stones.length), p: Math.round(x.x * P(m, params, 'span')), v: 1 - x.y })) }),
+    to: (st, n, params, m) => ({ n, drums: false, notes: st.stones.map((x, i) => ({ s: (i * n) / Math.max(1, st.stones.length), p: Math.round(x.x * P(m, params, 'range')), v: 1 - x.y })) }),
     from(ph, n, params, m) {
-      const span = P(m, params, 'span')
+      const span = P(m, params, 'range')
       const beat = ph.n / 4
       const pick = []
       for (const x of [...fit(melody(ph), 0, span)].sort((a, b) => (a.s % beat) - (b.s % beat) || a.s - b.s)) {

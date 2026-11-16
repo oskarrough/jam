@@ -50,7 +50,7 @@ kick, snare, hat, noise), the key (`degree(n, oct)`), and a four-chord progressi
 that advances once per loop (`chord(absStep, steps)`).
 
 All ten implement `generate(steps, params)` and `sample(steps)`, so bots can redraw them.
-Lanes wider than 2.5× their height (the dial's rings, the strips view) get an unrolled
+Seats wider than 2.5× their height (the dial's rings, the strips view) get an unrolled
 layout where the instrument needs one: rings become three rows of pulses, orbits become
 crossing dots on orbit bands.
 
@@ -60,6 +60,6 @@ phase and a seed, so every peer sees and hears the same thing from the same stat
 ## debug ui
 
 Right panel: transport (play, bpm, 16/32 steps, root, scale, backing beat, solo),
-lane (switch, level, reverb, mute, clear, randomize, copy state), and the focused
+seat (switch, level, reverb, mute, clear, randomize, copy state), and the focused
 instrument's params. The state drawer under the strip shows the live JSON and its size.
-`window.lab` exposes lanes, clock and engine in the console.
+`window.lab` exposes seats, clock and engine in the console.

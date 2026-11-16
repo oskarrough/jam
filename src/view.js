@@ -1,5 +1,5 @@
-// View: draws the machine (or plain strips) and turns pointer input into lane-local {x, y}.
-// Each lane renders into its own offscreen canvas; the dial view wraps it round a ring.
+// View: draws the machine (or plain strips) and turns pointer input into seat-local {x, y}.
+// Each seat renders into its own offscreen canvas; the dial view wraps it round a ring.
 //
 // The look: a dusk landscape painted once into a backdrop layer (flat sky, violet hills, ochre field,
 // a wandering ink line), and the machine on top: a paper dial pasted on with a flat offset shadow,
@@ -24,33 +24,33 @@ function rng(seed) {
 	return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
 }
 
-export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, onHand, canHand }) {
+export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer, onHand, canHand }) {
 	const g = canvas.getContext('2d')
-	const { lanes, transport } = engine
+	const { seats, transport } = engine
 	const { clock } = transport
 	const opts = { mode: 'dial', slices: 192, landscape: true, ground: 'vallotton', cycleLoops: 4 }
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	let W, H, S, CX, CY, DPR
-	// zoom: the overview geometry (S0, CX0, CY0), the focus geometry (SF, CXF, CYF, dev) and zt easing between them.
-	// In focus your instrument opens big and unwrapped on a paper sheet (dev); the machine shrinks beside it, still live.
-	let S0, CX0, CY0, SF, CXF, CYF, dev = null, zt = 0, moving = false
-	const focus = { on: false, lane: -1 }
+	// zoom: the overview geometry (S0, CX0, CY0), the focus geometry (SF, CXF, CYF, sheet) and zt easing between them.
+	// In focus your instrument opens big and unwrapped on a sheet; the machine shrinks beside it, still live.
+	let S0, CX0, CY0, SF, CXF, CYF, sheet = null, zt = 0, moving = false
+	const focus = { on: false, seat: -1 }
 	let bg = document.createElement('canvas'), bg2 = document.createElement('canvas')
 	// ground state: current G, and while cycling an incoming one fading in
 	let G = GROUNDS.vallotton, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
-	const cursors = new Map() // key -> {lane, x, y, name, until}
+	const cursors = new Map() // key -> {seat, x, y, name, until}
 	// Ghost trail of the last loop, so someone arriving can read the jam:
 	//  - trails: every pen stroke (yours and everyone's) stays on its ring as thin ink, fading out over one loop
 	//  - ghosts: when a ring changed during the loop, what it held before lingers faintly through the next one
-	const trails = new Map() // key -> [{lane, pts: [{x, y, t}]}]
+	const trails = new Map() // key -> [{seat, pts: [{x, y, t}]}]
 	let lastPhase = 0, loopMs = 5000
 	let heat = 0, lastT = performance.now(), lastBeat = -1, hover = null, drag = null
 	// handing your part to a robot: press your own badge, drag the thread onto theirs
 	let handing = null // {from, id, x, y, x0, y0, moved}
-	const seatUnder = (px, py) => lanes.findIndex((_, i) => { const [x, y] = seatPos(i); return Math.hypot(px - x, py - y) < seatR() + 6 })
+	const seatUnder = (px, py) => seats.findIndex((_, i) => { const [x, y] = seatPos(i); return Math.hypot(px - x, py - y) < seatR() + 6 })
 	// jelly: each ring and seat has a spring; pressing dents it where you pressed, release wobbles it back
-	const ringJelly = lanes.map(() => ({ s: spring({ k: 420, c: 9 }), a: 0 }))
-	const seatJelly = lanes.map(() => ({ s: spring({ k: 700, c: 10 }), a: 0 }))
+	const ringJelly = seats.map(() => ({ s: spring({ k: 420, c: 9 }), a: 0 }))
+	const seatJelly = seats.map(() => ({ s: spring({ k: 700, c: 10 }), a: 0 }))
 	const press = (j, a) => { j.a = a; j.s.target = 1 }
 	const release = (j) => { if (j.s.target) { j.s.target = 0; j.s.v -= 3 } }
 
@@ -69,18 +69,18 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			SF = Math.min(180, W * 0.46)
 			CXF = 8 + SF / 2
 			CYF = H - bottom - SF / 2 + 6
-			dev = { x: 12, y: 8 + STRIP, w: W - 24, h: Math.max(160, H - bottom - SF - STRIP - 16) }
+			sheet = { x: 12, y: 8 + STRIP, w: W - 24, h: Math.max(160, H - bottom - SF - STRIP - 16) }
 		} else {
 			// wide: the machine bottom-left, the sheet to its right
 			SF = Math.max(220, Math.min(W * 0.34, H - bottom - 120, 520))
 			CXF = 20 + SF / 2
 			CYF = H - bottom - SF / 2 - 4
 			const x = CXF + SF / 2 + 28
-			dev = { x, y: 12 + STRIP, w: W - x - 24, h: H - 12 - STRIP - bottom - 16 }
+			sheet = { x, y: 12 + STRIP, w: W - x - 24, h: H - 12 - STRIP - bottom - 16 }
 		}
 		applyZoom()
-		sizeLanes()
-		if (focus.on) dispatchEvent(new CustomEvent('zoom', { detail: { on: true, lane: focus.lane, dev: { ...dev } } }))
+		sizeSeats()
+		if (focus.on) dispatchEvent(new CustomEvent('zoom', { detail: { on: true, seat: focus.seat, sheet: { ...sheet } } }))
 		paintBackdrop(bg, G)
 		if (G2) paintBackdrop(bg2, G2)
 	}
@@ -121,8 +121,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	const eSheet = () => easeOf(Z.sheetEase, Z.sheetBezier)(sheetP())
 	// the strip above the sheet can trail it a little (barLag of the sheet's own move)
 	const eBar = () => easeOf(Z.sheetEase, Z.sheetBezier)(clamp01((sheetP() - Z.barLag) / Math.max(0.01, 1 - Z.barLag)))
-	const slideDist = () => (W - dev.x + Z.slidePad) * Z.slide
-	let sheetLane = -1 // the lane whose canvas is sized to the sheet (lags focus on the way out)
+	const slideDist = () => (W - sheet.x + Z.slidePad) * Z.slide
+	let sheetSeat = -1 // the seat whose canvas is sized to the sheet (lags focus on the way out)
 	function applyZoom() {
 		const e = eMachine()
 		S = S0 + (SF * Z.scale - S0) * e
@@ -131,8 +131,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 	const small = () => S < 330 // below this the dial drops its captions and numerals
 
-	// ring geometry, inner lane first
-	const n = () => lanes.length
+	// ring geometry, inner seat first
+	const n = () => seats.length
 	const band = () => (S * 0.26) / n()
 	const ringIn = (i) => S * 0.16 + i * band()
 	const ringT = () => band() * 0.82
@@ -146,12 +146,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		return { x, y: top + i * (h + 10), w, h }
 	}
 
-	function sizeLanes() {
-		lanes.forEach((L, i) => {
+	function sizeSeats() {
+		seats.forEach((L, i) => {
 			let w, h
 			// rings are sized at overview scale; warp() scales them down when the dial shrinks
 			const b0 = (S0 * 0.26) / n()
-			if (opts.mode === 'dial' && i === sheetLane) ({ w, h } = dev)
+			if (opts.mode === 'dial' && i === sheetSeat) ({ w, h } = sheet)
 			else if (opts.mode === 'dial') { w = TAU * (S0 * 0.16 + i * b0 + (b0 * 0.82) / 2); h = b0 * 0.82 }
 			else ({ w, h } = stripRect(i))
 			L.w = Math.round(w)
@@ -163,45 +163,45 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 
 	const angOf = (phase) => -Math.PI / 2 + phase * TAU
 	const polar = (a, r) => [CX + Math.cos(a) * r, CY + Math.sin(a) * r]
-	const seatAngles = () => lanes.map((_, i) => Math.PI * 0.75 - (i * TAU) / lanes.length) // first lane bottom-left
+	const seatAngles = () => seats.map((_, i) => Math.PI * 0.75 - (i * TAU) / seats.length) // first seat bottom-left
 	const seatPos = (i) => (opts.mode === 'dial' ? polar(seatAngles()[i], S * 0.505) : [stripRect(i).x - 2, stripRect(i).y + 16])
 	const seatR = () => Math.max(12, S * 0.028)
 
-	// screen -> lane hit: {lane, x, y} in the lane's 0..1 space
+	// screen -> seat hit: {seat, x, y} in the seat's 0..1 space
 	function hit(px, py, only = null) {
 		if (opts.mode === 'dial') {
 			const dx = px - CX, dy = py - CY, r = Math.hypot(dx, dy)
 			const x = (((Math.atan2(dy, dx) + Math.PI / 2) / TAU) % 1 + 1) % 1
-			for (let i = 0; i < lanes.length; i++) {
+			for (let i = 0; i < seats.length; i++) {
 				if (only !== null && i !== only) continue
 				const a = ringIn(i), b = a + ringT(), pad = only !== null ? 1e9 : 4
-				if (r >= a - pad && r <= b + pad) return { lane: i, x, y: Math.max(0, Math.min(1, 1 - (r - a) / ringT())) }
+				if (r >= a - pad && r <= b + pad) return { seat: i, x, y: Math.max(0, Math.min(1, 1 - (r - a) / ringT())) }
 			}
 		} else {
-			for (let i = 0; i < lanes.length; i++) {
+			for (let i = 0; i < seats.length; i++) {
 				if (only !== null && i !== only) continue
 				const R = stripRect(i), pad = only !== null ? 1e9 : 0
-				if (py >= R.y - pad && py <= R.y + R.h + pad) return { lane: i, x: Math.max(0, Math.min(0.9999, (px - R.x) / R.w)), y: Math.max(0, Math.min(1, (py - R.y) / R.h)) }
+				if (py >= R.y - pad && py <= R.y + R.h + pad) return { seat: i, x: Math.max(0, Math.min(0.9999, (px - R.x) / R.w)), y: Math.max(0, Math.min(1, (py - R.y) / R.h)) }
 			}
 		}
 		return null
 	}
 
 	canvas.addEventListener('contextmenu', (e) => e.preventDefault())
-	const inDev = (x, y) => focus.on && dev && x >= dev.x && x <= dev.x + dev.w && y >= dev.y && y <= dev.y + dev.h
-	const devXY = (x, y) => ({ x: Math.max(0, Math.min(0.9999, (x - dev.x) / dev.w)), y: Math.max(0, Math.min(1, (y - dev.y) / dev.h)) })
+	const inSheet = (x, y) => focus.on && sheet && x >= sheet.x && x <= sheet.x + sheet.w && y >= sheet.y && y <= sheet.y + sheet.h
+	const sheetXY = (x, y) => ({ x: Math.max(0, Math.min(0.9999, (x - sheet.x) / sheet.w)), y: Math.max(0, Math.min(1, (y - sheet.y) / sheet.h)) })
 	canvas.addEventListener('pointerdown', (e) => {
-		if (inDev(e.clientX, e.clientY) && canDraw(focus.lane)) {
+		if (inSheet(e.clientX, e.clientY) && canDraw(focus.seat)) {
 			canvas.setPointerCapture(e.pointerId)
-			drag = { lane: focus.lane, id: e.pointerId, alt: e.shiftKey, button: e.button, dev: true }
-			return onPointer(focus.lane, { type: 'down', ...devXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: e.button })
+			drag = { seat: focus.seat, id: e.pointerId, alt: e.shiftKey, button: e.button, sheet: true }
+			return onPointer(focus.seat, { type: 'down', ...sheetXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: e.button })
 		}
-		for (let i = 0; i < lanes.length; i++) {
+		for (let i = 0; i < seats.length; i++) {
 			const [x, y] = seatPos(i)
 			if (Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6) {
 				press(seatJelly[i], Math.atan2(e.clientY - y, e.clientX - x))
 				// your own badge waits for release: a tap zooms, a drag hands your part to a robot
-				if (onHand && seat(i).me) {
+				if (onHand && occupant(i).me) {
 					canvas.setPointerCapture(e.pointerId)
 					handing = { from: i, id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false }
 					return
@@ -214,19 +214,19 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		if (focus.on) { if (Math.hypot(e.clientX - CX, e.clientY - CY) < medallion()) setFocus(-1); return }
 		const h = hit(e.clientX, e.clientY)
 		if (h && opts.mode === 'dial') {
-			press(ringJelly[h.lane], Math.atan2(e.clientY - CY, e.clientX - CX))
-			if (!canDraw(h.lane)) setTimeout(() => release(ringJelly[h.lane]), 120) // a poke at someone else's ring
+			press(ringJelly[h.seat], Math.atan2(e.clientY - CY, e.clientX - CX))
+			if (!canDraw(h.seat)) setTimeout(() => release(ringJelly[h.seat]), 120) // a poke at someone else's ring
 		}
-		if (!h || !canDraw(h.lane)) return
+		if (!h || !canDraw(h.seat)) return
 		canvas.setPointerCapture(e.pointerId)
-		drag = { lane: h.lane, id: e.pointerId, alt: e.shiftKey, button: e.button }
-		onPointer(h.lane, { type: 'down', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: e.button })
+		drag = { seat: h.seat, id: e.pointerId, alt: e.shiftKey, button: e.button }
+		onPointer(h.seat, { type: 'down', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: e.button })
 	})
 	canvas.addEventListener('pointermove', (e) => {
 		hover = focus.on ? null : hit(e.clientX, e.clientY)
-		const onSeat = lanes.some((_, i) => { const [x, y] = seatPos(i); return Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6 })
+		const onSeat = seats.some((_, i) => { const [x, y] = seatPos(i); return Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6 })
 		const onDial = focus.on && Math.hypot(e.clientX - CX, e.clientY - CY) < medallion()
-		canvas.style.cursor = onSeat || onDial ? 'pointer' : inDev(e.clientX, e.clientY) || (hover && canDraw(hover.lane)) ? '' : 'default'
+		canvas.style.cursor = onSeat || onDial ? 'pointer' : inSheet(e.clientX, e.clientY) || (hover && canDraw(hover.seat)) ? '' : 'default'
 		if (handing && e.pointerId === handing.id) {
 			handing.x = e.clientX; handing.y = e.clientY
 			if (Math.hypot(handing.x - handing.x0, handing.y - handing.y0) > 8) handing.moved = true
@@ -234,10 +234,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			return
 		}
 		if (!drag || e.pointerId !== drag.id) return
-		if (drag.dev) return onPointer(drag.lane, { type: 'move', ...devXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: drag.button })
-		const h = hit(e.clientX, e.clientY, drag.lane)
-		ringJelly[drag.lane].a = Math.atan2(e.clientY - CY, e.clientX - CX) // the dent follows the pen
-		onPointer(drag.lane, { type: 'move', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
+		if (drag.sheet) return onPointer(drag.seat, { type: 'move', ...sheetXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: drag.button })
+		const h = hit(e.clientX, e.clientY, drag.seat)
+		ringJelly[drag.seat].a = Math.atan2(e.clientY - CY, e.clientX - CX) // the dent follows the pen
+		onPointer(drag.seat, { type: 'move', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
 	})
 	const up = (e) => {
 		if (handing && e.pointerId === handing.id) {
@@ -255,45 +255,45 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			return
 		}
 		if (!drag || e.pointerId !== drag.id) return
-		const h = drag.dev ? devXY(e.clientX, e.clientY) : hit(e.clientX, e.clientY, drag.lane)
-		onPointer(drag.lane, { type: 'up', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
-		release(ringJelly[drag.lane])
+		const h = drag.sheet ? sheetXY(e.clientX, e.clientY) : hit(e.clientX, e.clientY, drag.seat)
+		onPointer(drag.seat, { type: 'up', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
+		release(ringJelly[drag.seat])
 		drag = null
 	}
 	canvas.addEventListener('pointerup', up)
 	canvas.addEventListener('pointercancel', (e) => { if (handing && e.pointerId === handing.id) up(e) })
 
-	// zoom into a lane (your own), or out with -1
+	// zoom into a seat (your own), or out with -1
 	function setFocus(i) {
 		if (drag) return
 		const on = i >= 0 && opts.mode === 'dial'
-		if (on === focus.on && i === focus.lane) return
+		if (on === focus.on && i === focus.seat) return
 		focus.on = on
-		focus.lane = on ? i : -1
-		if (on) { sheetLane = i; sizeLanes() } // on the way out the sheet keeps its drawing until it has slid away
+		focus.seat = on ? i : -1
+		if (on) { sheetSeat = i; sizeSeats() } // on the way out the sheet keeps its drawing until it has slid away
 		hover = null
-		dispatchEvent(new CustomEvent('zoom', { detail: { on, lane: focus.lane, dev: on ? { ...dev } : null } }))
+		dispatchEvent(new CustomEvent('zoom', { detail: { on, seat: focus.seat, sheet: on ? { ...sheet } : null } }))
 	}
 	canvas.addEventListener('pointercancel', up)
 	canvas.addEventListener('pointerleave', () => (hover = null))
 
-	function showCursor(key, lane, x, y, name) {
+	function showCursor(key, seat, x, y, name) {
 		const now = performance.now()
-		cursors.set(key, { lane, x, y, name, until: now + 700 })
+		cursors.set(key, { seat, x, y, name, until: now + 700 })
 		let segs = trails.get(key)
 		if (!segs) trails.set(key, (segs = []))
 		let seg = segs[segs.length - 1]
 		const last = seg?.pts[seg.pts.length - 1]
-		// a new segment after a pause, a lane change, or a jump across the seam
-		if (!seg || seg.lane !== lane || now - last.t > 250 || Math.abs(x - last.x) > 0.5) segs.push((seg = { lane, pts: [] }))
+		// a new segment after a pause, a seat change, or a jump across the seam
+		if (!seg || seg.seat !== seat || now - last.t > 250 || Math.abs(x - last.x) > 0.5) segs.push((seg = { seat, pts: [] }))
 		if (!last || seg.pts.length === 0 || Math.hypot(x - last.x, y - last.y) > 0.002) seg.pts.push({ x, y, t: now })
 		if (seg.pts.length > 800) seg.pts.splice(0, 200)
 	}
-	// where a lane point lands on screen right now
-	function lanePoint(lane, x, y) {
-		if (opts.mode === 'dial' && focus.on && lane === focus.lane && eSheet() >= 1) return [dev.x + x * dev.w, dev.y + y * dev.h]
-		if (opts.mode === 'dial') return polar(angOf(x), ringIn(lane) + (1 - y) * ringT())
-		const R = stripRect(lane); return [R.x + x * R.w, R.y + y * R.h]
+	// where a seat point lands on screen right now
+	function seatPoint(seat, x, y) {
+		if (opts.mode === 'dial' && focus.on && seat === focus.seat && eSheet() >= 1) return [sheet.x + x * sheet.w, sheet.y + y * sheet.h]
+		if (opts.mode === 'dial') return polar(angOf(x), ringIn(seat) + (1 - y) * ringT())
+		const R = stripRect(seat); return [R.x + x * R.w, R.y + y * R.h]
 	}
 	function drawTrails() {
 		const now = performance.now(), life = loopMs
@@ -303,9 +303,9 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 				const seg = segs[k]
 				while (seg.pts.length && now - seg.pts[0].t > life) seg.pts.shift()
 				if (seg.pts.length < 2) { if (!seg.pts.length || now - seg.pts[0].t > life) segs.splice(k, 1); continue }
-				const L = lanes[seg.lane]
+				const L = seats[seg.seat]
 				if (!L) continue
-				const onSheet = opts.mode === 'dial' && focus.on && seg.lane === focus.lane && eSheet() >= 1
+				const onSheet = opts.mode === 'dial' && focus.on && seg.seat === focus.seat && eSheet() >= 1
 				g.strokeStyle = onSheet ? rgba('#efe6f4', 1) : L.color
 				g.lineWidth = onSheet ? 1.6 : 1.1
 				// draw in short runs so each run can fade by its own age
@@ -314,8 +314,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 					g.globalAlpha = 0.55 * (1 - age) ** 1.5
 					// follow the ring between samples instead of cutting a chord across the dial
 					const n = onSheet ? 1 : Math.max(1, Math.ceil(Math.abs(b.x - a.x) / 0.008))
-					g.beginPath(); g.moveTo(...lanePoint(seg.lane, a.x, a.y))
-					for (let j = 1; j <= n; j++) g.lineTo(...lanePoint(seg.lane, a.x + ((b.x - a.x) * j) / n, a.y + ((b.y - a.y) * j) / n))
+					g.beginPath(); g.moveTo(...seatPoint(seg.seat, a.x, a.y))
+					for (let j = 1; j <= n; j++) g.lineTo(...seatPoint(seg.seat, a.x + ((b.x - a.x) * j) / n, a.y + ((b.y - a.y) * j) / n))
 					g.stroke()
 				}
 			}
@@ -326,7 +326,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	// at the loop's turn: if a ring changed, keep a picture of what it held, to fade through the next loop
 	const sigOf = (L) => { try { return L.module.id + JSON.stringify(L.instance?.state ?? null) } catch { return L.module.id + Math.random() } }
 	function loopTurned() {
-		for (const L of lanes) {
+		for (const L of seats) {
 			if (!L.canvas) continue
 			const sig = sigOf(L)
 			L.ghost = L.snap && L.snapSig !== sig && L.snap.width === L.canvas.width && L.snap.height === L.canvas.height ? L.snap : null
@@ -400,19 +400,19 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		return hatches.get(key)
 	}
 
-	// draw one lane's instrument into its offscreen canvas
-	function renderLane(L) {
+	// draw one seat's instrument into its offscreen canvas
+	function renderSeat(L) {
 		const lg = L.g
 		lg.setTransform(1, 0, 0, 1, 0, 0)
 		lg.clearRect(0, 0, L.canvas.width, L.canvas.height)
 		lg.setTransform(DPR, 0, 0, DPR, 0, 0)
 		lg.save()
-		const shape = opts.mode === 'dial' && focus.on && L.index === focus.lane ? 'sheet' : 'ring'
+		const shape = opts.mode === 'dial' && focus.on && L.index === focus.seat ? 'sheet' : 'ring'
 		try { L.instance.frame(lg, L.w, L.h, engine.iclock, shape) } catch (e) { if (!L.err) console.error(L.module.id, e); L.err = true }
 		lg.restore()
 	}
 
-	// wrap a lane strip onto the annulus [r0, r1] as thin rotated slices
+	// wrap a seat strip onto the annulus [r0, r1] as thin rotated slices
 	function warp(L, r0, r1, src = L.canvas) {
 		const N = moving ? 48 : opts.slices, sw = src.width / N, dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
 		for (let k = 0; k < N; k++) {
@@ -439,7 +439,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		if (zt !== zTarget) {
 			zt = reduce ? zTarget : zTarget > zt ? Math.min(zTarget, zt + dt / Math.max(0.05, Z.inMs / 1000)) : Math.max(zTarget, zt - dt / Math.max(0.05, Z.outMs / 1000))
 			applyZoom()
-			if (!focus.on && sheetLane >= 0 && eSheet() === 0) { sheetLane = -1; sizeLanes() }
+			if (!focus.on && sheetSeat >= 0 && eSheet() === 0) { sheetSeat = -1; sizeSeats() }
 		}
 		moving = zt > 0 && zt < 1
 		for (const j of ringJelly) j.s.step(dt)
@@ -461,10 +461,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		if (G2) { g.globalAlpha = fade; g.drawImage(bg2, 0, 0); g.globalAlpha = 1 }
 		g.setTransform(DPR, 0, 0, DPR, 0, 0)
 		if (opts.landscape) drawDrifters(t)
-		lanes.forEach(renderLane)
+		seats.forEach(renderSeat)
 		if (opts.mode === 'dial') drawDial(t, dt, phase, loop)
 		else drawStrips(phase)
-		if (opts.mode === 'dial' && eSheet() > 0) drawDevice(phase)
+		if (opts.mode === 'dial' && eSheet() > 0) drawSheet(phase)
 		drawTrails()
 		drawCursors()
 		drawHanding()
@@ -527,13 +527,13 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		} catch { filterOK = false }
 		return filterOK
 	}
-	function drawDevice(phase) {
-		const e = eSheet(), { x, y, w, h } = dev, L = lanes[sheetLane]
+	function drawSheet(phase) {
+		const e = eSheet(), { x, y, w, h } = sheet, L = seats[sheetSeat]
 		g.save()
 		g.translate((1 - e) * slideDist(), 0) // slides in from the right edge, never translucent
 		g.fillStyle = 'rgba(42,28,72,.5)'
 		g.fillRect(x + 6, y + 8, w, h)
-		// the sheet is the eye's chamber: a deep ink ground, the instrument drawn on it as scratchboard. The lane
+		// the sheet is the eye's chamber: a deep ink ground, the instrument drawn on it as scratchboard. The seat
 		// canvas is drawn in ink for the paper rings, so here it goes through invert + half-turn hue: ink turns pale,
 		// pigments keep their hue and come up bright. Browsers without canvas filters keep a paper sheet.
 		const dark = canFilter()
@@ -557,7 +557,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 
 	function drawStrips(phase) {
-		lanes.forEach((L, i) => {
+		seats.forEach((L, i) => {
 			const R = stripRect(i), own = canDraw(i)
 			g.fillStyle = 'rgba(40,25,60,.35)'
 			g.fillRect(R.x + 5, R.y + 6, R.w, R.h)
@@ -575,7 +575,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			g.drawImage(L.canvas, R.x, R.y, R.w, R.h)
 			g.fillStyle = INK
 			g.fillRect(R.x + phase * R.w, R.y - 4, 1.5, R.h + 8)
-			const st = seat(i)
+			const st = occupant(i)
 			g.font = serif(13)
 			g.textAlign = 'left'; g.textBaseline = 'top'
 			g.fillStyle = ink(0.8)
@@ -585,7 +585,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 
 	function drawSeat(i, x, y, label) {
-		const L = lanes[i], st = seat(i), r = seatR()
+		const L = seats[i], st = occupant(i), r = seatR()
 		if (st.me) {
 			g.fillStyle = 'rgba(40,25,60,.45)'; g.beginPath(); g.arc(x + 3, y + 4, r, 0, TAU); g.fill()
 			// a slow dashed halo says: this one is yours, touch it to change instrument
@@ -663,7 +663,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	}
 
 	function drawDial(t, dt, phase, loop) {
-		const outer = ringIn(lanes.length - 1) + ringT() + 8, inner = ringIn(0) - 6, M = medallion()
+		const outer = ringIn(seats.length - 1) + ringT() + 8, inner = ringIn(0) - 6, M = medallion()
 
 		// the medallion: frosted paper in the ground's own tint. Mostly opaque; the land behind survives only as
 		// soft colour (a heavily blurred copy of the backdrop), never as a line crossing the rings.
@@ -709,7 +709,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke()
 		}
 
-		lanes.forEach((L, i) => {
+		seats.forEach((L, i) => {
 			const r0 = ringIn(i), r1 = r0 + ringT(), own = canDraw(i)
 			g.beginPath(); g.arc(CX, CY, r1, 0, TAU); g.arc(CX, CY, r0, 0, TAU, true)
 			g.fillStyle = rgba(L.color, own ? 0.13 : 0.05); g.fill()
@@ -720,7 +720,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 			const J = ringJelly[i], depth = J.s.x * ringT() * 0.28
 			wobble(g, CX, CY, r0, i * 3 + 11, own ? 0.9 : 0.6, { a: J.a, depth: -depth * 0.6, w: 0.3 }); g.stroke()
 			wobble(g, CX, CY, r1, i * 3 + 12, own ? 0.9 : 0.6, { a: J.a, depth, w: 0.32 }); g.stroke()
-			if (own && hover && hover.lane === i && !drag) {
+			if (own && hover && hover.seat === i && !drag) {
 				const a0 = angOf(Math.floor(hover.x * steps) / steps), a1 = angOf((Math.floor(hover.x * steps) + 1) / steps)
 				g.fillStyle = rgba(L.color, 0.28)
 				g.beginPath(); g.arc(CX, CY, r1, a0, a1); g.arc(CX, CY, r0, a1, a0, true); g.fill()
@@ -753,7 +753,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		g.strokeStyle = ink(0.15); g.lineWidth = 0.5
 		wobble(g, CX, CY, porthole() - 4, 22, 0.6); g.stroke()
 
-		lanes.forEach((L, i) => drawSeat(i, ...seatPos(i), true))
+		seats.forEach((L, i) => drawSeat(i, ...seatPos(i), true))
 	}
 
 	// the thread you pull from your badge while handing your part over; robots that can take it ring dashed
@@ -765,12 +765,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	try { hintOff = localStorage.getItem('roughjam.handHint') === 'done' } catch {}
 	function handHintDone() { hintOff = true; hint = null; try { localStorage.setItem('roughjam.handHint', 'done') } catch {} }
 	function maybeHint() {
-		const mine = lanes.findIndex((_, i) => canDraw(i))
+		const mine = seats.findIndex((_, i) => canDraw(i))
 		if (mine < 0) { loopsSeated = 0; return }
 		loopsSeated++
 		if (hintOff || hint || hintsShown >= 2 || focus.on || handing || drag) return
 		if (loopsSeated !== 3 && loopsSeated !== 12) return
-		const targets = lanes.map((_, j) => j).filter((j) => canHand?.(mine, j))
+		const targets = seats.map((_, j) => j).filter((j) => canHand?.(mine, j))
 		if (!targets.length) return
 		// the nearest robot round the dial
 		const [mx, my] = seatPos(mine)
@@ -795,7 +795,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo(mx + ((mx - CX) / om) * bow, my + ((my - CY) / om) * bow, x, y); g.stroke()
 		if (go >= 1) { g.lineDashOffset = performance.now() / 90; wobble(g, tx, ty, r + 9, hint.to * 11 + 5, 0.8); g.stroke() }
 		g.setLineDash([])
-		g.fillStyle = lanes[hint.from].color
+		g.fillStyle = seats[hint.from].color
 		g.beginPath(); g.arc(x, y, r * 0.42, 0, TAU); g.fill()
 		g.strokeStyle = INK; g.lineWidth = 1.1; g.stroke()
 		g.restore()
@@ -803,9 +803,9 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 
 	function drawHanding() {
 		if (!handing?.moved) return
-		const L = lanes[handing.from], [sx, sy] = seatPos(handing.from), r = seatR()
+		const L = seats[handing.from], [sx, sy] = seatPos(handing.from), r = seatR()
 		const over = seatUnder(handing.x, handing.y)
-		lanes.forEach((_, j) => {
+		seats.forEach((_, j) => {
 			if (!canHand?.(handing.from, j)) return
 			const [x, y] = seatPos(j)
 			g.strokeStyle = over === j ? INK : ink(0.6)
@@ -832,12 +832,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		const now = performance.now()
 		for (const [key, c] of cursors) {
 			if (c.until < now) { cursors.delete(key); continue }
-			const L = lanes[c.lane]
+			const L = seats[c.seat]
 			if (!L) continue
 			let x, y
-			if (opts.mode === 'dial' && focus.on && c.lane === focus.lane) { x = dev.x + c.x * dev.w; y = dev.y + c.y * dev.h }
-			else if (opts.mode === 'dial') [x, y] = polar(angOf(c.x), ringIn(c.lane) + (1 - c.y) * ringT())
-			else { const R = stripRect(c.lane); x = R.x + c.x * R.w; y = R.y + c.y * R.h }
+			if (opts.mode === 'dial' && focus.on && c.seat === focus.seat) { x = sheet.x + c.x * sheet.w; y = sheet.y + c.y * sheet.h }
+			else if (opts.mode === 'dial') [x, y] = polar(angOf(c.x), ringIn(c.seat) + (1 - c.y) * ringT())
+			else { const R = stripRect(c.seat); x = R.x + c.x * R.w; y = R.y + c.y * R.h }
 			g.fillStyle = L.color
 			g.beginPath(); g.arc(x, y, 3, 0, TAU); g.fill()
 			g.strokeStyle = INK; g.lineWidth = 1
@@ -860,7 +860,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 	return {
 		opts,
 		showCursor,
-		setMode(m) { opts.mode = m; if (m !== 'dial') setFocus(-1); sizeLanes() },
+		setMode(m) { opts.mode = m; if (m !== 'dial') setFocus(-1); sizeSeats() },
 		repaint: () => paintBackdrop(bg, G),
 		setGround,
 		setFocus,
@@ -868,11 +868,11 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer, on
 		get moving() { return moving },
 		get handHint() { return hint }, // the wordless drag-to-robot hint while it plays (tests)
 		// how far the sheet is still off to the right, in px (0 when it has arrived); DOM chrome on the sheet rides with it
-		get sheetShift() { return sheetLane < 0 ? Infinity : (1 - eBar()) * slideDist() },
+		get sheetShift() { return sheetSeat < 0 ? Infinity : (1 - eBar()) * slideDist() },
 		// zoom tuning (debug panel): the live knobs, their defaults, and a hook to apply a change
 		zoom: Z, zoomDefaults: ZOOM_DEFAULTS, easeNames: [...Object.keys(EASES), 'custom'],
 		zoomChanged() { bezierCache.clear(); applyZoom(); try { localStorage.setItem('roughjam.zoom', JSON.stringify(Z)) } catch {} },
-		get focus() { return { ...focus, dev: focus.on ? { ...dev } : null } },
+		get focus() { return { ...focus, sheet: focus.on ? { ...sheet } : null } },
 		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
 		ground: () => ({ ...(G2 || G) }),
 		// the bare disc inside the innermost ring, CSS px; null in strips mode

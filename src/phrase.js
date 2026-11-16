@@ -1,4 +1,4 @@
-// Phrases: a neutral form of a lane's part, so a motif drawn on one instrument can be
+// Phrases: a neutral form of a seat's part, so a motif drawn on one instrument can be
 // handed to a robot on another and varied musically.
 //
 //   phrase = { n, drums, notes: [{ s, p, v }] }
@@ -7,7 +7,7 @@
 //     p      pitch as a scale degree (5 per octave), or for drums the row: 0 kick, 1 snare, 2 hat
 //     v      velocity 0..1
 //
-// toPhrase(lane) and fromPhrase(phrase, lane) go through an adapter per instrument id.
+// toPhrase(seat) and fromPhrase(phrase, seat) go through an adapter per instrument id.
 // vary(phrase, turn) picks the next move for a robot.
 
 import { adapters as labAdapters } from './instruments/lib/phrases.js'
@@ -70,7 +70,7 @@ const stepline = {
 	},
 }
 
-// drums: per-step bitmask, 1 kick, 2 snare, 4 hat; vel[s][row] is how hard, 1..9
+// drums: per-step bitmask, 1 kick, 2 snare, 4 hat; vel[s][row] is how loud, 1..9
 const drums = {
 	to(state, n) {
 		const a = state?.hits || [], vel = state?.vel || []
@@ -93,18 +93,18 @@ const adapters = { bass: stepline, keys: stepline, bell: stepline, drums, ...lab
 
 export const canPhrase = (id) => !!adapters[id]
 
-export function toPhrase(lane, steps) {
-	const a = adapters[lane.module.id]
+export function toPhrase(seat, steps) {
+	const a = adapters[seat.module.id]
 	if (!a) return null
-	const ph = a.to(lane.instance.state, steps, lane.params, lane.module)
+	const ph = a.to(seat.instance.state, steps, seat.params, seat.module)
 	ph.notes = sortNotes(ph.notes.filter((x) => Number.isFinite(x.s) && Number.isFinite(x.p)))
 	return ph
 }
 
-export function fromPhrase(ph, lane, steps) {
-	const a = adapters[lane.module.id]
+export function fromPhrase(ph, seat, steps) {
+	const a = adapters[seat.module.id]
 	if (!a || !ph) return null
-	return a.from(ph, steps, lane.params, lane.module)
+	return a.from(ph, steps, seat.params, seat.module)
 }
 
 /* ───────── variations ───────── */

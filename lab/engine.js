@@ -57,7 +57,7 @@ export function createEngine() {
   reverbOut.gain.value = 0.5
   reverb.connect(reverbOut).connect(master)
 
-  function lane() {
+  function seat() {
     const out = audio.createGain()
     const send = audio.createGain()
     out.connect(master)
@@ -66,6 +66,6 @@ export function createEngine() {
     return { out, send }
   }
 
-  return { audio, master, reverb, lane, ...kit(audio) }
+  return { audio, master, reverb, seat, ...kit(audio) }
 }
 

@@ -25,7 +25,7 @@ export default {
   how: 'Swipe sideways across the strings. Fast swipes are loud. Strums record into the loop; the eraser or Shift rubs them out.',
   params: {
     record: { value: true },
-    damp: { value: 0.995, min: 0.98, max: 0.9995, step: 0.0005 },
+    decay: { value: 0.995, min: 0.98, max: 0.9995, step: 0.0005 },
     bright: { value: 0.55, min: 0, max: 1, step: 0.01 },
     octave: { value: 0, min: -1, max: 1, step: 1 },
     level: { value: 0.5, min: 0, max: 1, step: 0.01 },
@@ -36,7 +36,7 @@ export default {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
-    const size = [1, 1] // lane size from the last frame, for pointer maths
+    const size = [1, 1] // seat size from the last frame, for pointer maths
     const state = { hits: [] } // [slot, string, velocity]
     const ring = Array.from({ length: STRINGS }, () => ({ t: -1, v: 0 }))
     let lastX = null, lastT = 0
@@ -52,7 +52,7 @@ export default {
     function pluck(j, vel, time, abs) {
       engine.voices.pluck(out, {
         freq: mtof(notes(abs)[j]), time, gain: params.level * vel,
-        damp: params.damp, bright: params.bright, pan: (j - 2.5) * 0.12,
+        damp: params.decay, bright: params.bright, pan: (j - 2.5) * 0.12,
       })
       ring[j] = { t: time, v: vel }
     }

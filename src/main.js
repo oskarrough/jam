@@ -11,7 +11,7 @@ import { createHeart } from './heart.js'
 import { createUndo } from './undo.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
 
-const LANE_IDS = ['lane1', 'lane2', 'lane3', 'lane4']
+const SEAT_IDS = ['seat1', 'seat2', 'seat3', 'seat4']
 const START = ['bass', 'keys', 'bell', 'drums']
 
 const q = new URLSearchParams(location.search)
@@ -55,34 +55,34 @@ let rec = null
 if (replayId) try { rec = await loadRecording(replayId) } catch (e) { console.warn(e) }
 let view = null
 const transport = rec
-	? createReplayTransport(rec, { laneIds: LANE_IDS, onCursor: (i, x, y, down, who) => view?.showCursor('r' + who + i, i, x, y, who) })
+	? createReplayTransport(rec, { seatIds: SEAT_IDS, onCursor: (i, x, y, down, who) => view?.showCursor('r' + who + i, i, x, y, who) })
 	: await makeTransport()
 const replay = transport.kind === 'replay'
 if (replay) document.body.classList.add('replay')
-const engine = createEngine(transport, { laneIds: LANE_IDS, instruments: START })
-const { lanes } = engine
-const me = { name, lane: -1, erase: false }
+const engine = createEngine(transport, { seatIds: SEAT_IDS, instruments: START })
+const { seats } = engine
+const me = { name, seat: -1, erase: false }
 const undo = createUndo(engine)
 
-const humanAt = (i) => transport.peers.find((p) => p.instrument === lanes[i].id)
-const seat = (i) => {
+const humanAt = (i) => transport.peers.find((p) => p.seat === seats[i].id)
+const occupant = (i) => {
 	const p = humanAt(i)
 	if (p && p.id === transport.id) return { name: 'you', label: 'you', initial: me.name ? me.name[0] : 'Y', me: true, human: true }
 	if (p) return { name: p.name || playerName(i), label: p.name || playerName(i), initial: p.name ? p.name[0] : String(i + 1), human: true }
-	if (bots?.opts.on && lanes[i].module.generate) {
+	if (bots?.opts.on && seats[i].module.generate) {
 		// a robot riffing on someone's motif says so: "Robot B · inverts you"
-		const r = lanes[i].riff
+		const r = seats[i].riff
 		const riff = r && { color: r.color, label: r.label || 'echoes', who: riffWho(r) }
 		return { name: botName(i), label: riff ? `${botName(i)} · ${riff.label} ${riff.who}` : botName(i), initial: botName(i).slice(-1), bot: true, riff }
 	}
 	return { name: '', label: 'sit' }
 }
 const playerName = (i) => `player ${i + 1}`
-const canDraw = (i) => !replay && me.lane === i
+const canDraw = (i) => !replay && me.seat === i
 const riffWho = (r) => {
 	if (r.from === transport.id) return 'you'
 	const p = transport.peers.find((q) => q.id === r.from)
-	return p ? seat(lanes.findIndex((L) => L.id === p.instrument))?.label : 'a player'
+	return p ? occupant(seats.findIndex((L) => L.id === p.seat))?.label : 'a player'
 }
 let bots = null
 
@@ -90,29 +90,29 @@ function sit(i) {
 	if (replay) return
 	const p = humanAt(i)
 	if (p && p.id !== transport.id) return
-	me.lane = i
-	lanes[i].riff = null // a person taking the seat ends any robot riff there
+	me.seat = i
+	seats[i].riff = null // a person taking the seat ends any robot riff there
 	if (view?.focus.on) view.setFocus(i)
-	transport.setMe({ instrument: lanes[i].id, name: me.name })
+	transport.setMe({ seat: seats[i].id, name: me.name })
 	renderSeats()
 }
 
 view = createView(document.getElementById('c'), engine, {
-	seat,
+	occupant,
 	canDraw,
-	onSit: (i) => (i === me.lane ? toggleFocus() : sit(i)),
+	onSit: (i) => (i === me.seat ? toggleFocus() : sit(i)),
 	// drag your own badge onto a robot's: it takes your motif and improvises on it
 	onHand(from, to) {
-		if (from !== me.lane || !seat(to).bot) return false
+		if (from !== me.seat || !occupant(to).bot) return false
 		const ok = bots.hand(from, to)
 		renderSeats()
 		return ok
 	},
-	canHand: (from, to) => from === me.lane && to !== from && !!seat(to).bot,
+	canHand: (from, to) => from === me.seat && to !== from && !!occupant(to).bot,
 	onPointer(i, e) {
-		const L = lanes[i]
+		const L = seats[i]
 		if (me.erase) e.alt = true
-		e.shape = view.focus.on && view.focus.lane === i ? 'sheet' : 'ring'
+		e.shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
 		if (e.type === 'down') undo.remember(i)
 		L.instance.pointer(e)
 		engine.pushSoon(L)
@@ -126,28 +126,28 @@ bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 if (replay) bots.opts.on = false
 
 transport.on('cursor', (c) => {
-	const i = lanes.findIndex((L) => L.id === c.lane)
+	const i = seats.findIndex((L) => L.id === c.seat)
 	if (i >= 0) heart.glance?.(i, 700)
 	if (i >= 0) view.showCursor(c.from || 'peer' + i, i, c.x, c.y, c.name || transport.peers.find((p) => p.id === c.from)?.name || playerName(i))
 })
 transport.on('peers', renderSeats)
 transport.on('welcome', () => {
-	// take the first lane nobody is sitting at, keys first
-	if (me.lane < 0) for (const i of [1, 2, 0, 3]) if (!humanAt(i)) { sit(i); break }
+	// take the first seat nobody is sitting at, keys first
+	if (me.seat < 0) for (const i of [1, 2, 0, 3]) if (!humanAt(i)) { sit(i); break }
 	// ?instrument=strum: put that instrument in your ring and open it up
 	const want = registry.get(q.get('instrument'))
-	if (want && me.lane >= 0) {
-		const L = lanes[me.lane]
+	if (want && me.seat >= 0) {
+		const L = seats[me.seat]
 		if (L.module !== want) { engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps()) }); engine.push(L) }
-		view.setFocus?.(me.lane)
+		view.setFocus?.(me.seat)
 	}
 	renderSeats()
 })
-engine.on('lanes', renderSeats)
+engine.on('seats', renderSeats)
 // robots' riff captions change with each turn; re-list seats when they do
 let riffSig = ''
 setInterval(() => {
-	const sig = lanes.map((L) => (L.riff ? L.riff.id + L.riff.turn : '')).join('|')
+	const sig = seats.map((L) => (L.riff ? L.riff.id + L.riff.turn : '')).join('|')
 	if (sig !== riffSig) { riffSig = sig; renderSeats() }
 }, 300)
 
@@ -181,9 +181,9 @@ else if (transport.kind === 'ws') {
 		jamline.append(b, ' · ', out)
 	}
 }
-// seats live on the dial (view.js draws them from seat(i) every frame); this only keeps the peers line current
+// seats live on the dial (view.js draws them from occupant(i) every frame); this only keeps the peers line current
 function renderSeats() {
-	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name || playerName(lanes.findIndex((L) => L.id === p.instrument))))
+	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name || playerName(seats.findIndex((L) => L.id === p.seat))))
 	$('peers').textContent = names.length > 1 ? names.join(', ').replace(/, ([^,]*)$/, ' & $1') : ''
 }
 
@@ -202,7 +202,7 @@ $('c').addEventListener('pointerdown', () => { if (!engine.soundOn) $('sound').c
 		if (e.pointerType !== 'touch') return
 		touches.set(e.pointerId, [e.clientX, e.clientY])
 		const now = e.timeStamp // event time, not handling time: a busy frame mustn't spoil a quick tap
-		if (touches.size === 1) tap = { t: now, n: 1, moved: false, mark: me.lane >= 0 ? undo.mark(me.lane) : null }
+		if (touches.size === 1) tap = { t: now, n: 1, moved: false, mark: me.seat >= 0 ? undo.mark(me.seat) : null }
 		else if (tap && now - tap.t < 300) tap.n = Math.max(tap.n, touches.size)
 		else tap = null
 	}, { capture: true })
@@ -234,9 +234,9 @@ const tempo = (d) => {
 $('slower').onclick = () => tempo(-4)
 $('faster').onclick = () => tempo(4)
 $('clear').onclick = () => {
-	const L = lanes[me.lane]
+	const L = seats[me.seat]
 	if (!L) return
-	undo.remember(me.lane)
+	undo.remember(me.seat)
 	L.instance.clear ? L.instance.clear() : L.instance.setState(null)
 	engine.push(L)
 }
@@ -250,12 +250,12 @@ addEventListener('keydown', (e) => {
 	if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return
 	if ((e.metaKey || e.ctrlKey) && /^[zy]$/i.test(e.key)) {
 		e.preventDefault()
-		if (me.lane >= 0) (e.key.toLowerCase() === 'y' || e.shiftKey ? undo.redo : undo.undo)(me.lane)
+		if (me.seat >= 0) (e.key.toLowerCase() === 'y' || e.shiftKey ? undo.redo : undo.undo)(me.seat)
 		return
 	}
 	if (e.metaKey || e.ctrlKey) return
 	if (e.key === ' ') { e.preventDefault(); $('sound').click() }
-	else if (/^[1-9]$/.test(e.key) && +e.key <= lanes.length) sit(+e.key - 1)
+	else if (/^[1-9]$/.test(e.key) && +e.key <= seats.length) sit(+e.key - 1)
 	else if (e.key === 'd') debug.toggle()
 	else if (e.key === 'e') setErase(!me.erase)
 	else if (e.key === 'j' || e.key === 'ArrowLeft') { e.preventDefault(); cycleInstrument(-1) }
@@ -282,16 +282,16 @@ document.querySelectorAll('.token').forEach((el) => jellify(el))
 jellify(document.querySelector('.tempo'), { amount: 0.08 })
 
 /* ───────── zoom: tap your badge and your instrument opens big, in its own form; the machine shrinks beside it ───────── */
-const devbar = $('devbar')
-const strip = createStrip({ engine, registry, me, el: devbar, before: () => undo.remember(me.lane) })
-function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.lane) }
+const sheetbar = $('sheetbar')
+const strip = createStrip({ engine, registry, me, el: sheetbar, before: () => undo.remember(me.seat) })
+function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.seat) }
 addEventListener('zoom', (e) => {
-	const { on, dev } = e.detail
+	const { on, sheet } = e.detail
 	document.body.classList.toggle('zoomed', on)
 	if (on) {
-		devbar.style.left = dev.x + 'px'
-		devbar.style.top = dev.y - 54 + 'px'
-		devbar.style.width = dev.w + 'px'
+		sheetbar.style.left = sheet.x + 'px'
+		sheetbar.style.top = sheet.y - 54 + 'px'
+		sheetbar.style.width = sheet.w + 'px'
 		strip.paint()
 	}
 	rideSheet()
@@ -302,13 +302,13 @@ function rideSheet() {
 	if (riding) return
 	const go = () => {
 		const x = view.sheetShift
-		devbar.hidden = !Number.isFinite(x) || x > innerWidth
-		if (!devbar.hidden) devbar.style.transform = `translateX(${x}px)`
+		sheetbar.hidden = !Number.isFinite(x) || x > innerWidth
+		if (!sheetbar.hidden) sheetbar.style.transform = `translateX(${x}px)`
 		riding = view.moving || (view.focus.on && x > 0) ? requestAnimationFrame(go) : 0
 	}
 	riding = requestAnimationFrame(go)
 }
-engine.on('lanes', () => view.focus.on && strip.paint())
+engine.on('seats', () => view.focus.on && strip.paint())
 
 // j / k (or ← / →) cycle your instrument from anywhere. On the dial a glyph token pops up by your badge
 // with the name under it, so you see what you landed on; zoomed in, the strip shows it.
@@ -319,10 +319,10 @@ flash.setAttribute('aria-live', 'polite')
 document.body.append(flash)
 let flashT = 0
 function cycleInstrument(d) {
-	if (replay || me.lane < 0) return
+	if (replay || me.seat < 0) return
 	const id = strip.cycle(d)
 	if (!id || view.focus.on) return
-	const s = view.seatAt(me.lane), L = lanes[me.lane]
+	const s = view.seatAt(me.seat), L = seats[me.seat]
 	flash.style.setProperty('--c', L.color)
 	flash.innerHTML = `<span class="token">${strip.glyph(id)}</span><i></i>`
 	flash.querySelector('i').textContent = registry.get(id).name.toLowerCase()
@@ -340,7 +340,7 @@ Object.assign(window, { jam: { engine, transport, view, bots, registry, me, hear
 /* ───────── record: 8 bars from the next loop start, stored, a link to replay them at /r/<id> ───────── */
 const recBtn = $('rec')
 if (recBtn && transport.kind === 'ws') {
-	const recorder = createRecorder({ engine, transport, seatName: (i) => seat(i).name || null })
+	const recorder = createRecorder({ engine, transport, seatName: (i) => occupant(i).name || null })
 	const recline = $('recline')
 	const setRec = (state, p = 0) => { recBtn.dataset.state = state; recBtn.style.setProperty('--p', p.toFixed(3)) }
 	setRec('idle')

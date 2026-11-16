@@ -1,12 +1,12 @@
 // Souvenirs: record 8 bars of the jam, store them, replay them read-only at /r/<id>.
 //
-// A recording is what this tab actually played: at every bar boundary it snapshots each lane's
+// A recording is what this tab actually played: at every bar boundary it snapshots each seat's
 // {instrument, state, params} plus who sat there, and logs cursors (yours, peers', robots') in between.
 // It starts on a loop boundary and covers whole loops (at least 8 bars), so the replay loops seamlessly.
 //
-//   rec = { v: 1, loop: {bpm, beatsPerBar, bars}, bars: N, seats: [name|null ×lanes],
-//           frames: [{lane: data} ×N],   // lane data per bar; a lane is omitted if unchanged since the bar before
-//           cursors: [[ms, laneIndex, x, y, down, name], …], room, at }
+//   rec = { v: 1, loop: {bpm, beatsPerBar, bars}, bars: N, seats: [name|null ×seats],
+//           frames: [{seat: data} ×N],   // seat data per bar; a seat is omitted if unchanged since the bar before
+//           cursors: [[ms, seatIndex, x, y, down, name], …], room, at }
 
 import { createClock } from '../sync/sync.js'
 
@@ -14,7 +14,7 @@ const MIN_BARS = 8
 const CURSOR_HZ = 15
 
 export function createRecorder({ engine, transport, seatName }) {
-	const { lanes } = engine
+	const { seats } = engine
 	const clock = transport.clock
 	let cur = null
 
@@ -23,19 +23,19 @@ export function createRecorder({ engine, transport, seatName }) {
 
 	// cursors: remote via the transport, local (you and robots) by wrapping transport.cursor
 	const lastCursor = new Map()
-	function logCursor(lane, x, y, down, name) {
+	function logCursor(seat, x, y, down, name) {
 		if (!cur?.running) return
 		const t = clock.now() - cur.start
 		if (t < 0) return
-		const key = lane + '|' + name, prev = lastCursor.get(key)
+		const key = seat + '|' + name, prev = lastCursor.get(key)
 		if (prev && t - prev < 1000 / CURSOR_HZ && down) return
 		lastCursor.set(key, t)
-		const i = lanes.findIndex((L) => L.id === lane)
+		const i = seats.findIndex((L) => L.id === seat)
 		if (i >= 0) cur.rec.cursors.push([Math.round(t), i, +x.toFixed(3), +y.toFixed(3), down ? 1 : 0, name || ''])
 	}
-	transport.on('cursor', (c) => logCursor(c.lane, c.x, c.y, c.down, c.name || transport.peers.find((p) => p.id === c.from)?.name))
+	transport.on('cursor', (c) => logCursor(c.seat, c.x, c.y, c.down, c.name || transport.peers.find((p) => p.id === c.from)?.name))
 	const sendCursor = transport.cursor
-	transport.cursor = (x, y, down, lane, name) => { logCursor(lane, x, y, down, name || seatName(lanes.findIndex((L) => L.id === lane))); return sendCursor(x, y, down, lane, name) }
+	transport.cursor = (x, y, down, seat, name) => { logCursor(seat, x, y, down, name || seatName(seats.findIndex((L) => L.id === seat))); return sendCursor(x, y, down, seat, name) }
 
 	/** Arm: starts at the next loop boundary. onProgress({state, p}) with state armed | rec. Resolves with the recording. */
 	function record(onProgress = () => {}) {
@@ -57,9 +57,9 @@ export function createRecorder({ engine, transport, seatName }) {
 			// snapshot bars as their boundary passes (a few ms in, so edits landing on the bar are applied)
 			while (bar < bars && now >= start + bar * barMs + 30) {
 				const f = {}
-				lanes.forEach((L) => { const d = snap(L); if (!same(d, prev[L.id])) f[L.id] = prev[L.id] = d })
+				seats.forEach((L) => { const d = snap(L); if (!same(d, prev[L.id])) f[L.id] = prev[L.id] = d })
 				rec.frames.push(f)
-				if (bar === 0) rec.seats = lanes.map((L, i) => seatName(i) || null)
+				if (bar === 0) rec.seats = seats.map((L, i) => seatName(i) || null)
 				bar++
 			}
 			onProgress({ state: 'rec', p: Math.min(1, (now - start) / (bars * barMs)) })
@@ -92,9 +92,9 @@ export async function loadRecording(id) {
 
 /**
  * A transport that plays a recording on a loop. Same API as sync.js / local.js, but read-only:
- * edits and loop changes are ignored, lane data arrives at each recorded bar, cursors replay on time.
+ * edits and loop changes are ignored, seat data arrives at each recorded bar, cursors replay on time.
  */
-export function createReplayTransport(rec, { laneIds, onCursor }) {
+export function createReplayTransport(rec, { seatIds, onCursor }) {
 	const clock = createClock()
 	const listeners = {}
 	const emit = (ev, d) => (listeners[ev] || []).forEach((fn) => fn(d))
@@ -105,25 +105,25 @@ export function createReplayTransport(rec, { laneIds, onCursor }) {
 	clock.setLoop(loop)
 	const barMs = clock.barMs(loop), totalMs = rec.bars * barMs
 
-	// full lane state at each bar (frames only hold changes)
+	// full seat state at each bar (frames only hold changes)
 	const full = []
 	rec.frames.forEach((f, b) => (full[b] = { ...(full[b - 1] || {}), ...f }))
-	// wrapping round to bar 0 needs every lane, so fold the last bar's lanes into bar 0's starting point
+	// wrapping round to bar 0 needs every seat, so fold the last bar's seats into bar 0's starting point
 	const first = { ...full.at(-1), ...full[0] }
 	const atBar = (b) => (b === 0 ? first : full[b])
 
-	const peers = rec.seats.map((name, i) => name && { id: 'seat' + i, name, instrument: laneIds[i] }).filter(Boolean)
+	const peers = rec.seats.map((name, i) => name && { id: 'seat' + i, name, seat: seatIds[i] }).filter(Boolean)
 	let bar = -1, cursorIdx = 0, lastPass = -1
 	function tick() {
 		const t = clock.now() - origin
 		if (t < -150) return
 		const pass = Math.floor(Math.max(0, t) / totalMs), inPass = Math.max(0, t) - pass * totalMs
-		// lane data: emit a bar's lanes slightly ahead, like the network transport's lookahead
+		// seat data: emit a bar's seats slightly ahead, like the network transport's lookahead
 		const b = Math.floor((inPass + 120) / barMs) % rec.bars
 		if (b !== bar) {
 			bar = b
-			const lanes = b === 0 ? atBar(0) : rec.frames[b]
-			for (const [lane, data] of Object.entries(lanes)) emit('apply', { lane, data, at: origin + pass * totalMs + b * barMs })
+			const seats = b === 0 ? atBar(0) : rec.frames[b]
+			for (const [seat, data] of Object.entries(seats)) emit('apply', { seat, data, at: origin + pass * totalMs + b * barMs })
 		}
 		// cursors in order through each pass
 		if (pass !== lastPass) { lastPass = pass; cursorIdx = 0 }
@@ -134,7 +134,7 @@ export function createReplayTransport(rec, { laneIds, onCursor }) {
 	}
 	setInterval(tick, 20)
 	queueMicrotask(() => {
-		emit('welcome', { id: 'replay', loop, lanes: Object.fromEntries(laneIds.map((id) => [id, first[id]])), peers })
+		emit('welcome', { id: 'replay', loop, seats: Object.fromEntries(seatIds.map((id) => [id, first[id]])), peers })
 		emit('peers', peers)
 		tick()
 	})
@@ -143,8 +143,8 @@ export function createReplayTransport(rec, { laneIds, onCursor }) {
 		kind: 'replay',
 		on,
 		edit: () => clock.now(),
-		laneAt: (lane, t = clock.now()) => { const x = t - origin, i = Math.floor((((x % totalMs) + totalMs) % totalMs) / barMs); return atBar(i)?.[lane] },
-		lanes: () => atBar(Math.max(0, bar)),
+		seatAt: (seat, t = clock.now()) => { const x = t - origin, i = Math.floor((((x % totalMs) + totalMs) % totalMs) / barMs); return atBar(i)?.[seat] },
+		seats: () => atBar(Math.max(0, bar)),
 		cursor() {},
 		setLoop() {},
 		setMe() {},

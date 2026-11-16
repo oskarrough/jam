@@ -1,14 +1,14 @@
-// Engine: audio graph, lanes, lookahead scheduler.
+// Engine: audio graph, seats, lookahead scheduler.
 // Talks to a transport (local.js or sync/sync.js, same API) and to instruments (see instruments/index.js).
 
 import { registry } from './instruments/index.js'
 import { val } from './instruments/lib/util.js'
 import { kit } from './instruments/lib/kit.js'
 
-import { LANE_COLORS, INK_THEME } from './palette.js'
-export { LANE_COLORS }
+import { SEAT_COLORS, INK_THEME } from './palette.js'
+export { SEAT_COLORS }
 
-export function createEngine(transport, { laneIds, instruments }) {
+export function createEngine(transport, { seatIds, instruments }) {
 	const { clock } = transport
 	const audio = new (window.AudioContext || window.webkitAudioContext)()
 	const cfg = { lookaheadMs: 200, tickMs: 25 } // generous lookahead: the dial and heart share the main thread
@@ -19,7 +19,7 @@ export function createEngine(transport, { laneIds, instruments }) {
 	const on = (ev, fn) => (listeners[ev] ||= []).push(fn)
 
 
-	// master chain: lanes -> master -> compressor -> analyser -> out; lanes also send to a shared room
+	// master chain: seats -> master -> compressor -> analyser -> out; seats also send to a shared room
 	const master = audio.createGain()
 	master.gain.value = 0
 	const comp = audio.createDynamicsCompressor()
@@ -51,14 +51,14 @@ export function createEngine(transport, { laneIds, instruments }) {
 		get playing() { return soundOn },
 	}
 
-	const lanes = laneIds.map((id, i) => {
+	const seats = seatIds.map((id, i) => {
 		const out = audio.createGain()
 		const send = audio.createGain()
 		out.connect(master)
 		out.connect(send).connect(roomIn)
-		return { id, index: i, color: LANE_COLORS[i % LANE_COLORS.length], out, send, mix: { level: 0.9, space: 0.25, mute: false }, module: null, instance: null, params: {}, canvas: document.createElement('canvas') }
+		return { id, index: i, color: SEAT_COLORS[i % SEAT_COLORS.length], out, send, mix: { level: 0.9, space: 0.25, mute: false }, module: null, instance: null, params: {}, canvas: document.createElement('canvas') }
 	})
-	lanes.forEach((L) => (L.g = L.canvas.getContext('2d')))
+	seats.forEach((L) => (L.g = L.canvas.getContext('2d')))
 
 	function applyMix(L) {
 		L.out.gain.setTargetAtTime(L.mix.mute ? 0 : L.mix.level, audio.currentTime, 0.02)
@@ -74,17 +74,17 @@ export function createEngine(transport, { laneIds, instruments }) {
 		L.instance = mod.create({ audio, out: L.out, clock: iclock, params: L.params, color: L.color, theme: INK_THEME })
 		if (state !== undefined) L.instance.setState(state)
 		applyMix(L)
-		emit('lanes')
+		emit('seats')
 	}
 
-	lanes.forEach((L, i) => {
+	seats.forEach((L, i) => {
 		const id = instruments[i]
 		const mod = registry.get(id)
 		setInstrument(L, id, { state: mod?.sample?.(steps()) })
 	})
 
-	// network: lane data is {instrument, state, params}
-	const laneById = (id) => lanes.find((L) => L.id === id)
+	// network: seat data is {instrument, state, params}
+	const seatById = (id) => seats.find((L) => L.id === id)
 	const lastSent = new Map()
 	function push(L, { now = false } = {}) {
 		const data = { instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } }
@@ -101,20 +101,20 @@ export function createEngine(transport, { laneIds, instruments }) {
 		if (since > 100) push(L)
 		else timers.set(L.id, setTimeout(() => push(L), 100 - since))
 	}
-	transport.on('apply', ({ lane, data, local }) => {
-		const L = laneById(lane)
+	transport.on('apply', ({ seat, data, local }) => {
+		const L = seatById(seat)
 		if (!L || !data || local) return
 		L.riff = data.riff || null
 		if (data.instrument !== L.module.id) setInstrument(L, data.instrument, { state: data.state, params: data.params })
 		else { if (data.params) Object.assign(L.params, data.params); L.instance.setState(data.state) }
 		emit('apply', L)
 	})
-	transport.on('welcome', ({ lanes: snap }) => {
-		// first in the room: publish our starting lanes so later joiners get them
-		for (const L of lanes) if (!snap || !snap[L.id]) push(L, { now: true })
+	transport.on('welcome', ({ seats: snap }) => {
+		// first in the room: publish our starting seats so later joiners get them
+		for (const L of seats) if (!snap || !snap[L.id]) push(L, { now: true })
 	})
 
-	// scheduler: walk 16ths on the shared timeline, hand each to every lane ahead of time
+	// scheduler: walk 16ths on the shared timeline, hand each to every seat ahead of time
 	let nextT = null
 	function tick() {
 		if (!soundOn) return
@@ -133,7 +133,7 @@ export function createEngine(transport, { laneIds, instruments }) {
 			const late = (audio.currentTime - at) * 1000
 			if (late > 0) { stats.late++; stats.lastLateMs = late }
 			// a few ms late still sounds; much later would land off the beat, so drop it
-			if (late <= 30) for (const L of lanes) { try { L.instance.step(i, Math.max(at, audio.currentTime), sm / 1000) } catch (e) { console.error(L.module.id, e) } }
+			if (late <= 30) for (const L of seats) { try { L.instance.step(i, Math.max(at, audio.currentTime), sm / 1000) } catch (e) { console.error(L.module.id, e) } }
 			stats.scheduled++
 			// a loop change re-anchors the grid at its own origin
 			const next = nextT + sm, ln = clock.loopAt(next)
@@ -160,7 +160,7 @@ export function createEngine(transport, { laneIds, instruments }) {
 	}
 
 	return {
-		audio, lanes, cfg, stats, iclock, transport,
+		audio, seats, cfg, stats, iclock, transport,
 		on, setInstrument, push, pushSoon, applyMix, setSound, level,
 		get soundOn() { return soundOn },
 		steps, loop,

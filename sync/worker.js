@@ -2,7 +2,7 @@
 // Same protocol as server.js; both wrap room.js. Config: ../cloudflare.config.ts.
 //
 // WebSocket hibernation: sockets survive the object sleeping, presence rides on each socket's attachment,
-// and loop + lanes persist to storage so a cold room comes back with its patterns.
+// and loop + seats persist to storage so a cold room comes back with its patterns.
 // Note: Date.now() in Workers advances only between I/O events. Inside webSocketMessage it is the time the
 // message was delivered, which is what an NTP-style pong wants.
 

@@ -88,7 +88,7 @@ export function flashes() {
 
 // Normalise pointer events from any host: tracks `pressed`, fills in pixel coords
 // (px, py, w, h) when the host only sends normalised x/y. `size` is a [w, h] array
-// the instrument keeps current from frame(), since hosts may not send lane size.
+// the instrument keeps current from frame(), since hosts may not send seat size.
 export function withPointer(size, fn) {
   let pressed = false
   return (e) => {

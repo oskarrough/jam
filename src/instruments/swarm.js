@@ -2,7 +2,7 @@
 // Draw wires across their paths; a firefly crossing a wire plays a note set by the
 // wire's height. You compose by placing tripwires, not notes.
 import { kit, mtof } from './lib/kit.js'
-import { LANE_COLORS } from '../palette.js'
+import { SEAT_COLORS } from '../palette.js'
 import { withPointer, view, theme, subSlots, SLOTS, clamp, rng, intersect, segDist, flashes, tint, isStrip, TAU } from './lib/util.js'
 
 const MAX_WIRES = 8
@@ -18,7 +18,7 @@ function gen() {
 
 // Kandinsky's pairing, in our pigments: circles blue, triangles yellow, squares red
 const FORMS = ['circle', 'triangle', 'square']
-const PIG = { violet: LANE_COLORS[0], green: LANE_COLORS[1], pink: LANE_COLORS[2], blue: LANE_COLORS[3], ochre: LANE_COLORS[4], red: LANE_COLORS[5] }
+const PIG = { violet: SEAT_COLORS[0], green: SEAT_COLORS[1], pink: SEAT_COLORS[2], blue: SEAT_COLORS[3], ochre: SEAT_COLORS[4], red: SEAT_COLORS[5] }
 const FORM_PIG = { circle: 'blue', triangle: 'ochre', square: 'red' }
 // colour planes behind wires, low to high: deep to bright
 const PLANES = [PIG.violet, PIG.blue, PIG.green, PIG.pink, PIG.red, PIG.ochre]
@@ -53,7 +53,7 @@ export default {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
-    const size = [1, 1] // lane size from the last frame, for pointer maths
+    const size = [1, 1] // seat size from the last frame, for pointer maths
     const state = { wires: [] } // [x1, y1, x2, y2]
     const fx = flashes()
     let flies = []
@@ -124,7 +124,7 @@ export default {
         ensureFlies()
         const t = view(clock)
         const sheet = (shape || (isStrip(w, h) ? 'ring' : 'sheet')) === 'sheet'
-        const ink = th.fg // the dark sheet inverts the lane canvas, so ink stays ink
+        const ink = th.fg // the dark sheet inverts the seat canvas, so ink stays ink
         const m = Math.min(w, h)
         const U = sheet ? m : h // unit for sizes; on the thin ring everything shrinks to the strip
         g.lineCap = 'round'; g.lineJoin = 'round'

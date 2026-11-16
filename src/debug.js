@@ -13,11 +13,11 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	const meState = {
 		get name() { return me.name },
 		set name(v) { me.name = v; transport.setMe({ name: v }); renderSeats() },
-		get seat() { return me.lane < 0 ? '—' : engine.lanes[me.lane].id },
-		set seat(v) { const i = engine.lanes.findIndex((L) => L.id === v); if (i >= 0) sit(i) },
+		get seat() { return me.seat < 0 ? '—' : engine.seats[me.seat].id },
+		set seat(v) { const i = engine.seats.findIndex((L) => L.id === v); if (i >= 0) sit(i) },
 	}
 	meF.add(meState, 'name')
-	meF.add(meState, 'seat', engine.lanes.map((L) => L.id)).listen()
+	meF.add(meState, 'seat', engine.seats.map((L) => L.id)).listen()
 
 	// ── loop (changes land on the next loop boundary, for everyone)
 	const loopF = gui.addFolder('loop')
@@ -39,17 +39,17 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	loopF.add(loopEdit, 'chords').name('chords, one a bar').onFinishChange(commit)
 	transport.on('loop', ({ loop }) => { Object.assign(loopEdit, fromLoop(loop)); loopF.controllersRecursive().forEach((c) => c.updateDisplay()) })
 
-	// ── lanes: instrument per lane, mix, and the instrument's own params
-	const lanesF = gui.addFolder('lanes')
+	// ── seats: instrument per seat, mix, and the instrument's own params
+	const seatsF = gui.addFolder('seats')
 	const ids = [...registry.keys()]
-	engine.lanes.forEach((L) => {
-		const f = lanesF.addFolder(`${L.id}`).close()
+	engine.seats.forEach((L) => {
+		const f = seatsF.addFolder(`${L.id}`).close()
 		const sel = { get instrument() { return L.module.id }, set instrument(v) { engine.setInstrument(L, v, { state: registry.get(v).sample?.(engine.steps()) }); engine.push(L); buildParams() } }
 		f.add(sel, 'instrument', ids).listen()
 		f.add(L.mix, 'level', 0, 1.5, 0.01).onChange(() => engine.applyMix(L))
 		f.add(L.mix, 'space', 0, 1, 0.01).onChange(() => engine.applyMix(L))
 		f.add(L.mix, 'mute').onChange(() => engine.applyMix(L))
-		f.add({ clear: () => { L.instance.clear ? L.instance.clear() : L.instance.setState(null); engine.push(L) } }, 'clear')
+		f.add({ clear: () => { L.instance.clear ? L.instance.clear() : L.instance.setState(null); engine.push(L) } }, 'clear').name('wipe')
 		let pf = null
 		function buildParams() {
 			pf?.destroy()
@@ -63,7 +63,7 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 			}
 		}
 		buildParams()
-		engine.on('lanes', () => { if (pf && pf._title !== `${L.module.name} params`) buildParams() })
+		engine.on('seats', () => { if (pf && pf._title !== `${L.module.name} params`) buildParams() })
 	})
 
 	// ── network
@@ -115,11 +115,11 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	let playing = 0
 	zF.add({ play() {
 		clearTimeout(playing)
-		if (me.lane < 0) return
-		view.setFocus(me.lane)
+		if (me.seat < 0) return
+		view.setFocus(me.seat)
 		playing = setTimeout(() => view.setFocus(-1), Z.inMs + 900)
 	} }, 'play').name('play in → out')
-	zF.add({ toggle() { view.setFocus(view.focus.on ? -1 : me.lane) } }, 'toggle').name('in / out')
+	zF.add({ toggle() { view.setFocus(view.focus.on ? -1 : me.seat) } }, 'toggle').name('in / out')
 	const copyCtl = zF.add({ async copy() {
 		const json = JSON.stringify(Z)
 		try { await navigator.clipboard.writeText(json); copyCtl.name('copied ✓') } catch { console.log(json); copyCtl.name('in the console') }

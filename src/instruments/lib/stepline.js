@@ -1,4 +1,4 @@
-// Stepline: draw a line across the lane, one note per step, height = pitch.
+// Stepline: draw a line across the seat, one note per step, height = pitch.
 // Factory used by the bass, keys and bell instruments; they differ only in voice and range.
 
 import { fit, val, rgba } from './util.js'

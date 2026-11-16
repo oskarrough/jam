@@ -18,8 +18,8 @@ export function createStrip({ engine, registry, me, el, before }) {
 	caption.className = 'caption'
 	el.append(row, caption)
 
-	const lane = () => engine.lanes[me.lane]
-	const showCurrent = () => { const L = lane(); caption.textContent = L ? L.module.name.toLowerCase() : '' }
+	const seat = () => engine.seats[me.seat]
+	const showCurrent = () => { const L = seat(); caption.textContent = L ? L.module.name.toLowerCase() : '' }
 	const buttons = []
 	for (const [id, mod] of registry) {
 		const b = document.createElement('button')
@@ -40,7 +40,7 @@ export function createStrip({ engine, registry, me, el, before }) {
 	}
 
 	function choose(id) {
-		const L = lane()
+		const L = seat()
 		if (!L || L.module.id === id) return false
 		before?.()
 		engine.setInstrument(L, id, { state: registry.get(id).sample?.(engine.steps()) })
@@ -51,7 +51,7 @@ export function createStrip({ engine, registry, me, el, before }) {
 	// j/k and the arrows walk your ring through every instrument, wrapping around
 	const ids = [...registry.keys()]
 	function cycle(d) {
-		const L = lane()
+		const L = seat()
 		if (!L) return null
 		const id = ids[(ids.indexOf(L.module.id) + d + ids.length) % ids.length]
 		choose(id)
@@ -59,7 +59,7 @@ export function createStrip({ engine, registry, me, el, before }) {
 	}
 	// mark the current one and keep it in view when the row scrolls (phones)
 	function paint() {
-		const L = lane()
+		const L = seat()
 		if (!L) return
 		el.style.setProperty('--c', L.color)
 		for (const b of buttons) b.setAttribute('aria-pressed', b.dataset.id === L.module.id)

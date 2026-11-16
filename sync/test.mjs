@@ -11,11 +11,11 @@ const server = process.env.BASE ? null : spawn('node', [new URL('server.js', imp
 await new Promise((r) => setTimeout(r, 400))
 
 const browser = await chromium.launch()
-const open = async (name, lane, skew = 0) => {
+const open = async (name, seat, skew = 0) => {
 	const page = await (await browser.newContext()).newPage()
 	if (skew) await page.addInitScript((s) => { const o = performance.timeOrigin + s; Object.defineProperty(performance, 'timeOrigin', { get: () => o }) }, skew)
 	page.on('pageerror', (e) => console.error(name, e))
-	await page.goto(`${BASE}/sync/?name=${name}&lane=${lane}&room=test${process.pid}`)
+	await page.goto(`${BASE}/sync/?name=${name}&seat=${seat}&room=test${process.pid}`)
 	return page
 }
 const a = await open('alice', 'bass')
@@ -38,11 +38,11 @@ check(Math.abs(ta - tb) < 20, `server-clock estimate agrees across peers (Δ ${(
 const at = await a.evaluate(() => jam.edit('bass', [0, -1, 2, -1, 4, -1, 2, -1, 0, -1, 2, -1, 4, -1, 7, -1]))
 const barCheck = await b.evaluate((at) => { const c = jam.clock, p = c.pos(at + 0.5); return { bar: p.beats / p.loop.beatsPerBar } }, at)
 check(Math.abs(barCheck.bar - Math.round(barCheck.bar)) < 0.01, `edit 'at' is a bar boundary (bar ${barCheck.bar.toFixed(3)})`)
-const before = await b.evaluate(() => jam.laneAt('bass'))
+const before = await b.evaluate(() => jam.seatAt('bass'))
 check(before === undefined, 'bob does not have the edit before the bar')
 const wait = at - (await a.evaluate(() => jam.clock.now())) + 100
 await new Promise((r) => setTimeout(r, wait))
-const [la, lb] = await Promise.all([a, b].map((p) => p.evaluate(() => JSON.stringify(jam.laneAt('bass')))))
+const [la, lb] = await Promise.all([a, b].map((p) => p.evaluate(() => JSON.stringify(jam.seatAt('bass')))))
 check(la === lb && la !== undefined, `both play the same bass pattern after the bar (waited ${wait.toFixed(0)}ms)`)
 
 // Tempo change lands on the next loop boundary for both.
@@ -54,7 +54,7 @@ check(loops[0] === 120 && loops[1] === 120, 'tempo change scheduled on both')
 // Late joiner gets state.
 const c = await open('carol', 'lead')
 await new Promise((r) => setTimeout(r, 800))
-check((await c.evaluate(() => JSON.stringify(jam.laneAt('bass')))) === la, 'late joiner gets current lanes')
+check((await c.evaluate(() => JSON.stringify(jam.seatAt('bass')))) === la, 'late joiner gets current seats')
 
 // The real jam page (repo root) on the network transport.
 const jamPage = async (name, path) => {
@@ -83,16 +83,16 @@ if (!process.env.SKIP_REC) {
 	const href = await j1.evaluate(() => document.querySelector('#recline a').getAttribute('href'))
 	const id = href.split('/').pop()
 	const rec = await (await fetch(`${BASE}/api/r/${id}`)).json()
-	check(rec.bars === 8 && rec.frames.length === 8 && Object.keys(rec.frames[0]).length === 4, `recording ${id}: 8 bars, all 4 lanes in the first frame`)
+	check(rec.bars === 8 && rec.frames.length === 8 && Object.keys(rec.frames[0]).length === 4, `recording ${id}: 8 bars, all 4 seats in the first frame`)
 	check(rec.seats.includes('dora') && rec.seats.includes('eli'), `recording knows who sat where (${rec.seats.join(', ')})`)
 	const rp = await (await browser.newContext()).newPage()
 	rp.on('pageerror', (e) => console.error('replay', e))
 	await rp.goto(`${BASE}${href}`)
 	await new Promise((r) => setTimeout(r, 1500))
-	const rs = await rp.evaluate(() => ({ kind: jam.transport.kind, replay: document.body.classList.contains('replay'), line: document.getElementById('jamline').textContent, lanes: jam.engine.lanes.map((L) => JSON.stringify({ instrument: L.module.id, state: L.instance.state })) }))
+	const rs = await rp.evaluate(() => ({ kind: jam.transport.kind, replay: document.body.classList.contains('replay'), line: document.getElementById('jamline').textContent, seats: jam.engine.seats.map((L) => JSON.stringify({ instrument: L.module.id, state: L.instance.state })) }))
 	const want = Object.values(rec.frames[0]).map((d) => JSON.stringify({ instrument: d.instrument, state: d.state }))
 	check(rs.kind === 'replay' && rs.replay && /a recording/.test(rs.line), `/r/${id} opens read-only (“${rs.line}”)`)
-	check(rs.lanes.every((l, i) => l === want[i]), 'replay starts with the recorded lanes')
+	check(rs.seats.every((l, i) => l === want[i]), 'replay starts with the recorded seats')
 	check((await fetch(`${BASE}/api/r/nope1234`)).status === 404, 'unknown recording is a 404')
 	if (process.env.SHOT) await rp.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-replay.png') })
 }

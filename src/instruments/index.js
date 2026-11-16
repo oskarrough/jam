@@ -24,7 +24,7 @@ export function register(mod) {
 	for (const k of ['id', 'name', 'create']) if (!mod[k]) throw new Error(`instrument is missing ${k}`)
 	const create = mod.create
 	// A state meant for something else (a bot's part generated just before the seat switched
-	// instruments, a peer on an older version) must not break the lane: keep the old state instead.
+	// instruments, a peer on an older version) must not break the seat: keep the old state instead.
 	mod.create = (ctx) => {
 		const inst = create.call(mod, ctx)
 		const setState = inst.setState

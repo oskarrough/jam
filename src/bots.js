@@ -4,16 +4,16 @@
 // Riffs: a player can hand a robot their motif (drag your seat badge onto the robot's).
 // The robot then plays it back in its own instrument and improvises on it every loop or
 // two: theme, two variations, a call-and-response, again (see src/phrase.js). The motif
-// travels in the lane data as `riff`, so every tab sees it and any tab can take over driving.
+// travels in the seat data as `riff`, so every tab sees it and any tab can take over driving.
 
 import { toPhrase, fromPhrase, vary, canPhrase } from './phrase.js'
 
 export const botName = (i) => `Robot ${String.fromCharCode(65 + i)}`
 
 export function createBots(engine, { seated, view }) {
-	const { lanes, transport } = engine
+	const { seats, transport } = engine
 	const opts = { on: true, minLoops: 2, maxLoops: 5, sweepMs: 1600, riffSweepMs: 900 }
-	const bots = new Map() // lane index -> {nextAt, sweep, riffId}
+	const bots = new Map() // seat index -> {nextAt, sweep, riffId}
 
 	const leader = () => {
 		const ids = [transport.id, ...transport.peers.map((p) => p.id)].filter(Boolean).sort()
@@ -33,7 +33,7 @@ export function createBots(engine, { seated, view }) {
 	function tick() {
 		const now = performance.now()
 		const lead = opts.on && leader()
-		lanes.forEach((L, i) => {
+		seats.forEach((L, i) => {
 			const riffing = canRiff(L)
 			const active = lead && !seated(i) && (L.module.generate || riffing)
 			let b = bots.get(i)
@@ -48,7 +48,7 @@ export function createBots(engine, { seated, view }) {
 				if (target) b.sweep = { t0: now, y: 0.5, mod: L.module, target, riff: turn?.riff, ms: turn ? opts.riffSweepMs : opts.sweepMs }
 				else b.nextAt = now + loopMs()
 			}
-			if (b.sweep && b.sweep.mod !== L.module) b.sweep = null // lane changed instrument mid-sweep
+			if (b.sweep && b.sweep.mod !== L.module) b.sweep = null // seat changed instrument mid-sweep
 			if (b.sweep) {
 				const f = (now - b.sweep.t0) / b.sweep.ms
 				b.sweep.y = Math.max(0.05, Math.min(0.95, b.sweep.y + (Math.random() - 0.5) * 0.15))
@@ -69,19 +69,19 @@ export function createBots(engine, { seated, view }) {
 	}
 	setInterval(tick, 60)
 
-	// hand lane `from`'s part to the robot at lane `to`; returns false if either side can't phrase
+	// hand seat `from`'s part to the robot at seat `to`; returns false if either side can't phrase
 	function hand(from, to, { by } = {}) {
-		const A = lanes[from], B = lanes[to]
+		const A = seats[from], B = seats[to]
 		if (!A || !B || from === to || seated(to) || !canPhrase(A.module.id) || !canPhrase(B.module.id)) return false
 		const motif = toPhrase(A, engine.steps())
 		if (!motif?.notes.length) return false
-		B.riff = { id: Math.random().toString(36).slice(2, 10), from: by ?? transport.id, fromLane: from, color: A.color, motif, turn: 0, last: null, label: 'echoes' }
+		B.riff = { id: Math.random().toString(36).slice(2, 10), from: by ?? transport.id, fromSeat: from, color: A.color, motif, turn: 0, last: null, label: 'echoes' }
 		engine.push(B)
 		return true
 	}
 	// let a robot go back to its own ideas
 	function release(i) {
-		const L = lanes[i]
+		const L = seats[i]
 		if (!L?.riff) return
 		L.riff = null
 		engine.push(L)

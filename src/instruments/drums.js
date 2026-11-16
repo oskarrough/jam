@@ -1,5 +1,5 @@
 // Drums: kick, snare and hat in three rows, 808 style. Tap a step to set or clear a hit;
-// drag up or down on it to set how hard it hits; drag sideways to paint. Shift or right-drag clears.
+// drag up or down on it to set how loud it hits; drag sideways to paint. Shift or right-drag erases.
 //
 // state = { hits, vel }
 //   hits[s]  bitmask per step: 1 kick, 2 snare, 4 hat
@@ -57,7 +57,7 @@ const hitVoice = {
 	4({ audio: ac, out, params }, t, lv) {
 		const g = ac.createGain(), hp = ac.createBiquadFilter()
 		hp.type = 'highpass'; hp.frequency.value = 6000 + lv * 200
-		env(g, t, 0.001, 0.16 * gainOf(lv), val(params.hatDecay) * (0.6 + lv / 15)); hp.connect(g); g.connect(out); noiseSrc(ac, t, 0.3, hp)
+		env(g, t, 0.001, 0.16 * gainOf(lv), val(params.decay) * (0.6 + lv / 15)); hp.connect(g); g.connect(out); noiseSrc(ac, t, 0.3, hp)
 	},
 }
 
@@ -65,8 +65,8 @@ export default {
 	id: 'drums',
 	glyph: '<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
-	how: 'Kick, snare and hat in three rows. Tap a step for a hit, drag it up or down for how hard it hits, sideways to paint. Shift-drag erases.',
-	params: { hatDecay: { value: 0.045, min: 0.01, max: 0.3, step: 0.005 } },
+	how: 'Kick, snare and hat in three rows. Tap a step for a hit, drag it up or down for how loud it hits, sideways to paint. Shift-drag erases.',
+	params: { decay: { value: 0.045, min: 0.01, max: 0.3, step: 0.005 } },
 	generate: (steps) => { const { d, v } = drumGen(); return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) } },
 	sample: (steps) => { const { d, v } = drumSample(); return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) } },
 	create(ctx) {
@@ -167,7 +167,7 @@ export default {
 							y = rowY(r)
 							size = full * (0.45 + 0.55 * k) + f * 2
 						} else {
-							// a stem whose height is how hard the step hits
+							// a stem whose height is how loud the step hits
 							const base = h - r * band - band * 0.1
 							y = base - k * band * 0.68
 							size = Math.min(full, cw * 0.32) * (0.75 + 0.35 * k) + f * 2

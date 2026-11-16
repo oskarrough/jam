@@ -35,7 +35,7 @@ export default {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
-    const size = [1, 1] // lane size from the last frame, for pointer maths
+    const size = [1, 1] // seat size from the last frame, for pointer maths
     const state = { sparks: [] } // {s: slot, x, y, born: loop}
     let lastThrow = null
 

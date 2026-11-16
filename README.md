@@ -2,15 +2,25 @@
 
 A loop machine for a few friends and some strange instruments.
 
-Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Tap your own seat to zoom into your instrument, and its glyph token to swap it for another. Empty seats are taken by robots who redraw their part every few loops until a person sits down. Drag your own seat badge onto a robot's and it takes your part as a motif and improvises on it in its own instrument: echo, a variation or two, then a call-and-response, round again.
+Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Tap your own seat to zoom into your instrument, and its glyph token to swap it for another. Empty seats are taken by robots who redraw their ring every few loops until a person sits down. Drag your own seat badge onto a robot's and it takes your ring as a motif and improvises on it in its own instrument: echo, a variation or two, then a call-and-response, round again.
 
-It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, the key and the chords (one a bar, typed as numerals: `i III iv v`), which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. The panel isn't a developer backstage; it's part of the instrument.
+It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, the key and the chords (one a bar, typed as numerals: `i III iv v`), which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. Controls aren't a developer backstage; they're part of the instrument.
 
 And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fourteen so far:
 
 - **bass, keys, bell**: draw a line, height is pitch
 - **drums**: paint kick, snare and hat in three bands
 - **contour, grid, rings, sweep, drift, scribble, strum, swarm, orbits, embers**: ten stranger ones, described in [lab/README.md](lab/README.md)
+
+## Words
+
+- **seat**: your place at the machine, and who sits there (you, a friend, a robot). Code says seat too.
+- **ring**: what's drawn on the dial for a seat. Only a picture.
+- **instrument**: what you play, a gesture plus its sound. The thing you pick from the glyphs.
+- **voice**: the sound alone. Bass, keys and bell are one stepline instrument with three voices.
+- **erase** rubs out under the pen; **wipe** clears your whole ring.
+- **loud** is one note's level; **level** is an instrument's volume. **range** is pitch spread, **decay** is tail length.
+- **controls**: the `d` panel.
 
 ## Play
 
@@ -24,7 +34,7 @@ On its own the page plays across tabs in one browser. With a relay it plays acro
 
 `/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "start your own" makes one). `?name=you` sets your name, `?ws=off` keeps you local.
 
-Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`/`⌘`-`Z` undo (`Shift` to redo), `d` the controls panel. On a phone, tap with two fingers to undo, three to redo.
+Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`/`⌘`-`Z` undo (`Shift` to redo), `d` controls. On a phone, tap with two fingers to undo, three to redo.
 
 ## Deploy
 
@@ -36,8 +46,8 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`
 
     index.html              the page
     src/main.js             wiring: transport, engine, view, seats, robots, panel
-    src/engine.js           audio graph, lanes, lookahead scheduler on the shared clock
-    src/view.js             the dial (lanes wrapped round rings) and a flat strips view
+    src/engine.js           audio graph, seats, lookahead scheduler on the shared clock
+    src/view.js             the dial (seats wrapped round rings) and a flat strips view
     src/heart.js            the centrepiece: a Möbius band of Gaussian splats, driven by the clock and the music
     src/backdrop.js         the landscape and sky squiggles, painted once per resize in the heart's dithered, stroked hand
     src/picker.js           the glyph sheet for choosing your instrument
@@ -65,4 +75,4 @@ That writes a small working instrument, registers it, and the link seats you wit
 
 ### Swap the transport
 
-`src/transport/local.js` and `sync/sync.js` share one API: `on('welcome'|'peers'|'apply'|'cursor'|'loop')`, `edit(lane, data)` (returns when it lands, on the next bar), `laneAt`, `cursor`, `setLoop` (next loop boundary), `setMe`, `peers`, `debug()`, and a `clock` in shared milliseconds. Lane data is `{instrument, state, params}`; a seat is `peer.instrument === lane id`.
+`src/transport/local.js` and `sync/sync.js` share one API: `on('welcome'|'peers'|'apply'|'cursor'|'loop')`, `edit(seat, data)` (returns when it lands, on the next bar), `seatAt`, `cursor`, `setLoop` (next loop boundary), `setMe`, `peers`, `debug()`, and a `clock` in shared milliseconds. Seat data is `{instrument, state, params}`; a seat is `peer.instrument === seat id`.
