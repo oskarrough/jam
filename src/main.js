@@ -118,7 +118,7 @@ view = createView(document.getElementById('c'), engine, {
 		transport.cursor(e.x, e.y, e.type !== 'up', L.id)
 	},
 })
-const heart = createHeart({ engine, geom: () => view.center() })
+const heart = createHeart({ engine, geom: () => { const c = view.center(); if (c) c.moving = view.moving; return c } })
 bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 if (replay) bots.opts.on = false
 

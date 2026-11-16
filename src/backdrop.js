@@ -6,7 +6,8 @@
 // Everything here runs once per resize or ground change, on a small raster (one cell per `px` CSS pixels)
 // that is scaled up unsmoothed. Nothing here runs per frame; the view just blits the result.
 //
-//   paintLandscape(canvas, { W, H, DPR, hy, G })     fill canvas (W*DPR x H*DPR) for ground G, horizon at hy
+//   paintLandscape(canvas, { W, H, DPR, hy, G, dial }) fill canvas (W*DPR x H*DPR) for ground G, horizon at hy;
+//                                                      dial {x, y, r} is kept free of strokes
 //   makeWisps(G)                                      -> [[frames...], ...] small squiggle sprites that drift in the sky
 
 const TAU = Math.PI * 2
@@ -73,9 +74,17 @@ function raster(w, h) {
 	return { d, w, h, stroke, toCanvas }
 }
 
-export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2 }) {
+export function paintLandscape(cv, { W, H, DPR, hy, G, px = 2, dial = null }) {
 	const w = Math.ceil(W / px), h = Math.ceil(H / px), hz = hy / px
 	const r = raster(w, h), d = r.d, R = rng(7)
+	// the dial is a translucent lens: under it the land keeps its tones but drops its strokes, so notes read
+	if (dial) {
+		const raw = r.stroke, dx = dial.x / px, dy = dial.y / px, dr = dial.r / px
+		r.stroke = (cx, cy, ang, sl, ss, c, alpha, add, levels) => {
+			const q = clamp((Math.hypot(cx - dx, cy - dy) - dr * 0.98) / (dr * 0.14))
+			if (q > 0) raw(cx, cy, ang, sl, ss, c, alpha * q * q, add, levels)
+		}
+	}
 	const k = Math.max(0.35, Math.min(2, (w * h) / 256000)) // stroke counts follow the area
 	const sky = G.sky.map(col), sun = col(G.sun), far = col(G.far), near = col(G.near), trees = col(G.trees)
 	const field = col(G.field), furrow = col(G.furrow), grass = col(G.grass), grassInk = col(G.grassInk), shadow = col(G.shadow), line = col(G.line)

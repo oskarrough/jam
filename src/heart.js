@@ -295,6 +295,15 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	const LX = -0.45, LY = 0.66, LZ = 0.6
 	let last = performance.now(), raf = 0, side = 0, placed = '', wellU = 1
 
+	// cheap follow: move and scale the elements with CSS only, keeping the backing store and last render
+	function follow(G) {
+		const size = Math.round(2 * G.r * opts.reach), wr = Math.max(8, Math.round(G.r * 0.9125 - 7))
+		canvas.style.width = canvas.style.height = size + 'px'
+		canvas.style.transform = `translate(${Math.round(G.x - size / 2)}px, ${Math.round(G.y - size / 2)}px)`
+		well.style.width = well.style.height = 2 * wr + 'px'
+		well.style.transform = `translate(${Math.round(G.x - wr)}px, ${Math.round(G.y - wr)}px)`
+		placed = ''
+	}
 	function place(G) {
 		const size = Math.round(2 * G.r * opts.reach), px = Math.max(48, Math.round(size / Math.max(0.5, opts.pixel)))
 		const key = `${Math.round(G.x)},${Math.round(G.y)},${size},${px}`
@@ -330,6 +339,8 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		const G = opts.on ? geom() : null
 		if (!G || !(G.r > 4)) { canvas.style.display = well.style.display = 'none'; last = now; return }
 		canvas.style.display = ''
+		// mid-zoom (geom.moving): no GL work and no reallocation, just let CSS carry the last frame along
+		if (G.moving) { follow(G); last = now; return }
 		well.style.display = opts.chamber ? '' : 'none'
 		place(G)
 		if (opts.chamber) { paintWell(); setGround(opts.well) } else if (G.ground) setGround(G.ground)

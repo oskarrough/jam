@@ -245,7 +245,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		if (!opts.landscape) { c.fillStyle = G.paper; c.fillRect(0, 0, W, H); paintGrain(c); return }
 
 		// the landscape itself is painted in the heart's hand: see backdrop.js
-		paintLandscape(cv, { W, H, DPR, hy, G })
+		paintLandscape(cv, { W, H, DPR, hy, G, dial: { x: CX0, y: CY0, r: S0 * 0.475 } })
 	}
 
 	function paintGrain(c) {
