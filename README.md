@@ -2,7 +2,7 @@
 
 A loop machine for a few friends and some strange instruments.
 
-Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Tap your own seat to zoom into your instrument, and its glyph token to swap it for another. Empty seats are taken by robots who redraw their part every few loops until a person sits down.
+Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Tap your own seat to zoom into your instrument, and its glyph token to swap it for another. Empty seats are taken by robots who redraw their part every few loops until a person sits down. Drag your own seat badge onto a robot's and it takes your part as a motif and improvises on it in its own instrument: echo, a variation or two, then a call-and-response, round again.
 
 It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. The panel isn't a developer backstage; it's part of the instrument.
 
@@ -42,7 +42,8 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `d` th
     src/backdrop.js         the landscape and sky squiggles, painted once per resize in the heart's dithered, stroked hand
     src/picker.js           the glyph sheet for choosing your instrument
     src/jelly.js            the springy presses on buttons and badges
-    src/bots.js             the robots
+    src/bots.js             the robots, and riffing on a motif you hand them
+    src/phrase.js           parts as neutral phrases, and the musical moves robots vary them with
     src/debug.js            the panel (lil-gui, vendored)
     src/transport/local.js  tabs in one browser, same API as sync/sync.js, with fake latency, jitter and skew
     src/instruments/        one file per instrument, the registry, and README.md with the contract
