@@ -54,7 +54,7 @@ export function createLocalClock() {
 	return self
 }
 
-export function createLocalTransport({ room = 'campfire', name = 'anon', instrument = null, color = null } = {}) {
+export function createLocalTransport({ room = 'open', name = 'anon', instrument = null, color = null } = {}) {
 	const clock = createLocalClock()
 	const id = Math.random().toString(36).slice(2, 9)
 	const listeners = {}

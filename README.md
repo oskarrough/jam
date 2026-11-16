@@ -1,39 +1,62 @@
 # roughjam
 
-A multiplayer loop jam in the browser. Friends gather round one strange machine, each takes a seat (one ring, one instrument), and draws on their ring to play over one shared loop.
+A loop machine for a few friends and some strange instruments.
 
-    python3 -m http.server 8000     # or any static server; there is no build
-    open http://localhost:8000      # open a second tab to take a second seat
+Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Empty seats are taken by robots who redraw their part every few loops until a person sits down.
 
-No server needed for local play: tabs in one browser talk over BroadcastChannel. `?ws=ws://host:8787` switches to the network layer in `sync/` (`cd sync && npm i && npm start`). `?room=name` and `?name=you` also work. Press `d` for the debug panel, `space` for sound, `1`–`4` to change seat, `Shift`-drag to erase.
+It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. The panel isn't a developer backstage; it's part of the instrument.
 
-## Layout
+And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fourteen so far:
 
-    index.html              chrome
-    src/main.js             wiring: transport, engine, view, seats, bots, debug
-    src/transport/local.js  BroadcastChannel transport, same API as sync/sync.js, with fake latency, jitter, skew
-    src/engine.js           audio graph, lanes, lookahead scheduler on the shared clock
-    src/view.js             dial view (lanes wrapped round rings, dusk backdrop) and strips view, pointer mapping
-    src/heart.js            the centrepiece: a Möbius band of Gaussian splats on its own WebGL2 canvas, driven by the clock and lane audio
-    src/bots.js             bots that sit in empty seats and redraw their part every few loops
-    src/debug.js            lil-gui panel: loop, lanes and instrument params, network, clock
-    src/instruments/        instrument modules and the registry
+- **bass, keys, bell**: draw a line, height is pitch
+- **drums**: paint kick, snare and hat in three bands
+- **contour, grid, rings, sweep, drift, scribble, strum, swarm, orbits, embers**: ten stranger ones, described in [lab/README.md](lab/README.md)
 
-## Interfaces
+## Play
 
-**Transport** (swap `local.js` for `sync/sync.js`): `on('welcome'|'peers'|'apply'|'cursor'|'loop', fn)`, `edit(lane, data) -> ms it lands at`, `laneAt(lane, ms)`, `cursor(x, y, down, lane)`, `setLoop({bpm, bars, beatsPerBar})` (next loop boundary), `setMe({name, instrument, color})`, `peers`, `id`, `debug()`. `clock`: `now()` shared ms, `toAudio(ctx, ms)`, `loopAt()`, `pos() -> {bar, beat, loopPhase}`, `nextBar()`, `nextLoop()`. A seat is `peer.instrument === lane id`.
+    python3 -m http.server          # any static server; there is no build
+    open http://localhost:8000      # a second tab takes a second seat
 
-**Lane data** on the wire: `{instrument, state, params}`. Your own edits play immediately for you; everyone else gets them on the next bar (debug: network → remote edits land).
+On its own the page plays across tabs in one browser. With a relay it plays across machines:
 
-**Instrument** (`src/instruments/index.js` has the full contract):
+    cd sync && npm i && npm start   # the page plus a WebSocket relay on :8787
+    open http://localhost:8787      # finds the relay by itself
 
-    export default { id, name, params, create(ctx), generate?(steps), sample?(steps) }
-    ctx      = { audio, out, clock, params, color }
-    clock    = { bpm, steps, stepDur, startTime, now(), pos(), playing }   // seconds on the AudioContext timeline
-    instance = { state, setState(s), pointer(e), step(i, time, dur), frame(g, w, h, clock), clear?(), dispose() }
+`/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "start your own" makes one). `?name=you` sets your name, `?ws=off` keeps you local.
 
-`pointer` gets `{type, x, y, id, alt, button}` with x, y in 0..1 (y = 0 at the top / outer edge). `frame` draws into a cleared w×h lane; the fire view wraps it round a ring with x = loop phase clockwise from 12 o'clock. Loop length is 16 × bars × beatsPerBar / 4 steps, so read `clock.steps`.
+Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `d` the panel.
 
 ## Deploy
 
-Static files, no build: the whole repo root is the site. `cloudflare.config.ts` deploys the site plus the `sync/` relay (a Durable Object per room) to Cloudflare: `cf deploy`, then open `https://jam.0sk.ar/?ws=wss://jam.0sk.ar`. See `sync/README.md`.
+    cf deploy
+
+`cloudflare.config.ts` ships the repo root as static assets plus the relay as a Worker with a Durable Object per jam, on jam.0sk.ar. The deployed page connects to the relay on its own. Details in [sync/README.md](sync/README.md).
+
+## Inside
+
+    index.html              the page
+    src/main.js             wiring: transport, engine, view, seats, robots, panel
+    src/engine.js           audio graph, lanes, lookahead scheduler on the shared clock
+    src/view.js             the dial (lanes wrapped round rings) and a flat strips view
+    src/heart.js            the centrepiece: a Möbius band of Gaussian splats, driven by the clock and the music
+    src/bots.js             the robots
+    src/debug.js            the panel (lil-gui, vendored)
+    src/transport/local.js  tabs in one browser, same API as sync/sync.js, with fake latency, jitter and skew
+    src/instruments/        instruments and the registry
+    sync/                   the network: shared clock, quantized edits, relay for Node and Cloudflare
+    lab/                    the ten lab instruments one at a time, each with its own panel
+
+### Write an instrument
+
+An instrument is one ES module. Register it in `src/instruments/index.js` (the full contract is there) and it shows up in every ring's menu.
+
+    export default { id, name, params, create(ctx), generate?(steps), sample?(steps) }
+    ctx      = { audio, out, clock, params, color }
+    clock    = { bpm, steps, stepDur, startTime, now(), pos(), playing }   // AudioContext seconds
+    instance = { state, setState(s), pointer(e), step(i, time, dur), frame(g, w, h, clock), clear?(), dispose() }
+
+`frame` draws a plain rectangle; the dial wraps it round a ring, with x as loop phase clockwise from twelve and y = 0 on the outside. `pointer` gets `{type, x, y, alt}` in the same 0..1 space. `step` is called slightly ahead of time for each 16th. `state` is plain JSON and is the only thing that goes over the network. `params` become knobs in the panel. `generate` lets robots play it.
+
+### Swap the transport
+
+`src/transport/local.js` and `sync/sync.js` share one API: `on('welcome'|'peers'|'apply'|'cursor'|'loop')`, `edit(lane, data)` (returns when it lands, on the next bar), `laneAt`, `cursor`, `setLoop` (next loop boundary), `setMe`, `peers`, `debug()`, and a `clock` in shared milliseconds. Lane data is `{instrument, state, params}`; a seat is `peer.instrument === lane id`.

@@ -57,7 +57,6 @@ await new Promise((r) => setTimeout(r, 800))
 check((await c.evaluate(() => JSON.stringify(jam.laneAt('bass')))) === la, 'late joiner gets current lanes')
 
 // The real jam page (repo root) on the network transport.
-const wsUrl = BASE.replace(/^http/, 'ws')
 const jamPage = async (name, path) => {
 	const p = await (await browser.newContext()).newPage()
 	p.on('pageerror', (e) => console.error(name, e))

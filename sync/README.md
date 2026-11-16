@@ -1,6 +1,6 @@
 # roughjam sync
 
-Multiplayer layer for the campfire: presence, shared loop clock, per-lane state, quantized edits.
+Multiplayer layer for the jam: presence, shared loop clock, per-lane state, quantized edits.
 
     cd sync && npm i && npm start        # serves the repo root + relay on :8787
     open 'http://localhost:8787/?ws=ws://localhost:8787'   # the jam, networked; open twice

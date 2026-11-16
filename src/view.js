@@ -408,18 +408,6 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		}
 	}
 
-	function slip(text, x, y, px, align = 'center') {
-		g.font = serif(px)
-		const w = g.measureText(text).width + px * 0.9, h = px * 1.45
-		const x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x
-		g.fillStyle = PAPER
-		g.fillRect(x0, y - h / 2, w, h)
-		g.strokeStyle = ink(0.7); g.lineWidth = 0.8
-		g.strokeRect(x0 + 0.5, y - h / 2 + 0.5, w - 1, h - 1)
-		g.fillStyle = INK
-		g.textAlign = 'center'; g.textBaseline = 'middle'
-		g.fillText(text, x0 + w / 2, y + 1)
-	}
 
 	function drawStrips(phase) {
 		lanes.forEach((L, i) => {
@@ -500,16 +488,6 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		g.restore()
 	}
 
-	// one flame tongue: round foot, curling tip
-	function tongue(bx, by, w, h, lean) {
-		const tx = bx + lean, ty = by - h
-		g.beginPath()
-		g.moveTo(bx - w, by)
-		g.bezierCurveTo(bx - w * 1.25, by - h * 0.45, tx - w * 0.9 + lean * 0.3, by - h * 0.7, tx, ty)
-		g.bezierCurveTo(tx + w * 0.15 - lean * 0.4, by - h * 0.62, bx + w * 1.3, by - h * 0.42, bx + w, by)
-		g.quadraticCurveTo(bx, by + w * 0.9, bx - w, by)
-		g.closePath()
-	}
 
 	function drawDial(t, dt, phase, loop) {
 		const outer = ringIn(lanes.length - 1) + ringT() + 8, inner = ringIn(0) - 6, M = medallion()

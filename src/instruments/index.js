@@ -3,7 +3,7 @@
 // Module:   export default { id, name, params, create(ctx), generate?(steps), sample?(steps) }
 //   params:   { key: default } or { key: { value, min, max, step } | { value, options: [...] } }
 //   generate: optional, returns a fresh state; bots use it to redraw their part
-//   sample:   optional, returns the state a lane starts with on a fresh campfire
+//   sample:   optional, returns the state a lane starts with in a fresh jam
 // ctx:      { audio: AudioContext, out: AudioNode, clock, params, color }
 //   clock:    { bpm, steps, stepDur (s), startTime (audio s), now() (audio s), pos() (fractional step), playing }
 //   params:   live values, same keys as module.params; the debug panel mutates this object in place
@@ -11,7 +11,7 @@
 //   state:    JSON-serializable, the only thing that goes over the network
 //   pointer:  { type: 'down'|'move'|'up', x, y (0..1, y=0 is the top/outer edge), id, alt, button }
 //   step:     called ahead of time for each 16th; time is AudioContext seconds
-//   frame:    draw into a cleared w×h lane (CSS px). The fire view wraps the lane round a ring,
+//   frame:    draw into a cleared w×h lane (CSS px). The dial wraps the lane round a ring,
 //             x = loop phase clockwise from 12 o'clock, y = 0 on the outside.
 
 import { bass, keys, bell, drums } from './builtins.js'

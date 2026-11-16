@@ -1,6 +1,6 @@
 // 02 Grid: the plain step sequencer, as a baseline to compare the others against.
 import { kit } from './kit.js'
-import { withPointer, view, absOf, theme, clamp, flashes } from './util.js'
+import { withPointer, view, theme, clamp, flashes } from './util.js'
 
 const COLS = 16
 const ROWS = 8

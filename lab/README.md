@@ -1,12 +1,12 @@
 # instrument lab
 
-Ten ways to play one lane of the campfire. The modules live in `src/instruments/lab/` and are
+Ten ways to play one ring of the jam. The modules live in `src/instruments/lab/` and are
 registered with the jam, so any seat can pick them. This page plays them one at a time with
 their own debug panel: serve the repo root (`python3 -m http.server`), open `/lab/`, click,
 and press 1–0 to switch.
 No build step, no network: lil-gui is vendored.
 
-All ten share one clock and one key. Each draws into a plain rectangle, so the fire view
+All ten share one clock and one key. Each draws into a plain rectangle, so the dial
 can wrap it into a ring. Everything you draw is the instrument's `state`, plain JSON,
 mostly well under 1 KB.
 
@@ -50,7 +50,7 @@ kick, snare, hat, noise), the key (`degree(n, oct)`), and a four-chord progressi
 that advances once per loop (`chord(absStep, steps)`).
 
 All ten implement `generate(steps, params)` and `sample(steps)`, so bots can redraw them.
-Lanes wider than 2.5× their height (the fire view's rings, the strips view) get an unrolled
+Lanes wider than 2.5× their height (the dial's rings, the strips view) get an unrolled
 layout where the instrument needs one: rings become three rows of pulses, orbits become
 crossing dots on orbit bands.
 

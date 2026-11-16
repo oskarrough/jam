@@ -1,4 +1,4 @@
-// The four instruments the campfire starts with. Synthesis only, no samples.
+// The four instruments a jam starts with. Synthesis only, no samples.
 
 import { stepline } from './stepline.js'
 import { mtof, env, osc, noiseSrc, fit, rgba, rnd, val } from './util.js'

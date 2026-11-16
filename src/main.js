@@ -15,7 +15,7 @@ const START = ['bass', 'keys', 'bell', 'drums']
 const q = new URLSearchParams(location.search)
 // Jam: everyone lands in the one open jam at /. Your own lives at /j/<name> (root paths stay reserved); ?room= also works.
 const pathJam = decodeURIComponent(location.pathname.match(/\/j\/([\w-]{1,48})\/?$/)?.[1] || '')
-const room = (q.get('room') || pathJam || 'campfire').toLowerCase().slice(0, 48)
+const room = (q.get('room') || pathJam || 'open').toLowerCase().slice(0, 48)
 const name = q.get('name') || NAMES[Math.floor(Math.random() * NAMES.length)]
 
 // Transport is the swappable part. Network when there's a relay: ?ws=url, the deployed site (jam.0sk.ar),
@@ -105,7 +105,7 @@ const $ = (id) => document.getElementById(id)
 const JAM_A = ['dusk', 'amber', 'moss', 'salt', 'velvet', 'copper', 'hollow', 'paper', 'lantern', 'violet']
 const JAM_B = ['moth', 'heron', 'fern', 'kettle', 'orchard', 'tide', 'comet', 'wren', 'ember', 'quarry']
 const pick = (a) => a[Math.floor(Math.random() * a.length)]
-const isOpenJam = room === 'campfire'
+const isOpenJam = room === 'open'
 const jamline = $('jamline')
 const word = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; return b }
 if (transport.kind !== 'ws') jamline.textContent = 'just this browser'
@@ -186,7 +186,7 @@ setInterval(() => {
 	$('bpm').classList.toggle('pending', !!pending)
 }, 200)
 
-// debug panel loads its library from a CDN; the jam must work without it
+// the panel loads lazily; the jam plays without it
 let debug = { toggle() {} }
 import('./debug.js')
 	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart })))

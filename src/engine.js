@@ -10,7 +10,7 @@ export { LANE_COLORS }
 export function createEngine(transport, { laneIds, instruments }) {
 	const { clock } = transport
 	const audio = new (window.AudioContext || window.webkitAudioContext)()
-	const cfg = { lookaheadMs: 120, tickMs: 25 }
+	const cfg = { lookaheadMs: 200, tickMs: 25 } // generous lookahead: the dial and heart share the main thread
 	const stats = { scheduled: 0, late: 0, lastLateMs: 0 }
 	let soundOn = false
 	const listeners = {}
@@ -125,8 +125,10 @@ export function createEngine(transport, { laneIds, instruments }) {
 			const abs = Math.round((nextT - l.origin) / sm)
 			const i = ((abs % n) + n) % n
 			const at = clock.toAudio(audio, nextT)
-			if (at < audio.currentTime) { stats.late++; stats.lastLateMs = (audio.currentTime - at) * 1000 }
-			else for (const L of lanes) { try { L.instance.step(i, at, sm / 1000) } catch (e) { console.error(L.module.id, e) } }
+			const late = (audio.currentTime - at) * 1000
+			if (late > 0) { stats.late++; stats.lastLateMs = late }
+			// a few ms late still sounds; much later would land off the beat, so drop it
+			if (late <= 30) for (const L of lanes) { try { L.instance.step(i, Math.max(at, audio.currentTime), sm / 1000) } catch (e) { console.error(L.module.id, e) } }
 			stats.scheduled++
 			// a loop change re-anchors the grid at its own origin
 			const next = nextT + sm, ln = clock.loopAt(next)

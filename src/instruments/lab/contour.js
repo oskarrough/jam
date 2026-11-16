@@ -1,7 +1,7 @@
 // 01 Contour: draw a melody line across the loop. x is time, y is pitch.
 // One gliding monophonic voice follows the line; gaps are rests.
 import { kit } from './kit.js'
-import { withPointer, view, absOf, theme, SLOTS, clamp, subSlots } from './util.js'
+import { withPointer, view, theme, SLOTS, clamp, subSlots } from './util.js'
 
 function gen() {
   const ys = []

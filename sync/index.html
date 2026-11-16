@@ -52,7 +52,7 @@ const color = COLORS[Math.random() * COLORS.length | 0]
 let mine = q.get('lane') || LANES[Math.random() * LANES.length | 0]
 
 const url = q.get('ws') || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
-const t = createTransport({ url, room: q.get('room') || 'campfire', name, instrument: mine, color })
+const t = createTransport({ url, room: q.get('room') || 'open', name, instrument: mine, color })
 window.jam = t // poke at it from devtools
 
 // --- UI

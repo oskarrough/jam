@@ -65,7 +65,7 @@ export class JamRoom extends DurableObject {
 export default {
 	async fetch(req, env) {
 		if (req.headers.get('upgrade') === 'websocket') {
-			const room = (new URL(req.url).searchParams.get('room') || 'campfire').slice(0, 64)
+			const room = (new URL(req.url).searchParams.get('room') || 'open').slice(0, 64)
 			return env.ROOMS.get(env.ROOMS.idFromName(room)).fetch(req)
 		}
 		// The page probes this to find out it can go multiplayer. Reaches the Worker because no asset matches.

@@ -98,5 +98,5 @@ export function withPointer(size, fn) {
   }
 }
 
-// lanes much wider than tall (the fire view's rings, strips) get an unrolled layout
+// lanes much wider than tall (the dial's rings, strips) get an unrolled layout
 export const isStrip = (w, h) => w > h * 2.5

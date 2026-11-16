@@ -1,11 +1,11 @@
-// Live debug panel (lil-gui). Press d to toggle. Everything here is for poking at the jam while it runs.
+// The machine's panel (lil-gui). Press d to open or fold it. Every knob changes the jam live, for everyone in it.
 
-import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.esm.min.js'
+import GUI from './vendor/lil-gui.esm.min.js'
 
 export function createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart }) {
 	const { clock } = transport
-	const gui = new GUI({ title: 'debug  (d)', width: 280 })
-	if (innerWidth < 640) gui.close()
+	const gui = new GUI({ title: 'controls  (d)', width: 280 })
+	gui.close() // folded by default so the dial is whole; d opens it
 
 	// ── me
 	const meF = gui.addFolder('me')
@@ -106,5 +106,5 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 		cd['late steps'] = engine.stats.late
 	}, 100)
 
-	return { gui, toggle: () => gui.show(gui._hidden) }
+	return { gui, toggle: () => (gui._closed ? gui.open() : gui.close()) }
 }

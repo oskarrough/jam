@@ -2,7 +2,7 @@
 // Strums are recorded where they happened in the loop (time runs top to bottom)
 // and replay on whatever chord the loop is on, so a rhythm turns into a progression.
 import { kit, mtof } from './kit.js'
-import { withPointer, view, absNow, absOf, theme, subSlots, SLOTS, clamp, TAU } from './util.js'
+import { withPointer, view, absNow, absOf, theme, subSlots, SLOTS, clamp } from './util.js'
 
 const STRINGS = 6
 const MAX_HITS = 96

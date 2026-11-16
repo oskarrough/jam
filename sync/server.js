@@ -63,7 +63,7 @@ wss.on('connection', (ws, req) => {
 	ws.on('message', (raw) => later(() => {
 		let m
 		try { m = JSON.parse(raw) } catch { return }
-		if (!r) join(String(m.room || 'campfire').slice(0, 64)) // legacy: room named in hello
+		if (!r) join(String(m.room || 'open').slice(0, 64)) // legacy: room named in hello
 		r.room.message(id, m, r.info.get(id))
 	}))
 	ws.on('close', () => {

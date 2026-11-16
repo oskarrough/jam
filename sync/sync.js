@@ -1,6 +1,6 @@
 // roughjam sync client. One module, no deps.
 //
-//   const t = createTransport({ url: 'ws://host:8787', room: 'campfire', name: 'oskar', instrument: 'bass' })
+//   const t = createTransport({ url: 'ws://host:8787', room: 'open', name: 'oskar', instrument: 'bass' })
 //   t.on('apply', ({ lane, data, at }) => ...)   // fires LOOKAHEAD ms before `at` (server ms)
 //   const at = t.edit('bass', state)             // quantized to next bar, returns server ms
 //   t.laneAt('bass', serverMs)                   // what an audio scheduler should play at that time
@@ -103,7 +103,7 @@ export function createClock() {
 	return { addSample, pending, now, toLocal, fromLocal, toAudio, setLoop, loopAt, pos, nextBar, nextLoop, stats, instrumentClock, beatMs, barMs, loopMs }
 }
 
-export function createTransport({ url, room = 'campfire', name = 'anon', instrument = null, color = null } = {}) {
+export function createTransport({ url, room = 'open', name = 'anon', instrument = null, color = null } = {}) {
 	const clock = createClock()
 	const listeners = {}
 	const lanes = {} // lane -> [{at, data, rev, from}] (short history so laneAt() can answer for near-future times)

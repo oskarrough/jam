@@ -1,4 +1,4 @@
-import GUI from './vendor/lil-gui.esm.min.js'
+import GUI from '../src/vendor/lil-gui.esm.min.js'
 import { createEngine, createClock, SCALES, ROOTS } from './engine.js'
 import { instruments } from '../src/instruments/lab/index.js'
 import { THEME } from '../src/instruments/lab/util.js'
@@ -239,7 +239,6 @@ function dumpState(now) {
 // drawing
 
 const stage = $('#stage')
-const sg = stage.getContext('2d')
 
 function fit(c) {
   const dpr = Math.min(2, window.devicePixelRatio || 1)
