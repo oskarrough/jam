@@ -60,12 +60,20 @@ export const adapters = {
     },
   },
 
+  // pattern of up to 16 steps, each [pitch 0..14, length, loud, chance]; read over one loop, repeats and all
   grid: {
-    to: (st, n) => ({ n, drums: false, notes: st.cells.flatMap((on, i) => (on ? [{ s: ((i % 16) * n) / 16, p: Math.floor(i / 16), v: 0.8 }] : [])) }),
+    to(st, n) {
+      const notes = []
+      for (let s = 0; s < n; s++) { const x = st.s[s % st.len]; if (x) notes.push({ s, p: x[0], v: x[2] / 9 }) }
+      return { n, drums: false, notes }
+    },
     from(ph) {
-      const cells = Array(16 * 8).fill(0)
-      for (const x of fit(melody(ph), 0, 7)) cells[x.p * 16 + (Math.round((x.s / ph.n) * 16) % 16)] = 1
-      return { cells }
+      const s = Array(16).fill(0)
+      for (const x of fit(melody(ph), 0, 14)) {
+        const k = Math.round((x.s / ph.n) * 16) % 16
+        if (!s[k]) s[k] = [x.p, 3, clamp(Math.round((x.v ?? 0.8) * 9), 2, 9), 9]
+      }
+      return { len: 16, s }
     },
   },
 

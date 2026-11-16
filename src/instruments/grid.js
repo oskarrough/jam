@@ -1,98 +1,286 @@
-// 02 Grid: the plain step sequencer, as a baseline to compare the others against.
+// 02 Grid: a pocket step sequencer. Sixteen steps; tap one to switch it on or off,
+// press and drag to draw a value into the steps you cross. Pick what you draw with the
+// words along the bottom: pitch, length, loud, chance. Drag the bracket to shorten the
+// pattern; a pattern shorter than the loop drifts against it (polymeter).
+//
+// state: { len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 0..9, loud 0..9, chance 0..9]
+// Chance rolls are seeded by the absolute step, so every peer hears the same notes.
 import { kit } from './lib/kit.js'
-import { withPointer, view, theme, clamp, flashes } from './lib/util.js'
+import { withPointer, absNow, absOf, clamp, flashes, tint, mtof, isStrip, TAU } from './lib/util.js'
+import { INK, SANS } from '../palette.js'
 
-const COLS = 16
-const ROWS = 8
+const N = 16
+const PMAX = 14
+const PARAMS = ['pitch', 'length', 'loud', 'chance']
+const MAXOF = { pitch: PMAX, length: 9, loud: 9, chance: 9 }
+const IDX = { pitch: 0, length: 1, loud: 2, chance: 3 }
+const fresh = (p = 7) => [p, 4, 7, 9]
+
+// a stable 0..1 roll per absolute step, the same on every machine
+const roll = (abs, k) => ((Math.imul((abs * 2654435761) ^ (k * 40503), 2246822519) >>> 0) % 10007) / 10007
 
 function gen() {
-  const cells = Array(COLS * ROWS).fill(0)
-  for (let c = 0; c < COLS; c++) if (Math.random() < 0.55) cells[Math.floor(Math.random() * ROWS) * COLS + c] = 1
-  return { cells }
+  const len = [16, 16, 16, 12, 8, 6][Math.floor(Math.random() * 6)]
+  const s = Array(N).fill(0)
+  let p = 5 + Math.floor(Math.random() * 5)
+  for (let k = 0; k < len; k++) {
+    const strong = k % 4 === 0
+    if (Math.random() > (strong ? 0.85 : 0.4)) continue
+    p = clamp(p + Math.round((Math.random() - 0.5) * 5), 0, PMAX)
+    s[k] = [p, strong ? 5 : 2 + Math.floor(Math.random() * 3), strong ? 8 : 5 + Math.floor(Math.random() * 3), strong || Math.random() < 0.6 ? 9 : 4 + Math.floor(Math.random() * 4)]
+  }
+  return { len, s }
+}
+
+// a slightly wobbly closed loop, so steps look drawn rather than ruled
+function blob(g, x, y, rx, ry, seed) {
+  g.beginPath()
+  for (let k = 0; k <= 18; k++) {
+    const a = (k / 18) * TAU
+    const n = 1 + 0.06 * Math.sin(a * 3 + seed * 1.7) + 0.04 * Math.sin(a * 5 + seed)
+    const px = x + Math.cos(a) * rx * n, py = y + Math.sin(a) * ry * n
+    k ? g.lineTo(px, py) : g.moveTo(px, py)
+  }
+  g.closePath()
 }
 
 export default {
   id: 'grid',
-  glyph: '<path class="f" d="M7 7h4v4H7zM19 13h4v4h-4zM13 21h4v4h-4zM21 21h4v4h-4z"/><path d="M5 16h22M16 5v22" stroke-dasharray="1 3"/>',
+  glyph: '<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
   name: 'Grid',
-  how: 'Click or drag to paint cells; the first cell decides paint or erase.',
+  how: 'Tap a step to switch it. Drag to draw pitch, length, loud or chance (pick one along the bottom). Drag the bracket to shorten the pattern.',
   params: {
-    octave: { value: 1, min: -1, max: 2, step: 1 },
-    decay: { value: 0.9, min: 0.1, max: 3, step: 0.05 },
-    ratio: { value: 3.5, min: 1, max: 8, step: 0.01 },
-    index: { value: 1.6, min: 0, max: 6, step: 0.05 },
+    wave: { value: 'square', options: ['square', 'triangle', 'sawtooth', 'bell'] },
+    octave: { value: 0, min: -2, max: 1, step: 1 },
+    tone: { value: 0.55, min: 0, max: 1, step: 0.01 },
+    swing: { value: 0, min: 0, max: 0.5, step: 0.01 },
   },
-  generate: (steps, params) => gen(steps, params),
-  sample: (steps) => gen(steps),
+  generate: () => gen(),
+  sample: () => gen(),
   create(ctx) {
     const { params, out, audio, clock } = ctx
     const engine = kit(audio)
-    const { voices } = engine
-    const th = theme(ctx)
-    const size = [1, 1] // lane size from the last frame, for pointer maths
-    const state = { cells: Array(COLS * ROWS).fill(0) }
+    const size = [1, 1]
+    let shape = 'ring'
+    const state = { len: N, s: Array(N).fill(0) }
     const fx = flashes()
-    let mode = 1
+    const ui = { param: 'pitch' } // what a drag draws; local to this player
+    let press = null
 
-    const cellAt = (x, y) => {
-      const c = clamp(Math.floor(x * COLS), 0, COLS - 1)
-      const r = clamp(Math.floor((1 - y) * ROWS), 0, ROWS - 1)
-      return r * COLS + c
+    // ---------- sound
+    function voice(st, time, dur) {
+      const [p, d, v] = st
+      const f = mtof(engine.degree(p, params.octave + 1))
+      const len = 0.04 + (d / 9) ** 1.6 * 1.4
+      const gain = 0.03 + (v / 9) * 0.16
+      if (params.wave === 'bell') return engine.voices.bell(out, { freq: f, time, gain: gain * 0.9, d: len + 0.2, ratio: 3.5, index: 1.4 })
+      const o = audio.createOscillator(), lp = audio.createBiquadFilter(), g = audio.createGain()
+      o.type = params.wave
+      o.frequency.value = f
+      lp.type = 'lowpass'
+      lp.Q.value = 3
+      const top = f * (1.5 + params.tone * 14)
+      lp.frequency.setValueAtTime(top, time)
+      lp.frequency.exponentialRampToValueAtTime(Math.max(80, f * 0.9), time + len * 0.9)
+      g.gain.setValueAtTime(0.0001, time)
+      g.gain.exponentialRampToValueAtTime(gain, time + 0.004)
+      g.gain.exponentialRampToValueAtTime(0.0001, time + len)
+      o.connect(lp).connect(g).connect(out)
+      o.start(time)
+      o.stop(time + len + 0.05)
+    }
+
+    // ---------- editing
+    const loopStart = () => Math.floor(absNow(clock) / clock.steps) * clock.steps
+    const ensure = (k) => (state.s[k] ||= fresh())
+    function paint(k, y, erase) {
+      if (erase) { state.s[k] = 0; return }
+      const st = ensure(k)
+      const max = MAXOF[ui.param]
+      st[IDX[ui.param]] = clamp(Math.round((1 - y) * max), ui.param === 'chance' ? 1 : 0, max)
+    }
+
+    // sheet layout: steps across the top 84%, the param words and the bracket below
+    const BAND = 0.84
+    const colOf = (x) => clamp(Math.floor(x * N), 0, N - 1)
+    const tokenAt = (x) => PARAMS[clamp(Math.floor(x * PARAMS.length), 0, PARAMS.length - 1)]
+
+    function sheetPointer(e) {
+      const yy = clamp(e.y / BAND, 0, 1)
+      if (e.type === 'down') {
+        // the bracket: within half a step of the pattern's end
+        if (Math.abs(e.x * N - state.len) < 0.6) { press = { kind: 'len' }; return }
+        if (e.y > BAND) { ui.param = tokenAt(e.x); press = null; return }
+        press = { kind: 'step', k: colOf(e.x), x0: e.px, y0: e.py, moved: false, last: colOf(e.x), erase: e.alt }
+      } else if (e.type === 'move' && press) {
+        if (press.kind === 'len') { state.len = clamp(Math.round(e.x * N), 1, N); return }
+        if (!press.moved && Math.hypot(e.px - press.x0, e.py - press.y0) < 6) return
+        if (!press.moved) { press.moved = true; paint(press.k, yy, press.erase) }
+        const k = colOf(e.x)
+        const a = Math.min(k, press.last), b = Math.max(k, press.last)
+        for (let j = a; j <= b; j++) paint(j, yy, press.erase)
+        press.last = k
+      } else if (e.type === 'up' && press) {
+        if (press.kind === 'step' && !press.moved) state.s[press.k] = press.erase ? 0 : state.s[press.k] ? 0 : fresh(ui.param === 'pitch' ? Math.round((1 - yy) * PMAX) : 7)
+        press = null
+      }
+    }
+
+    // ring: x is the loop, so find which pattern step sits there in this loop; drag draws pitch
+    function ringPointer(e) {
+      const kAt = (x) => (loopStart() + clamp(Math.floor(x * clock.steps), 0, clock.steps - 1)) % state.len
+      if (e.type === 'down') press = { k: kAt(e.x), x0: e.px, y0: e.py, moved: false, erase: e.alt }
+      else if (e.type === 'move' && press) {
+        if (!press.moved && Math.hypot(e.px - press.x0, e.py - press.y0) < 6) return
+        press.moved = true
+        const k = kAt(e.x)
+        if (press.erase) state.s[k] = 0
+        else ensure(k)[0] = clamp(Math.round((1 - e.y) * PMAX), 0, PMAX)
+      } else if (e.type === 'up' && press) {
+        if (!press.moved) state.s[press.k] = press.erase || state.s[press.k] ? 0 : fresh(Math.round((1 - e.y) * PMAX))
+        press = null
+      }
+    }
+
+    // ---------- drawing
+    function drawSheet(g, w, h, t) {
+      const cw = w / N, top = h * BAND
+      // marks follow the sheet's ground: palette INK_THEME.sheet.ink when the sheet goes dark, ink on paper otherwise
+      const ink = ctx.theme?.sheet?.ink || INK, col = ctx.color || '#c08419'
+      const k0 = Math.floor(t.abs) % state.len
+      g.lineCap = 'round'; g.lineJoin = 'round'
+      // the active param as a hand-drawn curve through the steps, so a drag traces it
+      if (ui.param !== 'pitch') {
+        g.strokeStyle = tint(ink, 0.35); g.lineWidth = 1.2
+        g.beginPath()
+        let pen = false
+        for (let k = 0; k < N; k++) {
+          const st = state.s[k]
+          if (!st) { pen = false; continue }
+          const y = (1 - st[IDX[ui.param]] / MAXOF[ui.param]) * top * 0.92 + top * 0.04
+          pen ? g.lineTo((k + 0.5) * cw, y) : g.moveTo((k + 0.5) * cw, y)
+          pen = true
+        }
+        g.stroke()
+      }
+      for (let k = 0; k < N; k++) {
+        const x = (k + 0.5) * cw, st = state.s[k], inPat = k < state.len
+        const now = t.playing && k === k0
+        // the step's slot: a dotted hairline, beats a touch stronger; the playing step glows in your colour
+        if (now) { g.fillStyle = tint(col, 0.16); blob(g, x, top / 2, cw * 0.46, top * 0.5, k); g.fill() }
+        g.strokeStyle = tint(ink, !inPat ? 0.08 : k % 4 === 0 ? 0.3 : 0.16)
+        g.lineWidth = 1
+        g.setLineDash([1, 4])
+        g.beginPath(); g.moveTo(x, top * 0.04); g.lineTo(x, top * 0.96); g.stroke()
+        g.setLineDash([])
+        // a little ink tick under each step, a squiggle under each beat
+        g.strokeStyle = tint(ink, inPat ? 0.6 : 0.2); g.lineWidth = 1.2
+        g.beginPath()
+        if (k % 4 === 0) for (let u = 0; u <= 1.001; u += 0.2) { const px = x - cw * 0.25 + u * cw * 0.5, py = top + 4 + Math.sin(u * 9 + k) * 1.5; u ? g.lineTo(px, py) : g.moveTo(px, py) }
+        else { g.moveTo(x, top + 2); g.lineTo(x, top + 6) }
+        g.stroke()
+        if (!st) continue
+        const [p, d, v, c] = st
+        const y = (1 - p / PMAX) * top * 0.86 + top * 0.07
+        const r = Math.max(3, Math.min(cw * 0.36, top * 0.06) * (0.55 + (v / 9) * 0.6))
+        const glow = fx.glow(k, t.now, 0.3)
+        // length: an ink tail trailing to the right
+        g.strokeStyle = tint(col, inPat ? 0.9 : 0.3); g.lineWidth = Math.max(1.5, r * 0.45)
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + (d / 9) * cw * 0.9 + 1, y); g.stroke()
+        // the note: pigment bead in a light line; dotted when it only maybe plays
+        blob(g, x, y, r * (1 + glow * 0.35), r * (1 + glow * 0.35), k + 3)
+        g.fillStyle = glow ? ink : tint(col, inPat ? 1 : 0.35)
+        g.fill()
+        g.strokeStyle = tint(ink, inPat ? 0.9 : 0.3); g.lineWidth = 1.2
+        g.setLineDash(c < 9 ? [1.5, 2.5 + (9 - c) * 0.6] : [])
+        g.stroke()
+        g.setLineDash([])
+        if (c < 9) {
+          g.fillStyle = tint(ink, 0.55)
+          g.font = `${Math.max(9, Math.min(13, cw * 0.28))}px ${SANS}`
+          g.textAlign = 'center'; g.textBaseline = 'top'
+          g.fillText(`${(c + 1) * 10}%`, x, top * 0.94)
+        }
+      }
+      // the bracket that ends the pattern
+      const bx = state.len * cw
+      g.strokeStyle = ink; g.lineWidth = 2
+      g.beginPath(); g.moveTo(bx - 6, 3); g.lineTo(bx, 3); g.lineTo(bx, top - 3); g.lineTo(bx - 6, top - 3); g.stroke()
+      // the words that choose what a drag draws
+      g.font = `600 ${Math.max(11, Math.min(16, h * 0.05))}px ${SANS}`
+      g.textAlign = 'center'; g.textBaseline = 'middle'
+      PARAMS.forEach((name, i) => {
+        const x = ((i + 0.5) / PARAMS.length) * w, y = top + (h - top) / 2
+        const on = name === ui.param
+        g.fillStyle = tint(ink, on ? 1 : 0.45)
+        g.fillText(name, x, y)
+        if (on) {
+          // a squiggle underline for the chosen one
+          const tw = g.measureText(name).width
+          g.strokeStyle = col; g.lineWidth = 2
+          g.beginPath()
+          for (let u = 0; u <= 1.001; u += 0.1) { const px = x - tw / 2 + u * tw, py = y + 10 + Math.sin(u * 14) * 1.6; u ? g.lineTo(px, py) : g.moveTo(px, py) }
+          g.stroke()
+        }
+      })
+      g.fillStyle = tint(ink, 0.45)
+      g.textAlign = 'right'
+      g.fillText(`${state.len}`, w - 4, top + (h - top) / 2)
+    }
+
+    // ring: the strip round the dial shows what this loop actually plays, pattern repeats and all
+    function drawRing(g, w, h, t) {
+      const n = clock.steps, cw = w / n, base = Math.floor(t.abs / n) * n
+      const col = ctx.color || '#c08419'
+      for (let s = 0; s < n; s++) {
+        const k = (base + s) % state.len, st = state.s[k], x = (s + 0.5) * cw
+        if (k === 0 && state.len !== n) { g.fillStyle = tint(INK, 0.25); g.fillRect(s * cw, 1, 1, h - 2) } // pattern restarts here
+        if (!st) continue
+        const [p, d, v, c] = st
+        const y = (1 - p / PMAX) * h * 0.8 + h * 0.1
+        const r = Math.max(1.8, Math.min(h * 0.09, cw * 0.35) * (0.6 + (v / 9) * 0.5))
+        const glow = fx.glow(`a${(base + s) % 256}`, t.now, 0.3)
+        g.strokeStyle = tint(col, 0.85); g.lineWidth = Math.max(1, r * 0.5); g.lineCap = 'round'
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + (d / 9) * cw * 0.9, y); g.stroke()
+        g.beginPath(); g.arc(x, y, r * (1 + glow * 0.4), 0, TAU)
+        g.fillStyle = glow ? INK : col
+        g.fill()
+        g.strokeStyle = INK; g.lineWidth = 1
+        g.setLineDash(c < 9 ? [1.2, 2] : [])
+        g.stroke(); g.setLineDash([])
+      }
     }
 
     return {
-      state,
+      get state() { return state },
       pointer: withPointer(size, (e) => {
-        if (e.type === 'down') {
-          const i = cellAt(e.x, e.y)
-          mode = state.cells[i] ? 0 : 1
-          state.cells[i] = mode
-        } else if (e.type === 'move' && e.pressed) {
-          state.cells[cellAt(e.x, e.y)] = mode
-        }
+        shape = e.shape || (isStrip(e.w, e.h) ? 'ring' : 'sheet')
+        return shape === 'sheet' ? sheetPointer(e) : ringPointer(e)
       }),
-      step(i, time) {
-        // 16 columns span the loop; with longer loops columns fall on every n-th step
-        const per = clock.steps / COLS
-        if (i % per) return
-        i = i / per
-        for (let r = 0; r < ROWS; r++) {
-          if (!state.cells[r * COLS + i]) continue
-          const f = 440 * Math.pow(2, (engine.degree(r, params.octave) - 69) / 12)
-          voices.bell(out, { freq: f, time, gain: 0.13, d: params.decay, ratio: params.ratio, index: params.index })
-          fx.hit(r * COLS + i, time)
-        }
+      step(i, time, dur) {
+        const abs = absOf(clock, time)
+        const k = ((abs % state.len) + state.len) % state.len
+        const st = state.s[k]
+        if (!st) return
+        if (st[3] < 9 && roll(abs, k) > (st[3] + 1) / 10) return
+        const t = time + (abs % 2 ? params.swing * dur : 0)
+        voice(st, t, dur)
+        fx.hit(k, t)
+        fx.hit(`a${abs % 256}`, t)
       },
-      frame(g, w, h, clock) {
+      frame(g, w, h, clk, sh) {
         size[0] = w; size[1] = h
-        const t = view(clock)
-        const cw = w / COLS, ch = h / ROWS
-        const col = Math.floor(t.phase * COLS)
-        if (t.playing) {
-          g.fillStyle = th.faint
-          g.fillRect(col * cw, 0, cw, h)
-        }
-        const r0 = Math.max(1.5, Math.min(cw, ch) * 0.06)
-        for (let r = 0; r < ROWS; r++) {
-          for (let c = 0; c < COLS; c++) {
-            const i = r * COLS + c
-            const x = c * cw + cw / 2
-            const y = h - (r * ch + ch / 2)
-            if (state.cells[i]) {
-              const glow = fx.glow(i, t.now)
-              const s = Math.min(cw, ch) * (0.3 + glow * 0.12)
-              g.fillStyle = glow > 0 ? th.accent : th.fg
-              g.fillRect(x - s, y - s, s * 2, s * 2)
-            } else {
-              g.fillStyle = c % 4 === 0 ? th.dim : th.faint
-              g.fillRect(x - r0, y - r0, r0 * 2, r0 * 2)
-            }
-          }
-        }
+        shape = sh || (isStrip(w, h) ? 'ring' : 'sheet')
+        const t = { abs: absNow(clk), now: clk.now(), playing: clk.playing ?? true }
+        return shape === 'sheet' ? drawSheet(g, w, h, t) : drawRing(g, w, h, t)
       },
-      setState(s) { state.cells = s.cells.slice() },
-      clear() { state.cells.fill(0) },
-      randomize() { this.setState(gen(clock.steps, params)) },
+      setState(s) {
+        state.len = clamp(s.len | 0 || N, 1, N)
+        state.s = Array.from({ length: N }, (_, k) => (Array.isArray(s.s[k]) ? s.s[k].slice(0, 4).map((v) => v | 0) : 0))
+      },
+      clear() { state.s = Array(N).fill(0); state.len = N },
+      randomize() { this.setState(gen()) },
+      dispose() {},
     }
   },
 }

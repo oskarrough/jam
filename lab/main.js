@@ -50,7 +50,7 @@ function boot() {
     const s = saved?.lanes?.[mod.id]
     if (s?.params) for (const k in s.params) if (k in params) params[k] = s.params[k]
     const { out, send } = engine.lane()
-    const inst = mod.create({ audio: engine.audio, out, clock, params, theme: THEME })
+    const inst = mod.create({ audio: engine.audio, out, clock, params, theme: { ...THEME, sheet: { ink: THEME.fg } } })
     if (s?.state) try { inst.setState(s.state) } catch (e) { console.warn('bad saved state', mod.id, e) }
     else inst.randomize?.()
     return { mod, inst, params, out, send, level: s?.level ?? 1, reverb: s?.reverb ?? 0.25, mute: false, heard: idx === 0 }
