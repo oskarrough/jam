@@ -106,7 +106,7 @@ const jamPage = async (name, path) => {
 }
 const peersText = (p) =>
 	p.evaluate(() => [
-		document.getElementById('peers')?.textContent,
+		jam.transport.peers.map((q) => (q.id === jam.transport.id ? 'you' : q.name)).join(' '),
 		document.getElementById('jamline')?.textContent,
 		jam.transport.peers.length,
 	])
@@ -136,11 +136,7 @@ if (process.env.SHOT) await j2.screenshot({ path: process.env.SHOT.replace(/\.pn
 // Record 8 bars in the private jam, then replay the link read-only. Takes one loop to arm plus 8 bars (~30 s at 96 bpm).
 if (!process.env.SKIP_REC) {
 	await j1.click('#rec')
-	await j1.waitForFunction(
-		() => /recorded/.test(document.getElementById('recline').textContent),
-		null,
-		{ timeout: 60000 },
-	)
+	await j1.waitForFunction(() => !!document.querySelector('#recline a'), null, { timeout: 60000 })
 	const href = await j1.evaluate(() => document.querySelector('#recline a').getAttribute('href'))
 	const id = href.split('/').pop()
 	const rec = await (await fetch(`${BASE}/api/r/${id}`)).json()
@@ -168,7 +164,7 @@ if (!process.env.SKIP_REC) {
 		JSON.stringify({ instrument: d.instrument, state: d.state }),
 	)
 	check(
-		rs.kind === 'replay' && rs.replay && /a recording/.test(rs.line),
+		rs.kind === 'replay' && rs.replay && /^Recording /.test(rs.line),
 		`/r/${id} opens read-only (“${rs.line}”)`,
 	)
 	check(

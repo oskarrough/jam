@@ -3,17 +3,7 @@
 import GUI from './vendor/lil-gui.esm.min.js'
 import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/kit.js'
 
-export function createDebug({
-	engine,
-	transport,
-	view,
-	bots,
-	me,
-	sit,
-	registry,
-	renderSeats,
-	heart,
-}) {
+export function createDebug({ engine, transport, view, bots, me, sit, registry, heart }) {
 	const { clock } = transport
 	const gui = new GUI({
 		title: matchMedia('(pointer: coarse)').matches ? 'controls' : 'controls  (d)',
@@ -29,7 +19,6 @@ export function createDebug({
 		set name(v) {
 			me.name = v
 			transport.setMe({ name: v })
-			renderSeats()
 		},
 		get seat() {
 			return me.seat < 0 ? '—' : engine.seats[me.seat].id
@@ -275,10 +264,7 @@ export function createDebug({
 	const botF = gui.addFolder('robots')
 	botF
 		.add(bots.opts, 'on')
-		.onChange(() => {
-			document.getElementById('bots')?.setAttribute('aria-pressed', bots.opts.on)
-			renderSeats()
-		})
+		.onChange(() => document.getElementById('bots')?.setAttribute('aria-pressed', bots.opts.on))
 		.listen()
 	botF.add(bots.opts, 'minLoops', 1, 16, 1).name('min loops between')
 	botF.add(bots.opts, 'maxLoops', 1, 32, 1).name('max loops between')

@@ -118,35 +118,16 @@ h1 {
 	outline-offset: 2px;
 }
 
-.peers {
-	position: fixed;
-	margin: 0;
-	bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
-	right: max(16px, env(safe-area-inset-right, 0px));
-	max-width: 15rem;
-	text-align: right;
-	font: italic 400 14px/1.3 var(--serif);
-	background: var(--paper);
-	border: 1px solid var(--ink);
-	padding: 0.25rem 0.55rem;
-	box-shadow: 3px 4px 0 var(--shadow);
-}
-.peers:empty {
-	display: none;
-}
-
 /* the opening (view.js INTRO): the chrome waits off-stage until the dial has built, then rises token by token.
    If the script never gets there, it comes up on its own after a few seconds. */
 .deck li,
-.panel,
-.peers {
+.panel {
 	transition:
 		opacity 0.16s,
 		transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.35);
 }
 body.intro .deck li,
-body.intro .panel,
-body.intro .peers {
+body.intro .panel {
 	opacity: 0;
 	transform: translateY(16px);
 	animation: intro-late 0.2s 3s forwards;
@@ -341,6 +322,10 @@ output.pending {
 	--input-font-size: 12px;
 	--widget-height: 22px;
 }
+/* zoomed, the sheet and its instrument strip need the room */
+body.zoomed .lil-gui.root {
+	display: none;
+}
 .lil-gui.root {
 	top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
 	right: max(8px, env(safe-area-inset-right, 0px)) !important;
@@ -353,9 +338,6 @@ output.pending {
 	.panel {
 		width: auto;
 		right: max(16px, env(safe-area-inset-right, 0px));
-	}
-	.peers {
-		display: none;
 	}
 	/* seven pieces have to fit a 390px phone */
 	.deck {
@@ -388,9 +370,6 @@ output.pending {
 	.lil-gui.root.closed {
 		--width: 104px !important;
 	}
-	body.zoomed .lil-gui.root {
-		display: none;
-	} /* the zoomed sheet needs the room on a phone */
 	/* every instrument on the strip: two rows of seven instead of a row running off the edge */
 	.sheetbar {
 		height: auto;

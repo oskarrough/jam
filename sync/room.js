@@ -2,8 +2,14 @@
 // The server is the time authority: every timestamp on the wire is server ms from `now()`.
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
-const loopMs = (l) => (l.bars * l.beatsPerBar * 60000) / l.bpm
-const nextLoopBoundary = (l, t) => l.origin + Math.ceil((t - l.origin) / loopMs(l)) * loopMs(l)
+const barMs = (l) => (l.beatsPerBar * 60000) / l.bpm
+// A loop change lands on the next bar, and the loop keeps counting: bar 3 of the old loop is bar 3 of the new one
+export function nextLoopAt(cur, patch, t) {
+	const b = barMs(cur),
+		at = cur.origin + Math.ceil((t - cur.origin) / b) * b
+	const bar = (((Math.round((at - cur.origin) / b) % cur.bars) + cur.bars) % cur.bars) % patch.bars
+	return { at, loop: { ...patch, origin: at - bar * barMs(patch) } }
+}
 // key and chords: kept if new ones don't look right. Chords are degrees 0..6, one per bar, at most 16.
 function harmony(m, cur) {
 	const h = {}
@@ -91,16 +97,19 @@ export function createRoom(io, state = {}) {
 				id,
 			)
 		} else if (m.t === 'loop') {
-			// Tempo/length change lands on the next loop boundary; the new origin is that boundary, so phase stays continuous.
-			const at = nextLoopBoundary(s.loop, io.now() + 150)
-			s.loop = {
-				bpm: clamp(Number(m.bpm) || s.loop.bpm, 30, 300),
-				beatsPerBar: clamp(Number(m.beatsPerBar) || s.loop.beatsPerBar, 1, 16),
-				bars: clamp(Number(m.bars) || s.loop.bars, 1, 64),
-				...harmony(m, s.loop),
-				robots: typeof m.robots === 'boolean' ? m.robots : !!s.loop.robots,
-				origin: at,
-			}
+			const next = nextLoopAt(
+				s.loop,
+				{
+					bpm: clamp(Number(m.bpm) || s.loop.bpm, 30, 300),
+					beatsPerBar: clamp(Number(m.beatsPerBar) || s.loop.beatsPerBar, 1, 16),
+					bars: clamp(Number(m.bars) || s.loop.bars, 1, 64),
+					...harmony(m, s.loop),
+					robots: typeof m.robots === 'boolean' ? m.robots : !!s.loop.robots,
+				},
+				io.now() + 150,
+			)
+			const at = next.at
+			s.loop = next.loop
 			broadcast({ t: 'loop', loop: s.loop, at })
 			save()
 		}

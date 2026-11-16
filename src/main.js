@@ -98,7 +98,7 @@ const humanAt = (i) => transport.peers.find((p) => p.seat === seats[i].id)
 const occupant = (i) => {
 	const p = humanAt(i)
 	if (p && p.id === transport.id)
-		return { name: 'you', label: 'you', initial: me.name ? me.name[0] : 'Y', me: true, human: true }
+		return { name: 'you', label: 'you', initial: name ? name[0] : 'Y', me: true, human: true }
 	if (p)
 		return {
 			name: p.name || playerName(i),
@@ -136,7 +136,6 @@ function sit(i) {
 	seats[i].riff = null // a person taking the seat ends a robot riff
 	if (view?.focus.on) view.setFocus(i)
 	transport.setMe({ seat: seats[i].id, name: me.name })
-	renderSeats()
 }
 
 view = createView(document.getElementById('c'), engine, {
@@ -145,9 +144,7 @@ view = createView(document.getElementById('c'), engine, {
 	onSit: (i) => (i === me.seat ? toggleFocus() : sit(i)),
 	onHand(from, to) {
 		if (from !== me.seat || !occupant(to).bot) return false
-		const ok = bots.hand(from, to)
-		renderSeats()
-		return ok
+		return bots.hand(from, to)
 	},
 	canHand: (from, to) => from === me.seat && to !== from && !!occupant(to).bot,
 	onWipe: () => wipe(),
@@ -189,8 +186,15 @@ transport.on('cursor', (c) => {
 			c.name || transport.peers.find((p) => p.id === c.from)?.name || playerName(i),
 		)
 })
-transport.on('peers', renderSeats)
+// no ?name=: the lowest 'player N' nobody here has, kept for the session whichever seat you move to
+const freeName = () => {
+	const taken = new Set(transport.peers.filter((p) => p.id !== transport.id).map((p) => p.name))
+	let n = 1
+	while (taken.has(`player ${n}`)) n++
+	return `player ${n}`
+}
 transport.on('welcome', () => {
+	if (!me.name) me.name = freeName()
 	if (me.seat < 0)
 		for (const i of [1, 2, 0, 3])
 			if (!humanAt(i)) {
@@ -207,17 +211,7 @@ transport.on('welcome', () => {
 		view.setFocus?.(me.seat)
 		ghost.play()
 	}
-	renderSeats()
 })
-engine.on('seats', renderSeats)
-let riffSig = ''
-setInterval(() => {
-	const sig = seats.map((L) => (L.riff ? L.riff.id + L.riff.turn : '')).join('|')
-	if (sig !== riffSig) {
-		riffSig = sig
-		renderSeats()
-	}
-}, 300)
 
 const $ = (id) => document.getElementById(id)
 
@@ -336,26 +330,22 @@ function saveAudio() {
 	b.className = 'dl'
 	return b
 }
-// seats are drawn by view.js; this only keeps the peers line current
-function renderSeats() {
-	const names = transport.peers.map((p) =>
-		p.id === transport.id ? 'you' : p.name || playerName(seats.findIndex((L) => L.id === p.seat)),
-	)
-	$('peers').textContent = names.length > 1 ? names.join(', ').replace(/, ([^,]*)$/, ' & $1') : ''
-}
 
 $('sound').onclick = () => {
 	engine.setSound(!engine.soundOn)
 	$('sound').setAttribute('aria-pressed', engine.soundOn)
 }
-// first touch wakes the sound; after that the speaker token is theirs
-$('c').addEventListener(
-	'pointerdown',
-	() => {
-		if (!engine.soundOn) $('sound').click()
-	},
-	{ once: true, capture: true },
-)
+// the first tap or key anywhere wakes the sound (the speaker token and space toggle it themselves); after that it's theirs
+if (!replay) {
+	const wake = (e) => {
+		removeEventListener('pointerdown', wake, true)
+		removeEventListener('keydown', wake, true)
+		if (engine.soundOn || e.target.closest?.('#sound') || e.key === ' ') return
+		$('sound').click()
+	}
+	addEventListener('pointerdown', wake, true)
+	addEventListener('keydown', wake, true)
+}
 if (replay) {
 	// a recording plays on the first tap anywhere, from bar 1
 	const wake = (e) => {
@@ -410,7 +400,7 @@ const setErase = (on) => {
 	document.body.classList.toggle('erasing', on)
 }
 $('erase').onclick = () => setErase(!me.erase)
-// tempo lands on the next loop; `want` shows your ask before the relay echoes it (kept up to 2 s)
+// tempo lands on the next bar; `want` shows your ask before the relay echoes it (kept up to 2 s)
 let want = null // { bpm, t }
 const heading = () => {
 	const next = transport.clock.pending?.().at(-1)?.bpm ?? transport.clock.loopAt().bpm
@@ -445,7 +435,6 @@ function wipe() {
 function setRobots(on) {
 	bots.opts.on = !!on && !replay
 	$('bots').setAttribute('aria-pressed', bots.opts.on)
-	renderSeats()
 }
 transport.on('welcome', ({ loop }) => setRobots(loop?.robots))
 transport.on('loop', ({ loop }) => setRobots(loop?.robots))
@@ -497,12 +486,10 @@ import('./debug.js')
 				me,
 				sit,
 				registry,
-				renderSeats,
 				heart,
 			})),
 	)
 	.catch((e) => console.warn('debug panel unavailable', e))
-renderSeats()
 
 document.querySelectorAll('.token').forEach((el) => jellify(el))
 jellify(document.querySelector('.tempo'), { amount: 0.08 })

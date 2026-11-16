@@ -74,4 +74,4 @@ That writes a small working instrument, registers it, and the link seats you wit
 
 ### Swap the transport
 
-`src/transport/local.js` and `sync/sync.js` share one API: `on('welcome'|'peers'|'apply'|'cursor'|'loop')`, `edit(seat, data)` (returns when it lands, on the next bar), `seatAt`, `cursor`, `setLoop` (next loop boundary), `setMe`, `peers`, `debug()`, and a `clock` in shared milliseconds. Seat data is `{instrument, state, params}`; a seat is `peer.instrument === seat id`.
+`src/transport/local.js` and `sync/sync.js` share one API: `on('welcome'|'peers'|'apply'|'cursor'|'loop')`, `edit(seat, data)` (returns when it lands, on the next bar), `seatAt`, `cursor`, `setLoop` (next bar), `setMe`, `peers`, `debug()`, and a `clock` in shared milliseconds. Seat data is `{instrument, state, params}`; a seat is `peer.instrument === seat id`.

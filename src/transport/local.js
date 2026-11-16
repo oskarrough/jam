@@ -5,11 +5,13 @@
 //   t.edit(seat, data)          -> server ms it lands at
 //   t.seatAt(seat, ms?)         -> data in effect then
 //   t.cursor(x, y, down, seat, name?)
-//   t.setLoop({ bpm, bars, beatsPerBar })   lands on the next loop boundary
+//   t.setLoop({ bpm, bars, beatsPerBar })   lands on the next bar; the loop keeps counting
 //   t.setMe({ name, seat, color })
 //   t.clock.now() toLocal() toAudio(ctx, ms) pos() loopAt() nextBar() nextLoop() stats()
 //   t.debug()
 //   t.fake = { latency, jitter, skew, quantize }   local-only knobs
+
+import { nextLoopAt } from '../../sync/room.js'
 
 const LOOKAHEAD = 120
 const localNow = () => performance.timeOrigin + performance.now()
@@ -248,9 +250,11 @@ export function createLocalTransport({
 	}
 
 	function setLoop(patch) {
-		const cur = clock.loopAt()
-		const at = clock.nextLoop(clock.now() + 200)
-		const loop = { ...cur, ...patch, origin: at }
+		const { at, loop } = nextLoopAt(
+			clock.loopAt(),
+			{ ...clock.loopAt(), ...patch },
+			clock.now() + 200,
+		)
 		clock.setLoop(loop, at)
 		tx({ t: 'loop', loop, at })
 		schedule(at - LOOKAHEAD, () => emit('loop', { loop, at }))

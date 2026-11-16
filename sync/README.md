@@ -31,7 +31,7 @@ We send control data (patterns, cursors), never audio, and edits are quantized t
 ## Model
 
 - **Clock.** Server ms is the shared timeline. Clients ping (burst of 10 on connect, then every 1.5 s), keep the last 24 samples, take the median offset of the fastest round trips, and slew at ≤1 ms per sample once locked (jump only if off by >30 ms). Local time is `performance.timeOrigin + performance.now()`, which is monotonic.
-- **Loop.** `{bpm, beatsPerBar, bars, origin}`. Position is pure arithmetic from server time, so nothing ticks over the network. Tempo/length changes land on the next loop boundary and become the new origin, so phase stays continuous.
+- **Loop.** `{bpm, beatsPerBar, bars, origin}`. Position is pure arithmetic from server time, so nothing ticks over the network. Tempo/length changes land on the next bar; the new origin is set back so the loop keeps counting (bar 3 stays bar 3).
 - **Seats.** Opaque instrument `state` keyed by seat id. An edit is stamped with `at` = the next bar beyond `max(80, 1.5·RTT + 40) + 120` ms. Everyone, including the sender, switches at `at`. The server clamps `at` to never be in the past and snapshots seats for late joiners.
 - **Cursors.** Unquantized, unstored, for visual feedback of who's drawing where.
 - **Audio.** Schedulers call `seatAt(seat, serverMs)` for each step they're about to schedule, and `clock.toAudio(ctx, serverMs)` for the AudioContext time. `apply` events fire 120 ms early for UI.
