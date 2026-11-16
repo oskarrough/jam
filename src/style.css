@@ -62,11 +62,16 @@ svg .fill { fill: var(--ink) }
 #bots[aria-pressed='false'] .fill { fill: none }
 #bots[aria-pressed='false'] svg { opacity: 0.45 }
 
-.tempo { gap: 2px; background: var(--paper); border: 1.4px solid var(--ink); border-radius: 26px 22px 24px 20px; height: 48px; padding: 0 4px; box-shadow: 3px 4px 0 var(--shadow) }
-.nib { width: 28px; height: 40px; padding: 0; background: none; border: 0; cursor: pointer; display: grid; place-items: center; border-radius: 50% }
+/* tempo chip: each arrow owns its whole half (number included); the number sits on top and lets taps through */
+.tempo { position: relative; width: 132px; justify-content: center; background: var(--paper); border: 1.4px solid var(--ink); border-radius: 26px 22px 24px 20px; height: 48px; box-shadow: 3px 4px 0 var(--shadow); overflow: hidden }
+.nib { position: absolute; top: 0; bottom: 0; width: 50%; padding: 0 12px; background: none; border: 0; cursor: pointer; display: flex; align-items: center; touch-action: manipulation }
+#slower { left: 0; justify-content: flex-start }
+#faster { right: 0; justify-content: flex-end }
 .nib svg { width: 14px; height: 14px; stroke-width: 1.8 }
 .nib:hover svg { stroke: var(--vermilion) }
-output { width: 3.6ch; text-align: center; font: italic 400 24px/1 var(--serif); font-variant-numeric: tabular-nums lining-nums; font-variation-settings: 'WONK' 1 }
+.nib:active { background: color-mix(in srgb, var(--ink) 8%, transparent) }
+.nib:focus-visible { outline-offset: -4px }
+output { position: relative; pointer-events: none; width: 3.6ch; text-align: center; font: italic 400 24px/1 var(--serif); font-variant-numeric: tabular-nums lining-nums; font-variation-settings: 'WONK' 1 }
 output.pending { color: var(--vermilion) }
 
 /* lil-gui on paper; data stays mono */
