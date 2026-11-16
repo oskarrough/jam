@@ -3,6 +3,7 @@
 import { createLocalTransport } from './transport/local.js'
 import { createEngine } from './engine.js'
 import { createView } from './view.js'
+import { createPicker } from './picker.js'
 import { jellify } from './jelly.js'
 import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
@@ -66,6 +67,7 @@ function sit(i) {
 	const p = humanAt(i)
 	if (p && p.id !== transport.id) return
 	me.lane = i
+	if (view?.focus.on) view.setFocus(i)
 	transport.setMe({ instrument: lanes[i].id, name: me.name })
 	renderSeats()
 }
@@ -73,7 +75,7 @@ function sit(i) {
 const view = createView(document.getElementById('c'), engine, {
 	seat,
 	canDraw,
-	onSit: sit,
+	onSit: (i) => (i === me.lane ? toggleFocus() : sit(i)),
 	onPointer(i, e) {
 		const L = lanes[i]
 		if (me.erase) e.alt = true
@@ -132,10 +134,10 @@ function renderSeats() {
 		b.innerHTML = '<span class="dot"></span><span class="inst"></span><span class="who"></span>'
 		b.querySelector('.inst').textContent = L.module.name.toLowerCase()
 		b.querySelector('.who').textContent = st.me ? me.name : st.human ? st.label : st.bot ? st.label : '…'
-		b.disabled = st.me || st.human
-		b.title = st.me ? 'your ring' : st.human ? `${st.label}'s ring` : 'take this ring'
+		b.disabled = !st.me && st.human
+		b.title = st.me ? 'open your instrument' : st.human ? `${st.label}'s ring` : 'take this ring'
 		b.setAttribute('aria-label', st.me ? `${L.module.name}, your ring` : `Take the ${L.module.name} ring`)
-		b.onclick = () => sit(i)
+		b.onclick = () => (st.me ? toggleFocus() : sit(i))
 		li.appendChild(b)
 		ol.appendChild(li)
 	})
@@ -177,6 +179,7 @@ addEventListener('keydown', (e) => {
 	else if (/^[1-9]$/.test(e.key) && +e.key <= lanes.length) sit(+e.key - 1)
 	else if (e.key === 'd') debug.toggle()
 	else if (e.key === 'e') setErase(!me.erase)
+	else if (e.key === 'Escape' && view.focus.on) view.setFocus(-1)
 })
 setInterval(() => {
 	const l = transport.clock.loopAt()
@@ -196,6 +199,27 @@ renderSeats()
 // paper tokens give where you press them
 document.querySelectorAll('.token').forEach((el) => jellify(el))
 jellify(document.querySelector('.tempo'), { amount: 0.08 })
+
+/* ───────── zoom: tap your badge and your instrument opens big, in its own form; the machine shrinks beside it ───────── */
+const picker = createPicker({ engine, registry, view, me })
+const devbar = $('devbar')
+function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.lane) }
+addEventListener('zoom', (e) => {
+	const { on, dev } = e.detail
+	devbar.hidden = !on
+	document.body.classList.toggle('zoomed', on)
+	if (!on) return picker.close()
+	devbar.style.left = dev.x + dev.w - 12 + 'px'
+	devbar.style.top = dev.y + 12 + 'px'
+	paintPick()
+})
+// the pick token wears the current instrument's glyph
+function paintPick() { const L = lanes[me.lane]; if (L) $('pick').innerHTML = picker.glyph(L.module.id) }
+engine.on('lanes', () => view.focus.on && paintPick())
+$('pick').onclick = () => picker.toggle($('pick').getBoundingClientRect())
+$('back').onclick = () => view.setFocus(-1)
+jellify($('pick'))
+jellify($('back'))
 
 // handy in the console
 Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart } })

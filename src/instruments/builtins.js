@@ -162,7 +162,7 @@ export const drums = {
 					for (let r = 0; r < ROWS; r++) {
 						if (!(m & (1 << r))) continue
 						const y = (1 - (r + 0.5) / ROWS) * h
-						const size = h * [0.11, 0.085, 0.055][r] + f * 2.5
+						const size = Math.min(h * [0.11, 0.085, 0.055][r], [12, 9, 6][r]) + f * 2.5
 						g.fillStyle = f > 0.3 ? INK : color
 						g.beginPath()
 						if (r === 1) g.rect(x - size, y - size, size * 2, size * 2)

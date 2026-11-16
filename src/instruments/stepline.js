@@ -50,7 +50,7 @@ export function stepline({ id, name, base, voice, params = {}, generate, sample 
 					const X = (s) => ((s + 0.5) / n) * w, Y = (v) => (1 - (v + 0.5) / 8) * h
 					const color = ctx.color
 					// ligne claire: pigment line inside an ink line, notes as inked beads
-					const lw = Math.max(1.6, h * 0.06)
+					const lw = Math.max(1.6, Math.min(5, h * 0.06))
 					g.lineCap = 'round'
 					g.lineJoin = 'round'
 					g.beginPath()
@@ -70,7 +70,7 @@ export function stepline({ id, name, base, voice, params = {}, generate, sample 
 					g.strokeStyle = color
 					g.lineWidth = lw
 					g.stroke()
-					const r = Math.max(2.2, h * 0.075)
+					const r = Math.max(2.2, Math.min(9, h * 0.075))
 					g.lineWidth = 1.1
 					g.strokeStyle = INK
 					for (let s = 0; s < n; s++) {

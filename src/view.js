@@ -30,6 +30,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	const opts = { mode: 'dial', slices: 192, landscape: true, ground: 'vallotton', cycleLoops: 4 }
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	let W, H, S, CX, CY, DPR
+	// zoom: the overview geometry (S0, CX0, CY0), the focus geometry (SF, CXF, CYF, dev) and zt easing between them.
+	// In focus your instrument opens big and unwrapped on a paper sheet (dev); the machine shrinks beside it, still live.
+	let S0, CX0, CY0, SF, CXF, CYF, dev = null, zt = 0
+	const focus = { on: false, lane: -1 }
 	let bg = document.createElement('canvas'), bg2 = document.createElement('canvas')
 	// ground state: current G, and while cycling an incoming one fading in
 	let G = GROUNDS.vallotton, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
@@ -48,13 +52,38 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		canvas.width = W * DPR
 		canvas.height = H * DPR
 		const narrow = W < 640, top = narrow ? 150 : 24, bottom = narrow ? 96 : 84
-		S = Math.max(240, Math.min(W - 24, H - top - bottom))
-		CX = W / 2
-		CY = top + (H - top - bottom) / 2
+		S0 = Math.max(240, Math.min(W - 24, H - top - bottom))
+		CX0 = W / 2
+		CY0 = top + (H - top - bottom) / 2
+		if (narrow) {
+			// phone: a small live medallion bottom-left above the deck, the sheet fills the middle
+			SF = Math.min(180, W * 0.46)
+			CXF = 8 + SF / 2
+			CYF = H - bottom - SF / 2 + 6
+			dev = { x: 12, y: top + 6, w: W - 24, h: Math.max(160, H - bottom - SF - top - 12) }
+		} else {
+			// wide: the machine bottom-left under the seat list, the sheet to its right
+			SF = Math.max(220, Math.min(W * 0.34, H - bottom - 230, 520))
+			CXF = 20 + SF / 2
+			CYF = H - bottom - SF / 2 - 4
+			const x = CXF + SF / 2 + 28
+			dev = { x, y: 52, w: W - x - 24, h: H - 52 - bottom - 16 } // clear of the controls bar top-right
+		}
+		applyZoom()
 		sizeLanes()
+		if (focus.on) dispatchEvent(new CustomEvent('zoom', { detail: { on: true, lane: focus.lane, dev: { ...dev } } }))
 		paintBackdrop(bg, G)
 		if (G2) paintBackdrop(bg2, G2)
 	}
+
+	const ease = (t) => t * t * (3 - 2 * t)
+	function applyZoom() {
+		const e = ease(zt)
+		S = S0 + (SF - S0) * e
+		CX = CX0 + (CXF - CX0) * e
+		CY = CY0 + (CYF - CY0) * e
+	}
+	const small = () => S < 330 // below this the dial drops its captions and numerals
 
 	// ring geometry, inner lane first
 	const n = () => lanes.length
@@ -74,7 +103,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	function sizeLanes() {
 		lanes.forEach((L, i) => {
 			let w, h
-			if (opts.mode === 'dial') { w = TAU * (ringIn(i) + ringT() / 2); h = ringT() }
+			// rings are sized at overview scale; warp() scales them down when the dial shrinks
+			const b0 = (S0 * 0.26) / n()
+			if (opts.mode === 'dial' && focus.on && i === focus.lane) ({ w, h } = dev)
+			else if (opts.mode === 'dial') { w = TAU * (S0 * 0.16 + i * b0 + (b0 * 0.82) / 2); h = b0 * 0.82 }
 			else ({ w, h } = stripRect(i))
 			L.w = Math.round(w)
 			L.h = Math.round(h)
@@ -110,7 +142,14 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	}
 
 	canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+	const inDev = (x, y) => focus.on && dev && x >= dev.x && x <= dev.x + dev.w && y >= dev.y && y <= dev.y + dev.h
+	const devXY = (x, y) => ({ x: Math.max(0, Math.min(0.9999, (x - dev.x) / dev.w)), y: Math.max(0, Math.min(1, (y - dev.y) / dev.h)) })
 	canvas.addEventListener('pointerdown', (e) => {
+		if (inDev(e.clientX, e.clientY) && canDraw(focus.lane)) {
+			canvas.setPointerCapture(e.pointerId)
+			drag = { lane: focus.lane, id: e.pointerId, alt: e.shiftKey, button: e.button, dev: true }
+			return onPointer(focus.lane, { type: 'down', ...devXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: e.button })
+		}
 		for (let i = 0; i < lanes.length; i++) {
 			const [x, y] = seatPos(i)
 			if (Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6) {
@@ -119,6 +158,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 				return onSit(i)
 			}
 		}
+		// in focus the shrunken machine is for looking; a tap on it zooms back out
+		if (focus.on) { if (Math.hypot(e.clientX - CX, e.clientY - CY) < medallion()) setFocus(-1); return }
 		const h = hit(e.clientX, e.clientY)
 		if (h && opts.mode === 'dial') {
 			press(ringJelly[h.lane], Math.atan2(e.clientY - CY, e.clientX - CX))
@@ -130,22 +171,36 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		onPointer(h.lane, { type: 'down', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: e.button })
 	})
 	canvas.addEventListener('pointermove', (e) => {
-		hover = hit(e.clientX, e.clientY)
+		hover = focus.on ? null : hit(e.clientX, e.clientY)
 		const onSeat = lanes.some((_, i) => { const [x, y] = seatPos(i); return Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6 })
-		canvas.style.cursor = onSeat ? 'pointer' : hover && canDraw(hover.lane) ? '' : 'default'
+		const onDial = focus.on && Math.hypot(e.clientX - CX, e.clientY - CY) < medallion()
+		canvas.style.cursor = onSeat || onDial ? 'pointer' : inDev(e.clientX, e.clientY) || (hover && canDraw(hover.lane)) ? '' : 'default'
 		if (!drag || e.pointerId !== drag.id) return
+		if (drag.dev) return onPointer(drag.lane, { type: 'move', ...devXY(e.clientX, e.clientY), id: e.pointerId, alt: drag.alt, button: drag.button })
 		const h = hit(e.clientX, e.clientY, drag.lane)
 		ringJelly[drag.lane].a = Math.atan2(e.clientY - CY, e.clientX - CX) // the dent follows the pen
 		onPointer(drag.lane, { type: 'move', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
 	})
 	const up = (e) => {
 		if (!drag || e.pointerId !== drag.id) return
-		const h = hit(e.clientX, e.clientY, drag.lane)
+		const h = drag.dev ? devXY(e.clientX, e.clientY) : hit(e.clientX, e.clientY, drag.lane)
 		onPointer(drag.lane, { type: 'up', x: h.x, y: h.y, id: e.pointerId, alt: drag.alt, button: drag.button })
 		release(ringJelly[drag.lane])
 		drag = null
 	}
 	canvas.addEventListener('pointerup', up)
+
+	// zoom into a lane (your own), or out with -1
+	function setFocus(i) {
+		if (drag) return
+		const on = i >= 0 && opts.mode === 'dial'
+		if (on === focus.on && i === focus.lane) return
+		focus.on = on
+		focus.lane = on ? i : -1
+		sizeLanes()
+		hover = null
+		dispatchEvent(new CustomEvent('zoom', { detail: { on, lane: focus.lane, dev: on ? { ...dev } : null } }))
+	}
 	canvas.addEventListener('pointercancel', up)
 	canvas.addEventListener('pointerleave', () => (hover = null))
 
@@ -347,6 +402,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		const beatIdx = p ? Math.floor(p.beats) : 0
 		if (beatIdx !== lastBeat) { if (lastBeat !== -1) heat = Math.min(1, heat + (p.beat === 0 ? 0.25 : 0.08)); lastBeat = beatIdx }
 		heat = Math.max(heat * Math.pow(0.04, dt), Math.min(0.9, engine.level() * 2.5))
+		const zTarget = focus.on ? 1 : 0
+		if (zt !== zTarget) { zt += (zTarget - zt) * Math.min(1, dt * (reduce ? 60 : 7)); if (Math.abs(zTarget - zt) < 0.002) zt = zTarget; applyZoom() }
 		for (const j of ringJelly) j.s.step(dt)
 		for (const j of seatJelly) j.s.step(dt)
 
@@ -369,6 +426,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		lanes.forEach(renderLane)
 		if (opts.mode === 'dial') drawDial(t, dt, phase, loop)
 		else drawStrips(phase)
+		if (opts.mode === 'dial' && zt > 0.01) drawDevice(phase)
 		drawCursors()
 		requestAnimationFrame(frame)
 	}
@@ -409,6 +467,29 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		}
 	}
 
+
+	// the sheet your instrument plays on in focus: paper, ink edge, flat shadow, beat ticks along the top
+	function drawDevice(phase) {
+		const e = ease(zt), { x, y, w, h } = dev, L = lanes[focus.lane]
+		g.save()
+		g.globalAlpha = e
+		g.translate(x + w / 2, y + h / 2); g.scale(0.94 + 0.06 * e, 0.94 + 0.06 * e); g.translate(-(x + w / 2), -(y + h / 2))
+		g.fillStyle = 'rgba(42,28,72,.5)'
+		g.fillRect(x + 6, y + 8, w, h)
+		g.fillStyle = PAPER
+		g.fillRect(x, y, w, h)
+		if (focus.on && L && L.w === Math.round(w)) {
+			const steps = engine.steps()
+			for (let s = 0; s < steps; s += 4) { g.fillStyle = s % 16 ? ink(0.06) : ink(0.16); g.fillRect(x + (s / steps) * w, y, 1, h) }
+			g.drawImage(L.canvas, x, y, w, h)
+			g.fillStyle = INK
+			g.fillRect(x + phase * w, y - 5, 1.5, 10)
+			g.fillRect(x + phase * w, y + h - 5, 1.5, 10)
+		}
+		g.strokeStyle = INK; g.lineWidth = 1.4
+		g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+		g.restore()
+	}
 
 	function drawStrips(phase) {
 		lanes.forEach((L, i) => {
@@ -461,7 +542,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		g.textAlign = 'center'; g.textBaseline = 'middle'
 		g.fillStyle = st.name ? PAPER : ink(0.6)
 		g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
-		if (label) arcCaption(`${L.module.name.toLowerCase()} · ${st.label}`, Math.atan2(y - CY, x - CX), medallion() + Math.max(9, S * 0.02), Math.max(12, S * 0.021), st.me)
+		if (label && !small()) arcCaption(`${L.module.name.toLowerCase()} · ${st.label}`, Math.atan2(y - CY, x - CX), medallion() + Math.max(9, S * 0.02), Math.max(12, S * 0.021), st.me)
 	}
 
 	// hand-set caption riding the outside of the dial's rim, centred on angle a. Upright on both halves:
@@ -529,7 +610,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 			g.strokeStyle = bar ? ink(0.3) : ink(0.08)
 			g.lineWidth = bar ? 0.9 : 0.7
 			g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke()
-			if (bar) {
+			if (bar && !small()) {
 				g.font = serif(Math.max(12, S * 0.026))
 				g.textAlign = 'center'; g.textBaseline = 'middle'
 				g.fillStyle = ink(0.6)
@@ -562,6 +643,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 				g.beginPath(); g.arc(CX, CY, r1, a0, a1); g.arc(CX, CY, r0, a1, a0, true); g.fill()
 			}
 			warp(L, r0, r1)
+			if (small()) return
 			g.save()
 			g.translate(...polar(-Math.PI / 2 - 0.2, r0 + ringT() / 2))
 			g.rotate(-0.2)
@@ -596,7 +678,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 			const L = lanes[c.lane]
 			if (!L) continue
 			let x, y
-			if (opts.mode === 'dial') [x, y] = polar(angOf(c.x), ringIn(c.lane) + (1 - c.y) * ringT())
+			if (opts.mode === 'dial' && focus.on && c.lane === focus.lane) { x = dev.x + c.x * dev.w; y = dev.y + c.y * dev.h }
+			else if (opts.mode === 'dial') [x, y] = polar(angOf(c.x), ringIn(c.lane) + (1 - c.y) * ringT())
 			else { const R = stripRect(c.lane); x = R.x + c.x * R.w; y = R.y + c.y * R.h }
 			g.fillStyle = L.color
 			g.beginPath(); g.arc(x, y, 3, 0, TAU); g.fill()
@@ -620,9 +703,11 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	return {
 		opts,
 		showCursor,
-		setMode(m) { opts.mode = m; sizeLanes() },
+		setMode(m) { opts.mode = m; if (m !== 'dial') setFocus(-1); sizeLanes() },
 		repaint: () => paintBackdrop(bg, G),
 		setGround,
+		setFocus,
+		get focus() { return { ...focus, dev: focus.on ? { ...dev } : null } },
 		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
 		ground: () => ({ ...(G2 || G) }),
 		// the bare disc inside the innermost ring, CSS px; null in strips mode

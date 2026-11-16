@@ -69,7 +69,8 @@ export function createPicker({ engine, registry, view, me }) {
 		close()
 	}
 
-	function open() {
+	// anchor: a DOMRect-ish {left, top, width, height} or a seat {x, y, r}; the sheet blooms from it
+	function open(anchor) {
 		const L = lane()
 		if (!L) return
 		el.style.setProperty('--c', L.color)
@@ -77,7 +78,8 @@ export function createPicker({ engine, registry, view, me }) {
 		showCurrent()
 		el.hidden = false
 		// bloom out of the badge: place the sheet near it, kept on screen
-		const s = view.seatAt(me.lane), w = el.offsetWidth, h = el.offsetHeight, m = 12
+		const s = anchor?.width ? { x: anchor.left + anchor.width / 2, y: anchor.top + anchor.height / 2, r: anchor.width / 2 } : anchor || view.seatAt(me.lane)
+		const w = el.offsetWidth, h = el.offsetHeight, m = 12
 		const dx = s.x < innerWidth / 2 ? 1 : -1, dy = s.y < innerHeight / 2 ? 1 : -1
 		let x = s.x + dx * (s.r + 10) - (dx < 0 ? w : 0)
 		let y = s.y + dy * (s.r + 10) - (dy < 0 ? h : 0)
@@ -90,9 +92,9 @@ export function createPicker({ engine, registry, view, me }) {
 		;(buttons.find((b) => b.dataset.id === L.module.id) || buttons[0]).focus({ preventScroll: true })
 	}
 	function close() { el.hidden = true }
-	const toggle = () => (el.hidden ? open() : close())
+	const toggle = (anchor) => (el.hidden ? open(anchor) : close())
 
-	addEventListener('pointerdown', (e) => { if (!el.hidden && !el.contains(e.target)) close() }, true)
+	addEventListener('pointerdown', (e) => { if (!el.hidden && !el.contains(e.target) && !e.target.closest?.('#pick')) close() }, true)
 	addEventListener('keydown', (e) => {
 		if (el.hidden) return
 		if (e.key === 'Escape') { close(); e.stopPropagation() }
@@ -103,5 +105,6 @@ export function createPicker({ engine, registry, view, me }) {
 		if (step) { e.preventDefault(); buttons[(i + step + buttons.length) % buttons.length].focus() }
 	})
 
-	return { open, close, toggle, get isOpen() { return !el.hidden } }
+	const glyph = (id) => `<svg viewBox="0 0 32 32" aria-hidden="true">${GLYPHS[id] || fallback}</svg>`
+	return { open, close, toggle, glyph, get isOpen() { return !el.hidden } }
 }
