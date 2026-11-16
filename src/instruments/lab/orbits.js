@@ -3,11 +3,15 @@
 // loop), so 3 and 6 lap planets fall between the 16ths: easy polyrhythm.
 // Planet size sets pitch: big is low.
 import { kit, mtof } from './kit.js'
-import { withPointer, view, absNow, theme, subSlots, SLOTS, clamp, dist, flashes, TAU } from './util.js'
+import { isStrip, withPointer, view, absNow, theme, subSlots, SLOTS, clamp, dist, flashes, TAU } from './util.js'
 
 const REVS = [8, 6, 4, 3, 2, 1]
 const MAX = 10
 const lapsOf = (r) => REVS[clamp(Math.floor(((r - 0.15) / 0.85) * REVS.length), 0, REVS.length - 1)]
+
+function gen() {
+  return { planets: Array.from({ length: 4 }, () => ({ r: +(0.2 + Math.random() * 0.8).toFixed(3), a: Math.floor(Math.random() * 16) / 16, m: +Math.random().toFixed(3) })) }
+}
 
 export default {
   id: 'orbits',
@@ -19,10 +23,13 @@ export default {
     snap: { value: false },
     decay: { value: 0.7, min: 0.1, max: 2, step: 0.01 },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { planets: [] } // {r, a, m}: radius 0..1, phase offset in turns, mass 0..1
     const fx = flashes()
     let drag = null
@@ -38,9 +45,65 @@ export default {
       return { r: clamp(Math.hypot(dx, dy) / R(e.w, e.h), 0.15, 1), turns: ((Math.atan2(dx, -dy) / TAU) % 1 + 1) % 1 }
     }
 
+    // unrolled: x is the loop, y is the orbit (top = outer, slow). Each planet shows as
+    // dots where it crosses 12 o'clock. Press to place, drag to grow; drag a dot to move
+    // that planet; tap a dot to remove it.
+    const rOfY = (y) => clamp(1 - y * 0.85, 0.15, 1)
+    const yOfR = (r) => (1 - r) / 0.85
+    const crossings = (p) => {
+      const n = lapsOf(p.r), out = []
+      for (let c = Math.ceil(p.a); (c - p.a) / n < 1; c++) out.push((c - p.a) / n)
+      return out
+    }
+    function stripPointer(e) {
+      if (e.type === 'down') {
+        const k = state.planets.findIndex((p) =>
+          crossings(p).some((ph) => dist(ph * e.w, yOfR(p.r) * e.h, e.px, e.py) < 10 + p.m * e.h * 0.3))
+        if (k >= 0) drag = { k, grow: false, moved: 0, x0: e.px, y0: e.py, strip: true }
+        else {
+          const r = rOfY(e.y)
+          if (state.planets.length >= MAX) state.planets.shift()
+          state.planets.push({ r: +r.toFixed(3), a: +(-lapsOf(r) * e.x).toFixed(4), m: 0.3 })
+          drag = { k: state.planets.length - 1, grow: true, moved: 0, x0: e.px, y0: e.py, strip: true }
+        }
+      } else if (e.type === 'move' && drag?.strip) {
+        const p = state.planets[drag.k]
+        const d = dist(drag.x0, drag.y0, e.px, e.py)
+        drag.moved = Math.max(drag.moved, d)
+        if (drag.grow) p.m = +clamp(0.3 + d / (e.h * 3), 0, 1).toFixed(3)
+        else { p.r = +rOfY(e.y).toFixed(3); p.a = +(-lapsOf(p.r) * e.x).toFixed(4) }
+      } else if (e.type === 'up' && drag?.strip) {
+        if (!drag.grow && drag.moved < 5) state.planets.splice(drag.k, 1)
+        drag = null
+      }
+    }
+    function frameStrip(g, w, h, t) {
+      for (const n of REVS) {
+        // orbit band guides
+        const r = 0.15 + (REVS.indexOf(n) + 0.5) * (0.85 / REVS.length)
+        g.fillStyle = th.faint
+        g.fillRect(0, Math.round(yOfR(r) * h), w, 1)
+      }
+      state.planets.forEach((p, k) => {
+        const y = yOfR(p.r) * h
+        const glow = fx.glow(k, t.now, 0.4)
+        const size = 2 + p.m * h * 0.3
+        crossings(p).forEach((ph) => {
+          const near = Math.abs(((t.phase - ph + 1.5) % 1) - 0.5) < 0.02
+          g.fillStyle = glow && near ? th.accent : th.fg
+          g.beginPath(); g.arc(ph * w, y, size * (glow && near ? 1.3 : 1), 0, TAU); g.fill()
+        })
+      })
+      if (t.playing) {
+        g.fillStyle = th.dim
+        g.fillRect(Math.round(t.phase * w), 0, 1, h)
+      }
+    }
+
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
+        if (isStrip(e.w, e.h)) return stripPointer(e)
         const ph = phaseNow()
         if (e.type === 'down') {
           const k = state.planets.findIndex((p) => {
@@ -88,6 +151,8 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
+        if (isStrip(w, h)) return frameStrip(g, w, h, view(clock))
         const t = view(clock)
         const ph = ((t.phase % 1) + 1) % 1
         const RR = R(w, h)
@@ -111,9 +176,7 @@ export default {
       },
       setState(s) { state.planets = s.planets.map((p) => ({ ...p })) },
       clear() { state.planets = [] },
-      randomize() {
-        state.planets = Array.from({ length: 4 }, () => ({ r: 0.2 + Math.random() * 0.8, a: Math.floor(Math.random() * 16) / 16, m: Math.random() }))
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
     }
   },
 }

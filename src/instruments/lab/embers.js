@@ -8,6 +8,16 @@ import { withPointer, view, absNow, absOf, theme, SLOTS, clamp, dist, TAU } from
 const MAX = 48
 const FLIGHT = 0.45 // seconds a spark takes to rise
 
+// born: null means "lit just now"; setState stamps it with the current loop
+function gen(steps = 16) {
+  const per = SLOTS / steps
+  return {
+    sparks: Array.from({ length: 7 }, () => ({
+      s: Math.floor(Math.random() * steps) * per, x: +(0.15 + Math.random() * 0.7).toFixed(3), y: +(0.1 + Math.random() * 0.7).toFixed(3), born: null,
+    })),
+  }
+}
+
 export default {
   id: 'embers',
   name: 'Embers',
@@ -18,10 +28,13 @@ export default {
     crackle: { value: 0.35, min: 0, max: 1, step: 0.01 },
     tone: { value: 0.5, min: 0, max: 1, step: 0.01 },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { sparks: [] } // {s: slot, x, y, born: loop}
     let lastThrow = null
 
@@ -52,7 +65,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         if (e.type === 'down') { throwAt(e.x, e.y); lastThrow = [e.px, e.py] }
         else if (e.type === 'move' && e.pressed && lastThrow) {
           if (dist(lastThrow[0], lastThrow[1], e.px, e.py) > Math.min(e.w, e.h) * 0.08) {
@@ -77,6 +90,7 @@ export default {
         }
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         const t = view(clock)
         const loopDur = clock.stepDur * clock.steps
         const fx = w / 2, fy = h * 0.96
@@ -127,15 +141,12 @@ export default {
           g.beginPath(); g.arc(tx, ty, 1.5 + life * 1.5, 0, TAU); g.fill()
         }
       },
-      setState(s) { state.sparks = s.sparks.map((p) => ({ ...p })) },
-      clear() { state.sparks = [] },
-      randomize() {
+      setState(s) {
         const loop = Math.floor(absNow(clock) / clock.steps)
-        const per = SLOTS / clock.steps
-        state.sparks = Array.from({ length: 7 }, () => ({
-          s: Math.floor(Math.random() * clock.steps) * per, x: 0.15 + Math.random() * 0.7, y: 0.1 + Math.random() * 0.7, born: loop - 1,
-        }))
+        state.sparks = s.sparks.map((p) => ({ ...p, born: p.born ?? loop - 1 }))
       },
+      clear() { state.sparks = [] },
+      randomize() { this.setState(gen(clock.steps, params)) },
     }
   },
 }

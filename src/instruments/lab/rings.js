@@ -1,12 +1,17 @@
 // 03 Rings: three euclidean rhythms on concentric rings, each with its own length.
 // Ring lengths that differ from 16 drift against the loop (polymeter).
 import { kit } from './kit.js'
-import { withPointer, view, absOf, theme, clamp, TAU, flashes } from './util.js'
+import { isStrip, withPointer, view, absOf, theme, clamp, TAU, flashes } from './util.js'
 
 const RADII = [1, 0.7, 0.42]
 const VOICES = ['hat', 'snare', 'kick']
 
 const hit = (j, n, k, rot) => (((((j - rot) % n) + n) % n) * k) % n < k
+
+function gen(steps, p = {}) {
+  const n = [p.outer ?? 16, p.middle ?? 12, p.inner ?? 16]
+  return { rings: n.map((len) => ({ k: 1 + Math.floor(Math.random() * len * 0.6), rot: Math.floor(Math.random() * len) })) }
+}
 
 export default {
   id: 'rings',
@@ -19,10 +24,13 @@ export default {
     kickPitch: { value: 50, min: 30, max: 90, step: 1 },
     hatOpen: { value: false },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { params, out, audio, clock } = ctx
     const { voices } = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { rings: [{ k: 7, rot: 0 }, { k: 3, rot: 3 }, { k: 4, rot: 0 }] }
     const fx = flashes()
     const ns = () => [params.outer, params.middle, params.inner]
@@ -34,9 +42,55 @@ export default {
       return { R, r: Math.hypot(dx, dy), a: Math.atan2(dy, dx) + Math.PI / 2 }
     }
 
+    // unrolled: one row per ring (outer on top), x is the loop. Drag sideways to rotate,
+    // tap to add a pulse, shift-tap to remove one.
+    function stripPointer(e) {
+      if (e.type === 'down') {
+        const i = clamp(Math.floor(e.y * 3), 0, 2)
+        drag = { i, x0: e.x, rot0: state.rings[i].rot, moved: 0, strip: true }
+      } else if (e.type === 'move' && drag?.strip) {
+        const n = ns()[drag.i]
+        drag.moved = Math.max(drag.moved, Math.abs(e.x - drag.x0) * e.w)
+        const m = Math.round((e.x - drag.x0) * clock.steps)
+        state.rings[drag.i].rot = (((drag.rot0 + m) % n) + n) % n
+      } else if (e.type === 'up' && drag?.strip) {
+        if (drag.moved < 5) {
+          const ring = state.rings[drag.i], n = ns()[drag.i]
+          ring.k = clamp(ring.k + (e.alt ? -1 : 1), 0, n)
+        }
+        drag = null
+      }
+    }
+
+    function frameStrip(g, w, h, t) {
+      const steps = t.steps
+      const start = Math.floor(t.abs / steps) * steps
+      const cur = Math.floor(t.abs) - start
+      const cw = w / steps, rh = h / 3
+      ns().forEach((n, r) => {
+        const { k, rot } = state.rings[r]
+        const cy = rh * r + rh / 2
+        for (let s = 0; s < steps; s++) {
+          const j = (((start + s) % n) + n) % n
+          const on = hit(j, n, Math.min(k, n), rot)
+          const cx = cw * s + cw / 2
+          const glow = fx.glow(`${r}:${j}`, t.now)
+          const size = Math.max(1.5, Math.min(cw, rh) * (on ? 0.28 + glow * 0.1 : 0.08))
+          g.fillStyle = on ? (glow > 0 ? th.accent : th.fg) : s === cur && t.playing ? th.fg : th.dim
+          g.beginPath(); g.arc(cx, cy, size, 0, TAU); g.fill()
+          // this ring's own downbeat, which drifts when its length isn't the loop's
+          if (j === 0 && n !== steps) {
+            g.fillStyle = th.dim
+            g.fillRect(cw * s, rh * r + 1, 1, rh - 2)
+          }
+        }
+      })
+    }
+
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
+        if (isStrip(e.w, e.h)) return stripPointer(e)
         const { R, r, a } = geom(e)
         if (e.type === 'down') {
           let best = 0, bd = Infinity
@@ -73,6 +127,8 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
+        if (isStrip(w, h)) return frameStrip(g, w, h, view(clock))
         const t = view(clock)
         const R = Math.min(w, h) * 0.44
         const cx = w / 2, cy = h / 2
@@ -113,10 +169,7 @@ export default {
       },
       setState(s) { state.rings = s.rings.map((r) => ({ ...r })) },
       clear() { state.rings.forEach((r) => { r.k = 0; r.rot = 0 }) },
-      randomize() {
-        const n = ns()
-        state.rings.forEach((r, i) => { r.k = 1 + Math.floor(Math.random() * (n[i] * 0.6)); r.rot = Math.floor(Math.random() * n[i]) })
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
     }
   },
 }

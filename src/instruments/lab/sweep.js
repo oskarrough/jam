@@ -7,6 +7,13 @@ import { withPointer, view, absOf, theme, SLOTS, clamp, subSlots } from './util.
 const cutoffOf = (y) => 60 * Math.pow(2, (1 - y) * 7.5)
 const qOf = (x) => 0.4 + x * 16
 
+function gen() {
+  const a = Math.random(), b = Math.floor(Math.random() * 3) + 1
+  const auto = []
+  for (let s = 0; s < SLOTS; s++) auto.push([+(0.5 + 0.4 * Math.sin((s / SLOTS) * Math.PI * 2 * b + a * 6)).toFixed(3), +(Math.random() * 0.5).toFixed(3)])
+  return { auto }
+}
+
 export default {
   id: 'sweep',
   name: 'Sweep',
@@ -18,10 +25,13 @@ export default {
     octave: { value: -1, min: -2, max: 1, step: 1 },
     level: { value: 0.11, min: 0, max: 0.3, step: 0.005 },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { auto: Array(SLOTS).fill(null) }
     const filt = audio.createBiquadFilter()
     filt.type = 'lowpass'
@@ -77,7 +87,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         if (e.type === 'down') { lastRec = null; applyLive(e) }
         else if (e.type === 'move' && e.pressed) applyLive(e)
         else if (e.type === 'up') { live = null; lastRec = null }
@@ -99,6 +109,7 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         const t = view(clock)
         const sw = w / SLOTS
         // automation as columns; width of the cap shows resonance
@@ -129,10 +140,7 @@ export default {
       },
       setState(s) { state.auto = s.auto.map((a) => (a ? a.slice() : null)) },
       clear() { state.auto.fill(null) },
-      randomize() {
-        const a = Math.random(), b = Math.random() * 3 + 1
-        for (let s = 0; s < SLOTS; s++) state.auto[s] = [0.5 + 0.4 * Math.sin((s / SLOTS) * Math.PI * 2 * b + a * 6), Math.random() * 0.5]
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
       dispose() {
         amp.gain.setTargetAtTime(0, audio.currentTime, 0.05)
         oscs.forEach(({ o }) => o.stop(audio.currentTime + 0.4))

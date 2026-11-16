@@ -3,6 +3,16 @@
 import { kit } from './kit.js'
 import { withPointer, view, absOf, theme, SLOTS, clamp, subSlots } from './util.js'
 
+function gen() {
+  const ys = []
+  let y = Math.random()
+  for (let s = 0; s < SLOTS; s++) {
+    if (s % 4 === 0) y = clamp(y + (Math.random() - 0.5) * 0.5, 0.05, 0.95)
+    ys.push(Math.random() < 0.85 ? +y.toFixed(3) : null)
+  }
+  return { ys }
+}
+
 export default {
   id: 'contour',
   name: 'Contour',
@@ -15,10 +25,13 @@ export default {
     cutoff: { value: 2400, min: 200, max: 9000, step: 10 },
     articulate: { value: true },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { ys: Array(SLOTS).fill(null) }
 
     const osc = audio.createOscillator()
@@ -44,7 +57,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         if (e.type === 'down') { lastSlot = null; paint(e.x, e.y, e.alt) }
         else if (e.type === 'move' && e.pressed) paint(e.x, e.y, e.alt)
         else if (e.type === 'up') lastSlot = null
@@ -76,6 +89,7 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         const t = view(clock)
         // scale-degree guide lines
         g.strokeStyle = th.faint
@@ -116,13 +130,7 @@ export default {
       },
       setState(s) { state.ys = s.ys.slice() },
       clear() { state.ys.fill(null) },
-      randomize() {
-        let y = Math.random()
-        for (let s = 0; s < SLOTS; s++) {
-          if (s % 4 === 0) y = clamp(y + (Math.random() - 0.5) * 0.5, 0.05, 0.95)
-          state.ys[s] = Math.random() < 0.85 ? y : null
-        }
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
       dispose() { amp.gain.setTargetAtTime(0, audio.currentTime, 0.02); osc.stop(audio.currentTime + 0.2) },
     }
   },

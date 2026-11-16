@@ -43,6 +43,17 @@ function vowelBuffer(audio) {
   return buf
 }
 
+function gen() {
+  const pts = []
+  let x = Math.random(), y = Math.random(), a = Math.random() * TAU
+  for (let k = 0; k < 120; k++) {
+    a += (Math.random() - 0.5) * 1.2
+    x = clamp(x + Math.cos(a) * 0.03, 0, 1); y = clamp(y + Math.sin(a) * 0.03, 0, 1)
+    pts.push([+x.toFixed(3), +y.toFixed(3), k === 0 ? 1 : 0])
+  }
+  return { pts }
+}
+
 export default {
   id: 'scribble',
   name: 'Scribble',
@@ -55,10 +66,13 @@ export default {
     jitter: { value: 0.02, min: 0, max: 0.3, step: 0.005 },
     level: { value: 0.22, min: 0, max: 0.6, step: 0.01 },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { pts: [] } // [x, y, strokeStart]
     const src = vowelBuffer(audio)
     const fx = flashes()
@@ -82,7 +96,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         if (e.type === 'down') {
           last = [e.px, e.py]
           state.pts.push([clamp(e.x, 0, 1), clamp(e.y, 0, 1), 1])
@@ -115,6 +129,7 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         const t = view(clock)
         const N = state.pts.length
         // vowel zones
@@ -144,15 +159,7 @@ export default {
       },
       setState(s) { state.pts = s.pts.map((p) => p.slice()) },
       clear() { state.pts = [] },
-      randomize() {
-        state.pts = []
-        let x = Math.random(), y = Math.random(), a = Math.random() * TAU
-        for (let k = 0; k < 120; k++) {
-          a += (Math.random() - 0.5) * 1.2
-          x = clamp(x + Math.cos(a) * 0.03, 0, 1); y = clamp(y + Math.sin(a) * 0.03, 0, 1)
-          state.pts.push([x, y, k === 0 ? 1 : 0])
-        }
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
     }
   },
 }

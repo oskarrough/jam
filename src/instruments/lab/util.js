@@ -80,14 +80,18 @@ export function flashes() {
 }
 
 // Normalise pointer events from any host: tracks `pressed`, fills in pixel coords
-// (px, py, w, h) when the host only sends normalised x/y.
-export function withPointer(fn) {
+// (px, py, w, h) when the host only sends normalised x/y. `size` is a [w, h] array
+// the instrument keeps current from frame(), since hosts may not send lane size.
+export function withPointer(size, fn) {
   let pressed = false
   return (e) => {
     if (e.type === 'down') pressed = true
-    const w = e.w ?? 1, h = e.h ?? 1
+    const w = e.w ?? size[0], h = e.h ?? size[1]
     const ev = { ...e, pressed: e.pressed ?? pressed, w, h, px: e.px ?? e.x * w, py: e.py ?? e.y * h }
     if (e.type === 'up' || e.type === 'cancel') pressed = false
     return fn(ev)
   }
 }
+
+// lanes much wider than tall (the fire view's rings, strips) get an unrolled layout
+export const isStrip = (w, h) => w > h * 2.5

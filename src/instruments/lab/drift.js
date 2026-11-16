@@ -6,6 +6,10 @@ import { withPointer, view, absOf, theme, clamp, dist, TAU } from './util.js'
 
 const MAX = 5
 
+function gen() {
+  return { stones: Array.from({ length: 3 + Math.floor(Math.random() * 2) }, () => ({ x: +Math.random().toFixed(3), y: +(0.3 + Math.random() * 0.6).toFixed(3) })) }
+}
+
 export default {
   id: 'drift',
   name: 'Drift',
@@ -17,10 +21,13 @@ export default {
     glide: { value: 0.25, min: 0.01, max: 2, step: 0.01 },
     level: { value: 0.09, min: 0, max: 0.25, step: 0.005 },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { stones: [] }
     const voices = []
     let drag = null
@@ -72,7 +79,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         if (e.type === 'down') {
           let k = near(e)
           let fresh = false
@@ -107,6 +114,7 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         const t = view(clock)
         const m = Math.min(w, h)
         // pitch columns
@@ -137,10 +145,7 @@ export default {
       },
       setState(s) { state.stones = s.stones.map((p) => ({ ...p })); sync() },
       clear() { state.stones = []; sync() },
-      randomize() {
-        state.stones = Array.from({ length: 3 + Math.floor(Math.random() * 2) }, () => ({ x: Math.random(), y: 0.3 + Math.random() * 0.6 }))
-        sync()
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
       dispose() { state.stones = []; sync() },
     }
   },

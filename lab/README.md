@@ -1,7 +1,9 @@
 # instrument lab
 
-Ten ways to play one lane of the campfire. The modules live in `src/instruments/lab/` and are registered with the main jam, so any seat can pick them; this page plays them one at a time with their own debug panel.
-(`npx serve .` or `python3 -m http.server`), click, and press 1–0 to switch.
+Ten ways to play one lane of the campfire. The modules live in `src/instruments/lab/` and are
+registered with the jam, so any seat can pick them. This page plays them one at a time with
+their own debug panel: serve the repo root (`python3 -m http.server`), open `/lab/`, click,
+and press 1–0 to switch.
 No build step, no network: lil-gui is vendored.
 
 All ten share one clock and one key. Each draws into a plain rectangle, so the fire view
@@ -46,6 +48,11 @@ clock = { bpm, steps, stepDur, startTime, now(), pos(), playing?, abs()? }
 Shared sound comes from `kit(audio)` in `src/instruments/lab/kit.js`: voices (bell, pluck, marimba,
 kick, snare, hat, noise), the key (`degree(n, oct)`), and a four-chord progression
 that advances once per loop (`chord(absStep, steps)`).
+
+All ten implement `generate(steps, params)` and `sample(steps)`, so frengers can redraw them.
+Lanes wider than 2.5× their height (the fire view's rings, the strips view) get an unrolled
+layout where the instrument needs one: rings become three rows of pulses, orbits become
+crossing dots on orbit bands.
 
 Instruments whose motion depends on time (swarm, orbits) compute it purely from loop
 phase and a seed, so every peer sees and hears the same thing from the same state.

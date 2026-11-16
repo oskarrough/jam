@@ -7,6 +7,16 @@ import { withPointer, view, absNow, absOf, theme, subSlots, SLOTS, clamp, TAU } 
 const STRINGS = 6
 const MAX_HITS = 96
 
+function gen() {
+  const hits = []
+  ;[0, 6, 12, 20, 24, 28, 36, 44, 48, 54, 60].forEach((s) => {
+    if (Math.random() < 0.3) return
+    const down = Math.random() < 0.6
+    for (let k = 0; k < STRINGS; k++) hits.push([s, down ? k : STRINGS - 1 - k, +(0.5 + Math.random() * 0.4).toFixed(2)])
+  })
+  return { hits }
+}
+
 export default {
   id: 'strum',
   name: 'Strum',
@@ -18,10 +28,13 @@ export default {
     octave: { value: 0, min: -1, max: 1, step: 1 },
     level: { value: 0.5, min: 0, max: 1, step: 0.01 },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { hits: [] } // [slot, string, velocity]
     const ring = Array.from({ length: STRINGS }, () => ({ t: -1, v: 0 }))
     let lastX = null, lastT = 0
@@ -53,7 +66,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         const now = performance.now()
         if (e.type === 'down') {
           // tapping right on a string plucks it
@@ -81,6 +94,7 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         const t = view(clock)
         notes(Math.floor(t.abs))
         // recorded strums: time runs down each string
@@ -113,15 +127,7 @@ export default {
       },
       setState(s) { state.hits = s.hits.map((x) => x.slice()) },
       clear() { state.hits = [] },
-      randomize() {
-        state.hits = []
-        const pattern = [0, 6, 12, 20, 24, 28, 36, 44, 48, 54, 60]
-        pattern.forEach((s) => {
-          if (Math.random() < 0.3) return
-          const down = Math.random() < 0.6
-          for (let k = 0; k < STRINGS; k++) state.hits.push([s, down ? k : STRINGS - 1 - k, 0.5 + Math.random() * 0.4])
-        })
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
     }
   },
 }

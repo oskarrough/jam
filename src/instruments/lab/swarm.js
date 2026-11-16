@@ -6,6 +6,15 @@ import { withPointer, view, theme, subSlots, SLOTS, clamp, rng, intersect, segDi
 
 const MAX_WIRES = 8
 
+function gen() {
+  return {
+    wires: Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => {
+      const y = Math.random(), x = Math.random() * 0.6
+      return [x, y, x + 0.2 + Math.random() * 0.3, clamp(y + (Math.random() - 0.5) * 0.3, 0, 1)].map((v) => +v.toFixed(3))
+    }),
+  }
+}
+
 export default {
   id: 'swarm',
   name: 'Swarm',
@@ -18,10 +27,13 @@ export default {
     decay: { value: 0.35, min: 0.05, max: 1.5, step: 0.01 },
     trails: { value: true },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { audio, out, params, clock } = ctx
     const engine = kit(audio)
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { wires: [] } // [x1, y1, x2, y2]
     const fx = flashes()
     let flies = []
@@ -42,7 +54,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         if (e.type === 'down') draft = { x1: e.x, y1: e.y, x2: e.x, y2: e.y, px: e.px, py: e.py }
         else if (e.type === 'move' && draft) { draft.x2 = clamp(e.x, 0, 1); draft.y2 = clamp(e.y, 0, 1) }
         else if (e.type === 'up' && draft) {
@@ -82,6 +94,7 @@ export default {
         })
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         ensureFlies()
         const t = view(clock)
         state.wires.forEach(([a, b, c, d], wi) => {
@@ -115,12 +128,7 @@ export default {
       },
       setState(s) { state.wires = s.wires.map((x) => x.slice()) },
       clear() { state.wires = [] },
-      randomize() {
-        state.wires = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => {
-          const y = Math.random(), x = Math.random() * 0.6
-          return [x, y, x + 0.2 + Math.random() * 0.3, clamp(y + (Math.random() - 0.5) * 0.3, 0, 1)]
-        })
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
     }
   },
 }

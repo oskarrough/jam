@@ -5,6 +5,12 @@ import { withPointer, view, absOf, theme, clamp, flashes } from './util.js'
 const COLS = 16
 const ROWS = 8
 
+function gen() {
+  const cells = Array(COLS * ROWS).fill(0)
+  for (let c = 0; c < COLS; c++) if (Math.random() < 0.55) cells[Math.floor(Math.random() * ROWS) * COLS + c] = 1
+  return { cells }
+}
+
 export default {
   id: 'grid',
   name: 'Grid',
@@ -15,11 +21,14 @@ export default {
     ratio: { value: 3.5, min: 1, max: 8, step: 0.01 },
     index: { value: 1.6, min: 0, max: 6, step: 0.05 },
   },
+  generate: (steps, params) => gen(steps, params),
+  sample: (steps) => gen(steps),
   create(ctx) {
     const { params, out, audio, clock } = ctx
     const engine = kit(audio)
     const { voices } = engine
     const th = theme(ctx)
+    const size = [1, 1] // lane size from the last frame, for pointer maths
     const state = { cells: Array(COLS * ROWS).fill(0) }
     const fx = flashes()
     let mode = 1
@@ -32,7 +41,7 @@ export default {
 
     return {
       state,
-      pointer: withPointer((e) => {
+      pointer: withPointer(size, (e) => {
         if (e.type === 'down') {
           const i = cellAt(e.x, e.y)
           mode = state.cells[i] ? 0 : 1
@@ -54,6 +63,7 @@ export default {
         }
       },
       frame(g, w, h, clock) {
+        size[0] = w; size[1] = h
         const t = view(clock)
         const cw = w / COLS, ch = h / ROWS
         const col = Math.floor(t.phase * COLS)
@@ -81,10 +91,7 @@ export default {
       },
       setState(s) { state.cells = s.cells.slice() },
       clear() { state.cells.fill(0) },
-      randomize() {
-        state.cells.fill(0)
-        for (let c = 0; c < COLS; c++) if (Math.random() < 0.55) state.cells[Math.floor(Math.random() * ROWS) * COLS + c] = 1
-      },
+      randomize() { this.setState(gen(clock.steps, params)) },
     }
   },
 }
