@@ -9,6 +9,20 @@ const VOICES = ['hat', 'snare', 'kick']
 
 export const hit = (j, n, k, rot) => (((((j - rot) % n) + n) % n) * k) % n < k
 
+// Tapping a step toggles it: k goes up or down by one, and of all the rotations that put the
+// tapped step where you want it, the one that moves the fewest other pulses wins.
+function toggle(ring, n, j) {
+	const k = Math.min(ring.k, n), want = !hit(j, n, k, ring.rot), k2 = clamp(k + (want ? 1 : -1), 0, n)
+	let best = ring.rot, keep = -1
+	for (let rot = 0; rot < n; rot++) {
+		if (hit(j, n, k2, rot) !== want) continue
+		let same = 0
+		for (let i = 0; i < n; i++) if (hit(i, n, k2, rot) === hit(i, n, k, ring.rot)) same++
+		if (same > keep) { keep = same; best = rot }
+	}
+	ring.k = k2; ring.rot = best
+}
+
 function gen(steps, p = {}) {
 	const n = [p.outer ?? 16, p.middle ?? 12, p.inner ?? 16]
 	return { rings: n.map((len) => ({ k: 1 + Math.floor(Math.random() * len * 0.6), rot: Math.floor(Math.random() * len) })) }
@@ -19,7 +33,7 @@ export default {
 	glyph: '<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="8.5"/><circle cx="16" cy="16" r="13"/><circle class="f" cx="16" cy="3" r="1.8"/>',
 	name: 'Rings',
 	playhead: false, // time goes round each ring
-	how: 'Drag around a ring to rotate it, drag outward or inward to add or remove pulses, tap to add one.',
+	how: 'Tap a dot to turn it on or off; the rest of the ring spreads out evenly around it. Drag along a ring to turn it, drag outward or inward for more or fewer pulses.',
 	demo: (shape, aspect) => shape === 'ring' ? [tap(0.2, 0.17), line(0.2, 0.5, 0.45, 0.5, 10)] : [tap(...arc(0.5, 0.5, 0.44, 0.1, 0.1, aspect, 1)[0]), arc(0.5, 0.5, 0.31, 0.05, 0.3, aspect, 16)],
 	params: {
 		outer: { value: 16, min: 3, max: 16, step: 1 },
@@ -59,8 +73,9 @@ export default {
 				state.rings[drag.i].rot = (((drag.rot0 + m) % n) + n) % n
 			} else if (e.type === 'up' && drag?.strip) {
 				if (drag.moved < 5) {
-					const ring = state.rings[drag.i], n = ns()[drag.i]
-					ring.k = clamp(ring.k + (e.alt ? -1 : 1), 0, n)
+					const n = ns()[drag.i], steps = clock.steps
+					const start = Math.floor(view(clock).abs / steps) * steps, s = clamp(Math.floor(e.x * steps), 0, steps - 1)
+					toggle(state.rings[drag.i], n, (((start + s) % n) + n) % n)
 				}
 				drag = null
 			}
@@ -106,13 +121,16 @@ export default {
 					const ring = state.rings[drag.i]
 					let da = a - drag.a0
 					da = Math.atan2(Math.sin(da), Math.cos(da))
-					drag.moved = Math.max(drag.moved, Math.abs(r - drag.r0), Math.abs(da) * drag.r0)
-					ring.rot = (((drag.rot0 + Math.round((da / TAU) * n)) % n) + n) % n
-					ring.k = clamp(drag.k0 + Math.round((r - drag.r0) / (drag.R * 0.05)), 0, n)
+					const along = Math.abs(da) * drag.r0, out = Math.abs(r - drag.r0)
+					drag.moved = Math.max(drag.moved, along, out)
+					// one gesture does one thing: whichever way it went first
+					if (!drag.mode && drag.moved > 8) drag.mode = along > out ? 'turn' : 'count'
+					if (drag.mode === 'turn') ring.rot = (((drag.rot0 + Math.round((da / TAU) * n)) % n) + n) % n
+					if (drag.mode === 'count') ring.k = clamp(drag.k0 + Math.round((r - drag.r0) / (drag.R * 0.05)), 0, n)
 				} else if (e.type === 'up' && drag) {
-					if (drag.moved < 5) {
-						const ring = state.rings[drag.i]
-						ring.k = (ring.k + 1) % (ns()[drag.i] + 1)
+					if (drag.moved < 8) {
+						const n = ns()[drag.i]
+						toggle(state.rings[drag.i], n, ((Math.round((drag.a0 / TAU) * n) % n) + n) % n)
 					}
 					drag = null
 				}

@@ -169,10 +169,16 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)]
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
 const word = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; return b }
-const live = () => word('play live', () => (location.href = '/'))
+// leaves the recording for the jam it came from, live; the open jam when it came from there or we don't know
+const live = (room) => {
+	const named = room && room !== 'open'
+	const b = word(named ? 'join ' + room + ' live' : 'join the live jam', () => (location.href = named ? '/j/' + encodeURIComponent(room) : '/'))
+	b.title = 'leave this recording and play along with whoever is in there now'
+	return b
+}
 if (replay) {
 	const from = rec.room && rec.room !== 'open' ? [' of ', Object.assign(document.createElement('b'), { textContent: rec.room })] : []
-	jamline.append('a recording', ...from, ' · ', saveAudio(), ' · ', live())
+	jamline.append('a recording', ...from, ' · ', saveAudio(), ' · ', live(rec.room))
 } else if (replayId) jamline.append('that recording is gone · ', live())
 else if (transport.kind === 'ws') {
 	const fresh = (text) => Object.assign(word(text, () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))), { title: 'a new jam with its own link, for you and whoever you send it to' })
@@ -211,6 +217,7 @@ function saveAudio() {
 		busy = false
 	})
 	b.title = 'this recording as an audio file'
+	b.className = 'dl'
 	return b
 }
 // seats are drawn by view.js; this only keeps the peers line current
@@ -414,11 +421,12 @@ if (recBtn && transport.kind === 'ws') {
 			const url = `${location.origin}/r/${id}`
 			setRec('done', 1)
 			const copy = word('copy link', async () => {
-				try { await navigator.clipboard.writeText(url); copy.textContent = 'copied' } catch { copy.textContent = url }
+				try { await navigator.clipboard.writeText(url); copy.textContent = 'link copied' } catch { copy.textContent = url }
 			})
-			const a = Object.assign(document.createElement('a'), { href: '/r/' + id, target: '_blank', textContent: 'play it back' })
-			recline.append('recorded ' + r.bars + ' bars · ', copy, ' · ', a)
-			try { await navigator.clipboard.writeText(url) ; copy.textContent = 'link copied' } catch {}
+			copy.title = url
+			const a = Object.assign(document.createElement('a'), { href: '/r/' + id, target: '_blank', textContent: 'listen' })
+			recline.append(r.bars + ' bars · ', copy, ' · ', a)
+			try { await navigator.clipboard.writeText(url); copy.textContent = 'link copied' } catch {}
 			setTimeout(() => setRec('idle'), 2500)
 		} catch (e) {
 			console.warn(e)

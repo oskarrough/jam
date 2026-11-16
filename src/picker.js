@@ -40,11 +40,15 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		buttons.push(b)
 	}
 
+	// what you left on each instrument, so switching back finds it again; this tab only
+	const left = new Map()
 	function choose(id) {
 		const L = seat()
 		if (!L || L.module.id === id) return false
 		before?.()
-		engine.setInstrument(L, id, { state: registry.get(id).sample?.(engine.steps()) })
+		left.set(`${L.id}:${L.module.id}`, { state: structuredClone(L.instance.state), params: { ...L.params } })
+		const back = left.get(`${L.id}:${id}`)
+		engine.setInstrument(L, id, back ? structuredClone(back) : { state: registry.get(id).sample?.(engine.steps()) })
 		engine.push(L, { now: true })
 		paint()
 		chosen?.(id)

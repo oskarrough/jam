@@ -34,6 +34,7 @@ h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: i
 .jamline b { font-weight: 600 }
 .jamline button { all: unset; cursor: pointer; text-decoration: underline wavy color-mix(in srgb, currentColor 45%, transparent) 1px; text-underline-offset: 3px }
 .jamline button:hover, .jamline button:focus-visible { text-decoration-color: currentColor }
+.jamline .dl::before { content: ''; display: inline-block; width: 0.85em; height: 0.85em; margin-right: 0.3em; vertical-align: -0.08em; background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11'/%3E%3C/svg%3E") center / contain no-repeat }
 .jamline button:focus-visible { outline: 1.5px solid currentColor; outline-offset: 2px }
 
 .peers { position: fixed; margin: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); right: max(16px, env(safe-area-inset-right, 0px)); max-width: 15rem; text-align: right; font: italic 400 14px/1.3 var(--serif); background: var(--paper); border: 1px solid var(--ink); padding: 0.25rem 0.55rem; box-shadow: 3px 4px 0 var(--shadow) }
@@ -155,6 +156,11 @@ output.pending { color: var(--vermilion) }
 #rec[data-state='rec'] .arc, #rec[data-state='saving'] .arc, #rec[data-state='done'] .arc { opacity: 1 }
 #rec[data-state='rec'] .dot, #rec[data-state='armed'] .dot { fill: var(--vermilion) }
 #rec[data-state='saving'] { opacity: 0.6 }
+/* while it's taking, the whole token goes red and breathes, so nobody misses it */
+#rec[data-state='rec'] { background: var(--vermilion); animation: rec-on 1.2s ease-in-out infinite }
+#rec[data-state='rec'] .dot { fill: var(--paper) }
+#rec[data-state='rec'] .arc { stroke: var(--paper) }
+@keyframes rec-on { 50% { box-shadow: 3px 4px 0 var(--shadow), 0 0 0 7px color-mix(in srgb, var(--vermilion) 35%, transparent) } }
 @keyframes rec-blink { 50% { opacity: 0.2 } }
 #recline:empty { display: none }
 .jamline a { color: inherit; text-decoration: underline wavy color-mix(in srgb, currentColor 45%, transparent) 1px; text-underline-offset: 3px }
