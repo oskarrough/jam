@@ -4,3 +4,8 @@ node_modules
 sync/node_modules
 wrangler.jsonc
 .jj
+package.json
+bun.lock
+cloudflare.config.ts
+wrangler.config.ts
+.cloudflare
