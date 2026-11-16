@@ -145,6 +145,14 @@ export const drums = {
 			},
 			frame(g, w, h, clock) {
 				const n = hits.length, pos = clock.pos(), color = ctx.color
+				// row guides so the three bands are findable: hat (top/outer), snare, kick (bottom/inner)
+				g.fillStyle = rgba(color, 0.25)
+				for (let r = 1; r < ROWS; r++) g.fillRect(0, (r / ROWS) * h - 0.5, w, 1)
+				g.font = `500 ${Math.max(8, Math.min(11, h / ROWS - 2))}px "IBM Plex Mono", monospace`
+				g.textAlign = 'left'
+				g.textBaseline = 'middle'
+				g.fillStyle = rgba(color, 0.55)
+				;['kick', 'snare', 'hat'].forEach((label, r) => g.fillText(label, w / n + 3, (1 - (r + 0.5) / ROWS) * h))
 				for (let s = 0; s < n; s++) {
 					const m = hits[s]
 					if (!m) continue
