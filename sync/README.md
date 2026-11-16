@@ -7,18 +7,16 @@ Multiplayer layer for the campfire: presence, shared loop clock, per-lane state,
     open http://localhost:8787/sync/     # bare sync demo with a plain debug readout
     LAG=60 npm start                     # simulate 60 ms one-way latency (±20%)
     npm test                             # headless: two peers, one with a +5 s skewed clock, plus the jam page
-    BASE=http://127.0.0.1:8788 npm test  # same tests against `wrangler dev --port 8788` (Durable Object)
+    BASE=http://127.0.0.1:8788 npm test  # same tests against a local Worker dev server on :8788 (Durable Object)
 
 Other devices on the LAN: `http://<your-ip>:8787/?ws=ws://<your-ip>:8787`.
 
 ## Deploy (Cloudflare)
 
-`worker.js` is the same relay as a Worker with one Durable Object per room (`?room=` picks it), using WebSocket hibernation and persisting loop + lanes to storage. `../wrangler.jsonc` serves the repo root as static assets and routes the custom domain `jam.0sk.ar`. From the repo root:
+`worker.js` is the same relay as a Worker with one Durable Object per room (`?room=` picks it), using WebSocket hibernation and persisting loop + lanes to storage. `../cloudflare.config.ts` defines the Worker: repo root as static assets, `runWorkerFirst: ["/"]` so WebSocket upgrades reach the relay, the `ROOMS` Durable Object binding and the `jam.0sk.ar` domain. From the repo root:
 
-    cf deploy                 # or: npx wrangler deploy
+    cf deploy
     open 'https://jam.0sk.ar/?ws=wss://jam.0sk.ar'
-
-The `cf` CLI delegates Workers builds to Wrangler's config, so the `wrangler.jsonc` should be picked up; that part is untested against a real account. `wrangler dev` passes the full test suite locally.
 
 `room.js` holds the protocol; `server.js` (Node + `ws`) and `worker.js` (Durable Object) are thin wrappers.
 

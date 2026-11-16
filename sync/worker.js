@@ -1,5 +1,5 @@
 // roughjam relay on Cloudflare: one Durable Object per room, static site from Workers assets.
-// Same protocol as server.js; both wrap room.js. Config: ../wrangler.jsonc.
+// Same protocol as server.js; both wrap room.js. Config: ../cloudflare.config.ts.
 //
 // WebSocket hibernation: sockets survive the object sleeping, presence rides on each socket's attachment,
 // and loop + lanes persist to storage so a cold room comes back with its patterns.

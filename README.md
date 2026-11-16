@@ -36,4 +36,4 @@ No server needed for local play: tabs in one browser talk over BroadcastChannel.
 
 ## Deploy
 
-Static files, no build: the whole repo root is the site. `wrangler.jsonc` deploys the site plus the `sync/` relay (a Durable Object per room) to Cloudflare: `cf deploy`, then open `https://jam.0sk.ar/?ws=wss://jam.0sk.ar`. See `sync/README.md`.
+Static files, no build: the whole repo root is the site. `cloudflare.config.ts` deploys the site plus the `sync/` relay (a Durable Object per room) to Cloudflare: `cf deploy`, then open `https://jam.0sk.ar/?ws=wss://jam.0sk.ar`. See `sync/README.md`.
