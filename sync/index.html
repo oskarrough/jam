@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>roughjam sync</title>
+<style>
+	:root { --bg: #11100e; --fg: #e8e2d4; --dim: #6f6a5f; --fire: #ff8a3d; color-scheme: dark; }
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 ui-monospace, Menlo, monospace; }
+	main { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 16px; }
+	@media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+	h1 { font-size: 13px; font-weight: normal; margin: 0 0 12px; color: var(--dim); }
+	h1 b { color: var(--fire); font-weight: normal; }
+	.lane { margin-bottom: 10px; }
+	.lane header { display: flex; gap: 8px; color: var(--dim); }
+	.lane header .who { color: var(--fg); }
+	.lane.mine header .name { color: var(--fire); }
+	canvas { width: 100%; height: 72px; display: block; background: #191714; border-radius: 3px; touch-action: none; }
+	.lane.mine canvas { cursor: crosshair; outline: 1px solid #3a2a1c; }
+	aside { white-space: pre; color: var(--dim); }
+	aside b { color: var(--fg); font-weight: normal; }
+	button, select, input { font: inherit; background: #1d1a16; color: var(--fg); border: 1px solid #333; border-radius: 3px; padding: 2px 6px; }
+	.row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+	#beat { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #333; vertical-align: middle; }
+</style>
+</head>
+<body>
+<main>
+	<section>
+		<h1><b>roughjam</b> sync demo. Open a second tab or device. Draw in your lane; it lands on the next bar for everyone.</h1>
+		<div class="row">
+			<span id="beat"></span>
+			<label>you <input id="name" size="8" /></label>
+			<label>lane <select id="inst"></select></label>
+			<label>bpm <input id="bpm" type="number" min="30" max="300" style="width:5em" /></label>
+			<button id="audio">sound on</button>
+		</div>
+		<div id="lanes"></div>
+	</section>
+	<aside id="debug"></aside>
+</main>
+<script type="module">
+import { createTransport } from './sync.js'
+
+const LANES = ['drums', 'bass', 'chords', 'lead']
+const STEPS = 16, ROWS = 8
+const COLORS = ['#ff8a3d', '#6fc3df', '#c7e36b', '#e46fd1', '#f2d45c', '#9a8cff']
+const q = new URLSearchParams(location.search)
+const name = q.get('name') || ['ember', 'ash', 'spark', 'log', 'smoke', 'kindle'][Math.random() * 6 | 0]
+const color = COLORS[Math.random() * COLORS.length | 0]
+let mine = q.get('lane') || LANES[Math.random() * LANES.length | 0]
+
+const url = q.get('ws') || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
+const t = createTransport({ url, room: q.get('room') || 'campfire', name, instrument: mine, color })
+window.jam = t // poke at it from devtools
+
+// --- UI
+const $ = (s) => document.querySelector(s)
+$('#name').value = name
+$('#name').onchange = (e) => t.setMe({ name: e.target.value })
+$('#inst').innerHTML = LANES.map((l) => `<option ${l === mine ? 'selected' : ''}>${l}</option>`).join('')
+$('#inst').onchange = (e) => { mine = e.target.value; t.setMe({ instrument: mine }); renderLanes() }
+$('#bpm').onchange = (e) => t.setLoop({ bpm: +e.target.value })
+
+const drafts = {} // lane -> grid being drawn locally (not yet applied)
+const pendingAt = {} // lane -> server ms the draft lands
+const cursors = {} // peerId -> {x, y, lane, t}
+const empty = () => Array.from({ length: STEPS }, () => -1) // one note per step, -1 = rest
+
+function renderLanes() {
+	$('#lanes').innerHTML = LANES.map((l) => `<div class="lane ${l === mine ? 'mine' : ''}" data-lane="${l}"><header><span class="name">${l}</span><span class="who"></span><span class="pend"></span></header><canvas></canvas></div>`).join('')
+	for (const el of document.querySelectorAll('.lane')) {
+		const lane = el.dataset.lane, cv = el.querySelector('canvas')
+		let down = false
+		const cell = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height } }
+		const paint = (e) => {
+			const { x, y } = cell(e)
+			t.cursor(x, y, down, lane)
+			if (!down || lane !== mine) return
+			const g = (drafts[lane] ||= [...(t.laneAt(lane) || empty())])
+			const s = Math.min(STEPS - 1, Math.max(0, x * STEPS | 0)), r = Math.min(ROWS - 1, Math.max(0, (1 - y) * ROWS | 0))
+			g[s] = e.shiftKey ? -1 : r
+		}
+		cv.onpointerdown = (e) => { down = true; cv.setPointerCapture(e.pointerId); paint(e) }
+		cv.onpointermove = paint
+		cv.onpointerup = () => {
+			down = false
+			if (lane === mine && drafts[lane]) pendingAt[lane] = t.edit(lane, drafts[lane])
+		}
+	}
+}
+renderLanes()
+
+t.on('apply', ({ lane, at }) => { if (pendingAt[lane] === at) { delete drafts[lane]; delete pendingAt[lane] } })
+t.on('cursor', (m) => (cursors[m.from] = { ...m, t: performance.now() }))
+t.on('welcome', ({ loop }) => ($('#bpm').value = loop.bpm))
+t.on('loop', ({ loop }) => ($('#bpm').value = loop.bpm))
+
+// --- audio: lookahead scheduler reading laneAt() on the shared clock
+let ctx = null
+$('#audio').onclick = () => { ctx ||= new AudioContext(); ctx.resume(); $('#audio').textContent = 'sound ✓' }
+const BASE = { drums: 0, bass: 36, chords: 57, lead: 69 }
+const SCALE = [0, 2, 3, 5, 7, 9, 10, 12]
+let nextStepAt = 0
+function voice(lane, row, when) {
+	const o = ctx.createOscillator(), g = ctx.createGain()
+	if (lane === 'drums') {
+		o.type = 'sine'; o.frequency.setValueAtTime(row < 3 ? 140 : 900 + row * 300, when); o.frequency.exponentialRampToValueAtTime(40, when + 0.12)
+		g.gain.setValueAtTime(0.6, when); g.gain.exponentialRampToValueAtTime(0.001, when + 0.15)
+	} else {
+		o.type = lane === 'bass' ? 'triangle' : lane === 'chords' ? 'sawtooth' : 'square'
+		o.frequency.value = 440 * 2 ** ((BASE[lane] + SCALE[row] - 69) / 12)
+		g.gain.setValueAtTime(lane === 'bass' ? 0.3 : 0.06, when); g.gain.exponentialRampToValueAtTime(0.001, when + 0.25)
+	}
+	o.connect(g).connect(ctx.destination); o.start(when); o.stop(when + 0.3)
+}
+setInterval(() => {
+	if (!ctx || ctx.state !== 'running') return
+	const c = t.clock, l = c.loopAt(), stepMs = c.loopMs(l) / STEPS
+	const now = c.now(), horizon = now + 150
+	if (nextStepAt < now - 50 || nextStepAt > now + 1000) nextStepAt = l.origin + Math.ceil((now - l.origin) / stepMs) * stepMs
+	while (nextStepAt < horizon) {
+		const step = ((Math.round((nextStepAt - l.origin) / stepMs) % STEPS) + STEPS) % STEPS
+		for (const lane of LANES) { const g = t.laneAt(lane, nextStepAt); if (g && g[step] >= 0) voice(lane, g[step], c.toAudio(ctx, nextStepAt)) }
+		nextStepAt += stepMs
+	}
+}, 25)
+
+// --- render loop: playhead, grids, remote cursors, debug panel
+function draw() {
+	const p = t.clock.pos(), peers = t.peers
+	$('#beat').style.background = p && (p.beats % 1) < 0.15 ? (p.beat === 0 ? '#ff8a3d' : '#e8e2d4') : '#333'
+	for (const el of document.querySelectorAll('.lane')) {
+		const lane = el.dataset.lane, cv = el.querySelector('canvas'), x = cv.getContext('2d')
+		const w = (cv.width = cv.clientWidth * devicePixelRatio), h = (cv.height = cv.clientHeight * devicePixelRatio)
+		const live = t.laneAt(lane), draft = drafts[lane], cw = w / STEPS, rh = h / ROWS
+		for (let s = 0; s < STEPS; s++) {
+			x.fillStyle = s % 4 === 0 ? '#22201c' : '#1b1916'; x.fillRect(s * cw + 1, 0, cw - 2, h)
+			if (live && live[s] >= 0) { x.fillStyle = '#e8e2d4'; x.fillRect(s * cw + 2, h - (live[s] + 1) * rh + 2, cw - 4, rh - 4) }
+			if (draft && draft[s] >= 0 && draft[s] !== live?.[s]) { x.strokeStyle = '#ff8a3d'; x.strokeRect(s * cw + 2.5, h - (draft[s] + 1) * rh + 2.5, cw - 5, rh - 5) }
+		}
+		if (p) { x.fillStyle = '#ff8a3d55'; x.fillRect(p.loopPhase * w - 1, 0, 2 * devicePixelRatio, h) }
+		for (const [id, c] of Object.entries(cursors)) {
+			if (c.lane !== lane || performance.now() - c.t > 2000) continue
+			const peer = peers.find((pp) => pp.id === id)
+			x.fillStyle = peer?.color || '#fff'; x.beginPath(); x.arc(c.x * w, c.y * h, (c.down ? 6 : 3) * devicePixelRatio, 0, 7); x.fill()
+		}
+		el.querySelector('.who').textContent = peers.filter((pp) => pp.instrument === lane).map((pp) => pp.name + (pp.id === t.id ? '*' : '')).join(' ')
+		el.querySelector('.pend').textContent = pendingAt[lane] ? `lands in ${((pendingAt[lane] - t.clock.now()) / 1000).toFixed(2)}s` : ''
+	}
+	const d = t.debug(), f = (v, n = 1) => (v == null ? '–' : (+v).toFixed(n))
+	$('#debug').innerHTML = [
+		`<b>sync</b>   ${d.connected ? 'connected' : 'offline (solo)'}  room ${d.room}`,
+		`id      ${d.id ?? '–'}`,
+		`peers   ${d.peers}`,
+		`rtt     ${f(d.rtt)} ms min  ${f(d.rttLast)} last`,
+		`jitter  ${f(d.jitter)} ms`,
+		`offset  ${f(d.offset)} ms ${d.locked ? '(locked)' : '(locking…)'}`,
+		`drift   ${f(d.drift, 2)} ms/min`,
+		`samples ${d.samples}`,
+		`pending ${d.pending}   late ${f(d.lateMs, 0)} ms`,
+		`msgs    ${d.sent} out ${d.recv} in`,
+		'',
+		`<b>clock</b>  ${p ? `bar ${p.bar + 1} beat ${p.beat + 1}` : '–'}`,
+		`server  ${Math.floor(t.clock.now()) % 100000}`,
+		`phase   ${p ? f(p.loopPhase, 3) : '–'}`,
+		`bpm     ${p?.loop.bpm}  ${p?.loop.bars} bars`,
+		'',
+		`<b>fire</b>`,
+		...peers.map((pp) => `<span style="color:${pp.color}">●</span> ${pp.name.padEnd(8)} ${pp.instrument ?? ''}${pp.id === t.id ? '  (you)' : ''}`),
+	].join('\n')
+	requestAnimationFrame(draw)
+}
+draw()
+</script>
+</body>
+</html>
