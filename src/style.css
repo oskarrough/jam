@@ -110,8 +110,14 @@ output.pending { color: var(--vermilion) }
 	.nib { padding: 0 8px }
 	output { font-size: 20px }
 	.deck svg { width: 24px; height: 24px }
-	.lil-gui.root { top: auto !important; bottom: 80px }
-	body.zoomed .lil-gui.root { display: none } /* the zoomed sheet needs the room on a phone; d still works on the dial */
+	/* on a phone, controls fold into a small tab in the top corner, clear of the deck; open, they drop down over the sky */
+	.lil-gui.root { max-height: 62vh }
+	.lil-gui.root.closed { --width: 104px !important }
+	body.zoomed .lil-gui.root { display: none } /* the zoomed sheet needs the room on a phone */
+	/* every instrument on the strip: two rows of seven instead of a row running off the edge */
+	.sheetbar { height: auto }
+	.glyphs { flex-wrap: wrap; overflow: visible; max-width: calc(7 * 42px + 8px) }
+	.sheetbar .voices { top: 112px }
 }
 @media (max-width: 370px) {
 	.deck { gap: 4px }

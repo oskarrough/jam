@@ -64,8 +64,11 @@ export function createEngine(transport, { seatIds, instruments }) {
 	})
 	seats.forEach((L) => (L.g = L.canvas.getContext('2d')))
 
+	// mute is the jam's (it travels with the seat's data); solo is yours alone, in your own ears
+	let solo = -1
+	const heard = (L) => !L.mix.mute && (solo < 0 || solo === L.index)
 	function applyMix(L) {
-		L.out.gain.setTargetAtTime(L.mix.mute ? 0 : L.mix.level, audio.currentTime, 0.02)
+		L.out.gain.setTargetAtTime(heard(L) ? L.mix.level : 0, audio.currentTime, 0.02)
 		L.send.gain.setTargetAtTime(L.mix.space, audio.currentTime, 0.02)
 	}
 
@@ -92,6 +95,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 	function push(L, { now = false } = {}) {
 		const data = { instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } }
 		if (L.riff) data.riff = L.riff
+		if (L.mix.mute) data.mute = true
 		lastSent.set(L.id, performance.now())
 		return transport.edit(L.id, data, { now })
 	}
@@ -106,6 +110,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const L = seatById(seat)
 		if (!L || !data || local) return
 		L.riff = data.riff || null
+		if (!!data.mute !== L.mix.mute) { L.mix.mute = !!data.mute; applyMix(L) }
 		if (data.instrument !== L.module.id) setInstrument(L, data.instrument, { state: data.state, params: data.params })
 		else { if (data.params) Object.assign(L.params, data.params); L.instance.setState(data.state) }
 		emit('apply', L)
@@ -160,6 +165,10 @@ export function createEngine(transport, { seatIds, instruments }) {
 	return {
 		audio, seats, cfg, stats, iclock, transport,
 		on, setInstrument, push, pushSoon, applyMix, setSound, level,
+		heard: (i) => heard(seats[i]),
+		get solo() { return solo },
+		setMute(L, on) { L.mix.mute = on; applyMix(L); push(L, { now: true }); emit('mix', L) },
+		setSolo(i) { solo = solo === i ? -1 : i; seats.forEach(applyMix); emit('mix') },
 		get soundOn() { return soundOn },
 		steps, loop,
 		setTick(ms) { cfg.tickMs = ms; clearInterval(timer); timer = setInterval(tick, ms) },

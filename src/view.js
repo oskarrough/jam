@@ -21,7 +21,7 @@ function rng(seed) {
 	return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
 }
 
-export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer, onHand, canHand, onWipe }) {
+export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer, onHand, canHand, onWipe, onMute, onSolo }) {
 	const g = canvas.getContext('2d')
 	const { seats, transport } = engine
 	const { clock } = transport
@@ -41,7 +41,9 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	let lastPhase = 0, loopMs = 5000
 	let heat = 0, lastT = performance.now(), lastBeat = -1, hover = null, drag = null
 	// handing your part to a robot: press your own badge, drag the thread onto theirs
-	let handing = null // {from, id, x, y, x0, y0, moved}
+	let handing = null // a press on a badge: {from, id, x, y, x0, y0, moved, own, long, timer}
+	let lastTap = null
+	const LONG_MS = 550, DOUBLE_MS = 260
 	const seatUnder = (px, py) => seats.findIndex((_, i) => { const [x, y] = seatPos(i); return Math.hypot(px - x, py - y) < seatR() + 6 })
 	const ringJelly = seats.map(() => ({ s: spring({ k: 420, c: 9 }), a: 0 }))
 	const seatJelly = seats.map(() => ({ s: spring({ k: 700, c: 10 }), a: 0 }))
@@ -54,7 +56,7 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		H = innerHeight
 		canvas.width = W * DPR
 		canvas.height = H * DPR
-		const narrow = W < 640, top = narrow ? 44 : 24, bottom = narrow ? 96 : 84, STRIP = 58
+		const narrow = W < 640, top = narrow ? 44 : 24, bottom = narrow ? 96 : 84, STRIP = narrow ? 112 : 58 // the strip wraps to two rows on a phone
 		S0 = Math.max(240, Math.min(W - 24, H - top - bottom))
 		CX0 = W / 2
 		CY0 = top + (H - top - bottom) / 2
@@ -219,14 +221,12 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 			const [x, y] = seatPos(i)
 			if (Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6) {
 				press(seatJelly[i], Math.atan2(e.clientY - y, e.clientX - x))
-				// your own badge waits for release: a tap zooms, a drag hands your part to a robot
-				if (onHand && occupant(i).me) {
-					canvas.setPointerCapture(e.pointerId)
-					handing = { from: i, id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false }
-					return
-				}
-				setTimeout(() => release(seatJelly[i]), 110)
-				return onSit(i)
+				// a badge waits for release: a tap sits or zooms, a double tap solos, a long press mutes,
+				// and dragging your own hands your part to a robot
+				canvas.setPointerCapture(e.pointerId)
+				const h = (handing = { from: i, id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false, own: !!onHand && occupant(i).me })
+				h.timer = setTimeout(() => { if (handing === h && !h.moved) { h.long = true; release(seatJelly[i]); onMute?.(i) } }, LONG_MS)
+				return
 			}
 		}
 		if (focus.on) { if (!inSheet(e.clientX, e.clientY)) setFocus(-1); return }
@@ -260,11 +260,18 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	})
 	const up = (e) => {
 		if (handing && e.pointerId === handing.id) {
-			const { from, moved } = handing
+			const { from, moved, own, long, timer } = handing
 			handing = null
+			clearTimeout(timer)
 			release(seatJelly[from])
-			if (e.type === 'pointercancel') return
-			if (!moved) return onSit(from)
+			if (e.type === 'pointercancel' || long) return
+			if (!moved || !own) {
+				// a second tap on the same badge soon after is a double tap: solo, and the first tap never happens
+				if (lastTap && lastTap.i === from && performance.now() - lastTap.t < DOUBLE_MS) { clearTimeout(lastTap.timer); lastTap = null; return onSolo?.(from) }
+				clearTimeout(lastTap?.timer)
+				lastTap = { i: from, t: performance.now(), timer: setTimeout(() => { lastTap = null; onSit(from) }, DOUBLE_MS) }
+				return
+			}
 			const to = seatUnder(e.clientX, e.clientY)
 			if (to >= 0 && canHand?.(from, to)) {
 				press(seatJelly[to], Math.atan2(e.clientY - seatPos(to)[1], e.clientX - seatPos(to)[0]))
@@ -668,7 +675,19 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 		const img = st.me && glyphImg(L.module.id, PAPER)
 		if (img) g.drawImage(img, x - r * 0.78, y - r * 0.78, r * 1.56, r * 1.56)
 		else g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
-		if (label && !small()) arcCaption(`${L.module.name.toLowerCase()} · ${st.label}`, Math.atan2(y - CY, x - CX), S * 0.505 + r + Math.max(10, S * 0.022), Math.max(11, S * 0.018), st.me)
+		if (L.mix.mute) {
+			// muted: an ink slash through the badge
+			g.strokeStyle = INK; g.lineWidth = 2.2; g.lineCap = 'round'
+			g.beginPath(); g.moveTo(x - r * 0.95, y + r * 0.95); g.lineTo(x + r * 0.95, y - r * 0.95); g.stroke()
+			g.lineCap = 'butt'
+		}
+		if (engine.solo === i) {
+			// soloed in your ears: a second, looser ring round the badge
+			g.strokeStyle = L.color; g.lineWidth = 2
+			wobble(g, x, y, r + 9, i * 11 + 5, 1.1); g.stroke()
+		}
+		const tag = L.mix.mute ? ' · muted' : engine.solo === i ? ' · solo' : ''
+		if (label && !small()) arcCaption(`${L.module.name.toLowerCase()} · ${st.label}${tag}`, Math.atan2(y - CY, x - CX), S * 0.505 + r + Math.max(10, S * 0.022), Math.max(11, S * 0.018), st.me)
 	}
 
 	// hand-set caption riding the outside of the dial's rim, centred on angle a. Upright on both halves:
@@ -791,7 +810,10 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 				g.beginPath(); g.arc(CX, CY, r1, a0, a1); g.arc(CX, CY, r0, a1, a0, true); g.fill()
 			}
 			if (L.ghost && !moving) { g.globalAlpha = 0.3 * (1 - phase) ** 1.2; warp(L, r0, r1, L.ghost); g.globalAlpha = 1 }
+			// a ring you can't hear (muted for the jam, or someone else soloed in your ears) fades back
+			if (!engine.heard(i)) g.globalAlpha = 0.28
 			warp(L, r0, r1)
+			g.globalAlpha = 1
 			if (!small()) {
 				g.translate(...polar(-Math.PI / 2 - 0.2, r0 + ringT() / 2))
 				g.rotate(-0.2)
@@ -901,7 +923,7 @@ export function createView(canvas, engine, { occupant, canDraw, onSit, onPointer
 	}
 
 	function drawHanding() {
-		if (!handing?.moved) return
+		if (!handing?.moved || !handing.own) return
 		const L = seats[handing.from], [sx, sy] = seatPos(handing.from), r = seatR()
 		const over = seatUnder(handing.x, handing.y)
 		seats.forEach((_, j) => {

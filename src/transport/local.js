@@ -62,7 +62,7 @@ export function createLocalTransport({ room = 'open', name = 'anon', seat = null
 	const fake = { latency: 0, jitter: 0, quantize: 'bar' }
 	let welcomed = false, sent = 0, recv = 0, lastLateMs = 0, rev = 0
 
-	clock.setLoop({ bpm: 92, beatsPerBar: 4, bars: 2, origin: Math.floor(localNow()) })
+	clock.setLoop({ bpm: 96, beatsPerBar: 4, bars: 4, origin: Math.floor(localNow()) })
 
 	const emit = (ev, d) => (listeners[ev] || []).forEach((fn) => fn(d))
 	const on = (ev, fn) => ((listeners[ev] ||= []).push(fn), () => (listeners[ev] = listeners[ev].filter((f) => f !== fn)))

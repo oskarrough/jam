@@ -5,7 +5,7 @@ import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/
 
 export function createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart }) {
 	const { clock } = transport
-	const gui = new GUI({ title: 'controls  (d)', width: 280 })
+	const gui = new GUI({ title: matchMedia('(pointer: coarse)').matches ? 'controls' : 'controls  (d)', width: 280 })
 	gui.close()
 
 	const meF = gui.addFolder('me')
@@ -46,7 +46,7 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 		f.add(sel, 'instrument', ids).listen()
 		f.add(L.mix, 'level', 0, 1.5, 0.01).onChange(() => engine.applyMix(L))
 		f.add(L.mix, 'space', 0, 1, 0.01).onChange(() => engine.applyMix(L))
-		f.add(L.mix, 'mute').onChange(() => engine.applyMix(L))
+		f.add(L.mix, 'mute').onChange((v) => engine.setMute(L, v)).listen()
 		f.add({ clear: () => { L.instance.clear ? L.instance.clear() : L.instance.setState(null); engine.push(L) } }, 'clear').name('wipe')
 		let pf = null
 		function buildParams() {

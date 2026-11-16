@@ -108,6 +108,8 @@ view = createView(document.getElementById('c'), engine, {
 	},
 	canHand: (from, to) => from === me.seat && to !== from && !!occupant(to).bot,
 	onWipe: () => wipe(),
+	onMute: (i) => !replay && engine.setMute(seats[i], !seats[i].mix.mute),
+	onSolo: (i) => engine.setSolo(i),
 	onPointer(i, e) {
 		const L = seats[i]
 		if (e.type === 'down') ghost?.stop()
@@ -306,7 +308,7 @@ addEventListener('zoom', (e) => {
 	document.body.classList.toggle('zoomed', on)
 	if (on) {
 		sheetbar.style.left = sheet.x + 'px'
-		sheetbar.style.top = sheet.y - 54 + 'px'
+		sheetbar.style.top = sheet.y - (innerWidth < 640 ? 104 : 54) + 'px'
 		sheetbar.style.width = sheet.w + 'px'
 		strip.paint()
 	}
