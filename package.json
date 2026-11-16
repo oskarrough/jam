@@ -3,10 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "new-instrument": "node scripts/new-instrument.js"
+    "new-instrument": "node scripts/new-instrument.js",
+    "check": "node scripts/check.js",
+    "shots": "node scripts/shots.js",
+    "two-tabs": "node scripts/two-tabs.js"
   },
   "devDependencies": {
     "cf": "^1.0.0-rc.0",
-    "wrangler": "^4.163.0"
+    "wrangler": "^4.163.0",
+    "eslint": "^9.15.0",
+    "globals": "^15.12.0"
   }
 }

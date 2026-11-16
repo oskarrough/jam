@@ -132,6 +132,9 @@ export function createTransport({ url, room = 'open', name = 'anon', seat = null
 		h.sort((a, b) => a.at - b.at || a.rev - b.rev)
 		while (h.length > 4) h.shift()
 		schedule(entry.at - LOOKAHEAD, () => {
+			// timers for edits landing on the same bar can fire out of order; only the newest one for that bar applies
+			const cur = seats[seat] || [], i = cur.indexOf(entry)
+			if (i < 0 || cur[i + 1]?.at === entry.at) return
 			const late = clock.now() - (entry.at - LOOKAHEAD)
 			if (late > 20) lastLateMs = late
 			emit('apply', { seat, ...entry, local: entry.from === id || entry.from === 'me' })

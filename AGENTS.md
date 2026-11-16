@@ -1,8 +1,9 @@
 # Notes for agents
 
-- No build. Serve the repo root (`python3 -m http.server`) or `cd sync && npm start` for the relay too.
-- Work on `main`: no branches. Pull before you start and before you push; several agents push here.
-- Browser checks: use `agent-browser` when it's installed; otherwise Playwright.
-- `cd sync && npm test` runs the multiplayer tests (two headless peers plus the jam page).
-- Instruments: one file each in `src/instruments/`, contract in `src/instruments/README.md`. `npm run new-instrument <name>` scaffolds one; `/?instrument=<id>` opens it.
-- Deploy: pull, then `bun install && npx cf deploy` from `main`; it ships the repo root plus the relay to jam.0sk.ar.
+- Commit to `main`, no branches. Pull (rebase) before you start and again before you push; several agents push here.
+- `npm run check` before every push: lint, all instruments in a headless browser, the multiplayer tests. `-- --quick` skips the last.
+- `npm run shots [-- <instrument>] [--phone]` puts dial and sheet screenshots in `shots/` (ignored). `npm run two-tabs` is the two-player smoke test.
+- Words: **seat** (a place at the machine), **ring** (its drawing on the dial), **instrument** (gesture + sound), **voice** (the sound alone). Full list in README.
+- New instrument: `npm run new-instrument <name>`; contract in `src/instruments/README.md`; `/?instrument=<id>` opens it.
+- Poking around by hand: `agent-browser` if installed, else Playwright (`scripts/lib/browser.js` has a server and helpers).
+- Deploy is Oskar's: pull, then `bun install && npx cf deploy` from `main`.
