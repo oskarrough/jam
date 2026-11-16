@@ -11,6 +11,8 @@ Multiplayer layer for the jam: presence, shared loop clock, per-lane state, quan
 
 Jams: `/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "start your own" makes one). Both `server.js` and the Worker serve the page there with `<base href="/">`. The page goes multiplayer on its own when the host answers `/sync/relay`; `?ws=off` keeps it to this browser.
 
+Recordings: the deck's record token waits for the next loop, captures 8 bars (lane state per bar, who sat where, cursors), POSTs to `/api/r` and returns `/r/<id>`, which replays read-only in the full machine (`src/record.js`). The Worker stores each one in its own Durable Object of the existing `JamRoom` class, so `cloudflare.config.ts` needs no new binding; `server.js` keeps them in memory.
+
 Other devices on the LAN: `http://<your-ip>:8787/?ws=ws://<your-ip>:8787`.
 
 ## Deploy (Cloudflare)

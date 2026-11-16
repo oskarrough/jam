@@ -8,6 +8,7 @@ import { jellify } from './jelly.js'
 import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
 import { createHeart } from './heart.js'
+import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
 
 const NAMES = ['ash', 'birch', 'wren', 'sorrel', 'quill', 'juniper', 'tansy', 'rook']
 const LANE_IDS = ['lane1', 'lane2', 'lane3', 'lane4']
@@ -15,6 +16,7 @@ const START = ['bass', 'keys', 'bell', 'drums']
 
 const q = new URLSearchParams(location.search)
 // Jam: everyone lands in the one open jam at /. Your own lives at /j/<name> (root paths stay reserved); ?room= also works.
+const replayId = location.pathname.match(/\/r\/([\w-]{4,32})\/?$/)?.[1]
 const pathJam = decodeURIComponent(location.pathname.match(/\/j\/([\w-]{1,48})\/?$/)?.[1] || '')
 const room = (q.get('room') || pathJam || 'open').toLowerCase().slice(0, 48)
 const name = q.get('name') || NAMES[Math.floor(Math.random() * NAMES.length)]
@@ -47,7 +49,15 @@ async function makeTransport() {
 	return createLocalTransport({ room, name })
 }
 
-const transport = await makeTransport()
+// /r/<id>: a recorded souvenir, replayed read-only in the full machine
+let rec = null
+if (replayId) try { rec = await loadRecording(replayId) } catch (e) { console.warn(e) }
+let view = null
+const transport = rec
+	? createReplayTransport(rec, { laneIds: LANE_IDS, onCursor: (i, x, y, down, who) => view?.showCursor('r' + who + i, i, x, y, who) })
+	: await makeTransport()
+const replay = transport.kind === 'replay'
+if (replay) document.body.classList.add('replay')
 const engine = createEngine(transport, { laneIds: LANE_IDS, instruments: START })
 const { lanes } = engine
 const me = { name, lane: -1, erase: false }
@@ -60,10 +70,11 @@ const seat = (i) => {
 	if (bots?.opts.on && lanes[i].module.generate) return { name: botName(i), label: botName(i), initial: botName(i).slice(-1), bot: true }
 	return { name: '', label: 'sit' }
 }
-const canDraw = (i) => me.lane === i
+const canDraw = (i) => !replay && me.lane === i
 let bots = null
 
 function sit(i) {
+	if (replay) return
 	const p = humanAt(i)
 	if (p && p.id !== transport.id) return
 	me.lane = i
@@ -72,7 +83,7 @@ function sit(i) {
 	renderSeats()
 }
 
-const view = createView(document.getElementById('c'), engine, {
+view = createView(document.getElementById('c'), engine, {
 	seat,
 	canDraw,
 	onSit: (i) => (i === me.lane ? toggleFocus() : sit(i)),
@@ -88,6 +99,7 @@ const view = createView(document.getElementById('c'), engine, {
 })
 const heart = createHeart({ engine, geom: () => view.center() })
 bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
+if (replay) bots.opts.on = false
 
 transport.on('cursor', (c) => {
 	const i = lanes.findIndex((L) => L.id === c.lane)
@@ -112,7 +124,10 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)]
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
 const word = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; return b }
-if (transport.kind !== 'ws') jamline.textContent = 'just this browser'
+if (replay) {
+	jamline.append('a recording', rec.room && rec.room !== 'open' ? ' from jam ' : '', rec.room && rec.room !== 'open' ? Object.assign(document.createElement('b'), { textContent: rec.room }) : '', ' · ', word('join the open jam', () => (location.href = '/')))
+} else if (replayId) jamline.append('that recording is gone · ', word('join the open jam', () => (location.href = '/')))
+else if (transport.kind !== 'ws') jamline.textContent = 'just this browser'
 else if (isOpenJam) jamline.append('the open jam · ', word('start your own', () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))))
 else {
 	const b = document.createElement('b')
@@ -225,3 +240,36 @@ jellify($('back'))
 
 // handy in the console
 Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart } })
+
+/* ───────── record: 8 bars from the next loop start, stored, a link to replay them at /r/<id> ───────── */
+const recBtn = $('rec')
+if (recBtn && transport.kind === 'ws') {
+	const recorder = createRecorder({ engine, transport, seatName: (i) => seat(i).name || null })
+	const recline = $('recline')
+	const setRec = (state, p = 0) => { recBtn.dataset.state = state; recBtn.style.setProperty('--p', p.toFixed(3)) }
+	setRec('idle')
+	recBtn.onclick = async () => {
+		if (recorder.busy || recBtn.dataset.state === 'saving') return
+		recline.textContent = ''
+		try {
+			const r = await recorder.record(({ state, p }) => setRec(state, p))
+			r.room = room
+			setRec('saving', 1)
+			const id = await saveRecording(r)
+			const url = `${location.origin}/r/${id}`
+			setRec('done', 1)
+			const copy = word('copy link', async () => {
+				try { await navigator.clipboard.writeText(url); copy.textContent = 'copied' } catch { copy.textContent = url }
+			})
+			const a = Object.assign(document.createElement('a'), { href: '/r/' + id, target: '_blank', textContent: 'play it back' })
+			recline.append('recorded ' + r.bars + ' bars · ', copy, ' · ', a)
+			try { await navigator.clipboard.writeText(url) ; copy.textContent = 'link copied' } catch {}
+			setTimeout(() => setRec('idle'), 2500)
+		} catch (e) {
+			console.warn(e)
+			setRec('idle')
+			recline.textContent = 'could not save that one'
+		}
+	}
+	jellify(recBtn)
+} else if (recBtn) recBtn.closest('li').hidden = true

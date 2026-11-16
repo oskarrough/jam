@@ -129,3 +129,16 @@ output.pending { color: var(--vermilion) }
 svg .f { fill: var(--ink); stroke: none }
 .caption { margin: 8px 0 0; text-align: center; font: italic 400 18px/1.2 var(--serif); min-height: 1.2em }
 @media (max-width: 640px) { .glyphs { grid-template-columns: repeat(5, 40px); gap: 6px } .glyph { width: 40px; height: 40px } }
+
+/* record token: a ring that fills as the 8 bars pass; armed blinks until the loop comes round */
+#rec .arc { fill: none; stroke: var(--vermilion); stroke-width: 2.4; stroke-dasharray: calc(var(--p, 0) * 1) 1; transform: rotate(-90deg); transform-origin: 16px 16px; opacity: 0 }
+#rec[data-state='armed'] .dot { animation: rec-blink 0.6s steps(2) infinite }
+#rec[data-state='rec'] .arc, #rec[data-state='saving'] .arc, #rec[data-state='done'] .arc { opacity: 1 }
+#rec[data-state='rec'] .dot, #rec[data-state='armed'] .dot { fill: var(--vermilion) }
+#rec[data-state='saving'] { opacity: 0.6 }
+@keyframes rec-blink { 50% { opacity: 0.2 } }
+#recline:empty { display: none }
+.jamline a { color: inherit; text-decoration: underline wavy color-mix(in srgb, currentColor 45%, transparent) 1px; text-underline-offset: 3px }
+/* replay pages: a souvenir to listen to, so only the sound token stays */
+body.replay .deck li:not(:first-child) { display: none }
+body.replay canvas { cursor: default }

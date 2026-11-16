@@ -76,6 +76,27 @@ const redirect = await fetch(`${BASE}${jam}/`, { redirect: 'manual' })
 check(redirect.status === 301, '/j/<jam>/ redirects to /j/<jam>')
 if (process.env.SHOT) await j2.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-jam.png') })
 
+// Record 8 bars in the private jam, then replay the link read-only. Takes one loop to arm plus 8 bars (~30 s at 96 bpm).
+if (!process.env.SKIP_REC) {
+	await j1.click('#rec')
+	await j1.waitForFunction(() => /recorded/.test(document.getElementById('recline').textContent), null, { timeout: 60000 })
+	const href = await j1.evaluate(() => document.querySelector('#recline a').getAttribute('href'))
+	const id = href.split('/').pop()
+	const rec = await (await fetch(`${BASE}/api/r/${id}`)).json()
+	check(rec.bars === 8 && rec.frames.length === 8 && Object.keys(rec.frames[0]).length === 4, `recording ${id}: 8 bars, all 4 lanes in the first frame`)
+	check(rec.seats.includes('dora') && rec.seats.includes('eli'), `recording knows who sat where (${rec.seats.join(', ')})`)
+	const rp = await (await browser.newContext()).newPage()
+	rp.on('pageerror', (e) => console.error('replay', e))
+	await rp.goto(`${BASE}${href}`)
+	await new Promise((r) => setTimeout(r, 1500))
+	const rs = await rp.evaluate(() => ({ kind: jam.transport.kind, replay: document.body.classList.contains('replay'), line: document.getElementById('jamline').textContent, lanes: jam.engine.lanes.map((L) => JSON.stringify({ instrument: L.module.id, state: L.instance.state })) }))
+	const want = Object.values(rec.frames[0]).map((d) => JSON.stringify({ instrument: d.instrument, state: d.state }))
+	check(rs.kind === 'replay' && rs.replay && /a recording/.test(rs.line), `/r/${id} opens read-only (“${rs.line}”)`)
+	check(rs.lanes.every((l, i) => l === want[i]), 'replay starts with the recorded lanes')
+	check((await fetch(`${BASE}/api/r/nope1234`)).status === 404, 'unknown recording is a 404')
+	if (process.env.SHOT) await rp.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-replay.png') })
+}
+
 await b.screenshot({ path: process.env.SHOT || '/tmp/roughjam-sync.png' })
 await browser.close()
 server?.kill()
