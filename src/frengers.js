@@ -22,7 +22,8 @@ export function createFrengers(engine, { seated, view }) {
 			let b = bots.get(i)
 			if (!active) { bots.delete(i); return }
 			if (!b) bots.set(i, (b = { nextAt: now + 800 + Math.random() * loopMs() * 1.5, sweep: null }))
-			if (!b.sweep && now > b.nextAt) b.sweep = { t0: now, y: 0.5, target: L.module.generate(engine.steps(), L.params) }
+			if (!b.sweep && now > b.nextAt) b.sweep = { t0: now, y: 0.5, mod: L.module, target: L.module.generate(engine.steps(), L.params) }
+			if (b.sweep && b.sweep.mod !== L.module) b.sweep = null // lane changed instrument mid-sweep
 			if (b.sweep) {
 				const f = (now - b.sweep.t0) / opts.sweepMs
 				b.sweep.y = Math.max(0.05, Math.min(0.95, b.sweep.y + (Math.random() - 0.5) * 0.15))
