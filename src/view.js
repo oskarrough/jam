@@ -74,6 +74,7 @@ export function createView(
 	// handing your part to a robot: press your own badge, drag the thread onto theirs
 	let handing = null // a press on a badge: {from, id, x, y, x0, y0, moved, own, long, timer}
 	let lastTap = null
+	let miniFade = 1
 	const LONG_MS = 550,
 		DOUBLE_MS = 300
 	const seatUnder = (px, py) =>
@@ -107,18 +108,19 @@ export function createView(
 		S0 = Math.max(240, Math.min(W - 24, H - top - bottom))
 		CX0 = W / 2
 		CY0 = top + (H - top - bottom) / 2
-		if (narrow) {
-			SF = Math.min(180, W * 0.46)
-			CXF = 8 + SF / 2
-			CYF = H - bottom - SF / 2 + 6
-			sheet = { x: 12, y: 8 + STRIP, w: W - 24, h: Math.max(160, H - bottom - SF - STRIP - 16) }
-		} else {
-			SF = Math.max(220, Math.min(W * 0.34, H - bottom - 120, 520))
-			CXF = 20 + SF / 2
-			CYF = H - bottom - SF / 2 - 4
-			const x = CXF + SF / 2 + 28
-			sheet = { x, y: 12 + STRIP, w: W - x - 24, h: H - 12 - STRIP - bottom - 16 }
+		// zoomed, the sheet takes the whole screen between the strip and the deck; the machine shrinks to a small
+		// dial floating over the sheet's left edge, half-way down. Tap it to go back.
+		const sy = (narrow ? 8 : 12) + STRIP,
+			side = narrow ? 8 : 16
+		sheet = {
+			x: side,
+			y: sy,
+			w: W - side * 2,
+			h: Math.max(160, H - sy - bottom - (narrow ? 8 : 16)),
 		}
+		SF = narrow ? Math.min(150, W * 0.38) : Math.max(170, Math.min(H * 0.28, 240))
+		CXF = SF * 0.56 + (narrow ? 2 : 10)
+		CYF = sheet.y + sheet.h / 2
 		applyZoom()
 		sizeSeats()
 		if (focus.on)
@@ -339,9 +341,11 @@ export function createView(
 	}
 
 	canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+	const onMini = (x, y) => Math.hypot(x - CX, y - CY) < S * 0.5 + seatR() + 6
 	const inSheet = (x, y) =>
 		focus.on &&
 		sheet &&
+		!onMini(x, y) &&
 		x >= sheet.x &&
 		x <= sheet.x + sheet.w &&
 		y >= sheet.y &&
@@ -790,9 +794,10 @@ export function createView(
 		if (opts.landscape) drawDrifters(t)
 		g.globalAlpha = 1
 		seats.forEach(renderSeat)
+		// zoomed, the sheet goes under the machine: the small dial floats on top of it
+		if (opts.mode === 'dial' && eSheet() > 0) drawSheet(phase)
 		if (opts.mode === 'dial') drawDial(t, dt, phase, loop)
 		else drawStrips(phase)
-		if (opts.mode === 'dial' && eSheet() > 0) drawSheet(phase)
 		drawTrails()
 		drawCursors()
 		drawHanding()
@@ -1184,7 +1189,9 @@ export function createView(
 		}
 		if (dialP === 0) return
 		g.save()
-		g.globalAlpha = EASES.smooth(Math.min(1, dialP * 2.5))
+		// while you draw on the sheet, the floating dial steps back so the notes under it show through
+		miniFade += ((focus.on && drag?.sheet ? 0.25 : 1) - miniFade) * Math.min(1, dt * 10)
+		g.globalAlpha = EASES.smooth(Math.min(1, dialP * 2.5)) * miniFade
 		const dk = 0.86 + 0.14 * EASES['out back'](dialP)
 		if (dk !== 1) {
 			g.translate(CX, CY)
@@ -1668,7 +1675,8 @@ export function createView(
 			return { x, y, r: seatR() }
 		},
 		// the bare disc inside the innermost ring, CSS px; null in strips mode
-		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER } : null),
+		center: () =>
+			opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER, fade: miniFade } : null,
 		resize,
 	}
 }

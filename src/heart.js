@@ -492,6 +492,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 			return
 		}
 		canvas.style.display = ''
+		canvas.style.opacity = well.style.opacity = G.fade ?? 1
 		// geom.moving: no GL work, let CSS carry the last frame
 		if (G.moving) {
 			follow(G)
