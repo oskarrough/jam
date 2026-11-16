@@ -151,8 +151,8 @@ setInterval(() => {
 /* ───────── DOM chrome ───────── */
 const $ = (id) => document.getElementById(id)
 
-// Jams: the open one at /, your own at /j/<words>. In your own, its name sits under the title and copies the
-// link when tapped; the title leads back to the open jam. The deck's sprout token starts a new one.
+// Jams: the open one at /, your own at /j/<words>. In your own, its name sits top left and copies the
+// link when tapped, and 'leave' goes back to the open jam. The deck's sprout token starts a new one.
 const JAM_A = ['dusk', 'amber', 'moss', 'salt', 'velvet', 'copper', 'hollow', 'paper', 'lantern', 'violet']
 const JAM_B = ['moth', 'heron', 'fern', 'kettle', 'orchard', 'tide', 'comet', 'wren', 'ember', 'quarry']
 const pick = (a) => a[Math.floor(Math.random() * a.length)]
