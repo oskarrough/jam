@@ -59,7 +59,7 @@ export default {
   glyph: '<path d="M4 21c3-11 6 6 8-5s4 11 7 0 3 9 9-7"/>',
   name: 'Scribble',
   playhead: false, // replays in stroke order
-  how: 'Scribble anywhere. The drawing replays once per loop in stroke order; left is oo, right is ee, height is pitch.',
+  how: 'Scribble anywhere. The drawing replays once per loop in stroke order; left is oo, right is ee, height is pitch. The eraser or Shift rubs it out.',
   params: {
     range: { value: 10, min: 3, max: 16, step: 1 },
     octave: { value: 0, min: -2, max: 1, step: 1 },
@@ -80,6 +80,17 @@ export default {
     const fx = flashes()
     let last = null
 
+    // rub out the points under the pen; whatever follows a gap starts a stroke of its own
+    function rub(e) {
+      const r = Math.min(e.w, e.h) * 0.045
+      let cut = false
+      state.pts = state.pts.filter((p) => {
+        if (dist(p[0] * e.w, p[1] * e.h, e.px, e.py) < r) return !(cut = true)
+        if (cut) { p[2] = 1; cut = false }
+        return true
+      })
+    }
+
     function grain(x, y, time) {
       const s = audio.createBufferSource()
       s.buffer = src
@@ -99,6 +110,7 @@ export default {
     return {
       state,
       pointer: withPointer(size, (e) => {
+        if (e.alt) { if (e.type === 'down' || (e.type === 'move' && e.pressed)) rub(e); last = null; return }
         if (e.type === 'down') {
           last = [e.px, e.py]
           state.pts.push([clamp(e.x, 0, 1), clamp(e.y, 0, 1), 1])

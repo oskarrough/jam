@@ -18,7 +18,7 @@ export default {
   id: 'sweep',
   glyph: '<path d="M5 25A13 13 0 0 1 27 12"/><path d="M23 9l4 3-3 4"/><path d="M8 19h4M11 14h4" stroke-dasharray="1 2"/>',
   name: 'Sweep',
-  how: 'Hold and move to sweep the filter: up is brighter, right is more resonant. It records as you play.',
+  how: 'Hold and move to sweep the filter: up is brighter, right is more resonant. It records as you play; the eraser or Shift rubs it out.',
   params: {
     record: { value: true },
     detune: { value: 9, min: 0, max: 40, step: 1 },
@@ -86,9 +86,24 @@ export default {
       }
     }
 
+    // rub out recorded automation under the pen, filling the columns crossed since the last move
+    let lastRub = null
+    function rub(e) {
+      const s = clamp(Math.floor(e.x * SLOTS), 0, SLOTS - 1)
+      const a = Math.min(lastRub ?? s, s), b = Math.max(lastRub ?? s, s)
+      for (let i = a; i <= b; i++) state.auto[i] = null
+      lastRub = s
+    }
+
     return {
       state,
       pointer: withPointer(size, (e) => {
+        if (e.alt) {
+          if (e.type === 'down') { lastRub = null; rub(e) }
+          else if (e.type === 'move' && e.pressed) rub(e)
+          else if (e.type === 'up') lastRub = null
+          return
+        }
         if (e.type === 'down') { lastRec = null; applyLive(e) }
         else if (e.type === 'move' && e.pressed) applyLive(e)
         else if (e.type === 'up') { live = null; lastRec = null }

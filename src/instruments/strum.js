@@ -22,7 +22,7 @@ export default {
   glyph: '<path d="M4 9h24M4 13h24M4 17h24M4 21h24" stroke-width="1"/><path d="M9 26L23 5" stroke-width="2.2"/>',
   name: 'Strum',
   playhead: 'y', // time runs top to bottom
-  how: 'Swipe sideways across the strings. Fast swipes are loud. Strums record into the loop.',
+  how: 'Swipe sideways across the strings. Fast swipes are loud. Strums record into the loop; the eraser or Shift rubs them out.',
   params: {
     record: { value: true },
     damp: { value: 0.995, min: 0.98, max: 0.9995, step: 0.0005 },
@@ -66,9 +66,16 @@ export default {
       }
     }
 
+    // rub out recorded strums under the pen: a string's width across, a few slots of time down
+    function rub(e) {
+      const ry = Math.max(1.5, (Math.min(e.w, e.h) * 0.04) / e.h * SLOTS)
+      state.hits = state.hits.filter(([s, j]) => Math.abs(e.x - xOf(j)) > 0.5 / STRINGS || Math.abs(e.y * SLOTS - s) > ry)
+    }
+
     return {
       state,
       pointer: withPointer(size, (e) => {
+        if (e.alt) { if (e.type === 'down' || (e.type === 'move' && e.pressed)) rub(e); lastX = null; return }
         const now = performance.now()
         if (e.type === 'down') {
           // tapping right on a string plucks it
