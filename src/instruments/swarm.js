@@ -15,6 +15,16 @@ function gen() {
   }
 }
 
+// fixed flight paths from a seed: every peer derives the same swarm
+export function makeFlies(seed, count) {
+  const r = rng(seed * 7919)
+  return Array.from({ length: count }, () => ({
+    a: 1 + Math.floor(r() * 3), b: 1 + Math.floor(r() * 3),
+    p: r() * TAU, q: r() * TAU, ax: 0.3 + r() * 0.16, ay: 0.3 + r() * 0.16,
+  }))
+}
+export const flyPos = (f, ph) => [0.5 + f.ax * Math.sin(TAU * f.a * ph + f.p), 0.5 + f.ay * Math.sin(TAU * f.b * ph + f.q)]
+
 export default {
   id: 'swarm',
   glyph: '<circle class="f" cx="8" cy="9" r="1.6"/><circle class="f" cx="22" cy="7" r="1.6"/><circle class="f" cx="13" cy="21" r="1.6"/><circle class="f" cx="25" cy="19" r="1.6"/><circle class="f" cx="17" cy="13" r="1.6"/><path d="M4 27L28 12"/>',
@@ -45,13 +55,9 @@ export default {
       const k = `${params.seed}:${params.count}`
       if (k === flyKey) return
       flyKey = k
-      const r = rng(params.seed * 7919)
-      flies = Array.from({ length: params.count }, () => ({
-        a: 1 + Math.floor(r() * 3), b: 1 + Math.floor(r() * 3),
-        p: r() * TAU, q: r() * TAU, ax: 0.3 + r() * 0.16, ay: 0.3 + r() * 0.16,
-      }))
+      flies = makeFlies(params.seed, params.count)
     }
-    const pos = (f, ph) => [0.5 + f.ax * Math.sin(TAU * f.a * ph + f.p), 0.5 + f.ay * Math.sin(TAU * f.b * ph + f.q)]
+    const pos = flyPos
 
     return {
       state,

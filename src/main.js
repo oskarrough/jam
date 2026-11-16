@@ -67,11 +67,21 @@ const seat = (i) => {
 	const p = humanAt(i)
 	if (p && p.id === transport.id) return { name: 'you', label: 'you', initial: me.name ? me.name[0] : 'Y', me: true, human: true }
 	if (p) return { name: p.name || playerName(i), label: p.name || playerName(i), initial: p.name ? p.name[0] : String(i + 1), human: true }
-	if (bots?.opts.on && lanes[i].module.generate) return { name: botName(i), label: botName(i), initial: botName(i).slice(-1), bot: true }
+	if (bots?.opts.on && lanes[i].module.generate) {
+		// a robot riffing on someone's motif says so: "Robot B · inverts you"
+		const r = lanes[i].riff
+		const riff = r && { color: r.color, label: r.label || 'echoes', who: riffWho(r) }
+		return { name: botName(i), label: riff ? `${botName(i)} · ${riff.label} ${riff.who}` : botName(i), initial: botName(i).slice(-1), bot: true, riff }
+	}
 	return { name: '', label: 'sit' }
 }
 const playerName = (i) => `player ${i + 1}`
 const canDraw = (i) => !replay && me.lane === i
+const riffWho = (r) => {
+	if (r.from === transport.id) return 'you'
+	const p = transport.peers.find((q) => q.id === r.from)
+	return p ? seat(lanes.findIndex((L) => L.id === p.instrument))?.label : 'a player'
+}
 let bots = null
 
 function sit(i) {
@@ -79,6 +89,7 @@ function sit(i) {
 	const p = humanAt(i)
 	if (p && p.id !== transport.id) return
 	me.lane = i
+	lanes[i].riff = null // a person taking the seat ends any robot riff there
 	if (view?.focus.on) view.setFocus(i)
 	transport.setMe({ instrument: lanes[i].id, name: me.name })
 	renderSeats()
@@ -88,6 +99,14 @@ view = createView(document.getElementById('c'), engine, {
 	seat,
 	canDraw,
 	onSit: (i) => (i === me.lane ? toggleFocus() : sit(i)),
+	// drag your own badge onto a robot's: it takes your motif and improvises on it
+	onHand(from, to) {
+		if (from !== me.lane || !seat(to).bot) return false
+		const ok = bots.hand(from, to)
+		renderSeats()
+		return ok
+	},
+	canHand: (from, to) => from === me.lane && to !== from && !!seat(to).bot,
 	onPointer(i, e) {
 		const L = lanes[i]
 		if (me.erase) e.alt = true
@@ -122,6 +141,12 @@ transport.on('welcome', () => {
 	renderSeats()
 })
 engine.on('lanes', renderSeats)
+// robots' riff captions change with each turn; re-list seats when they do
+let riffSig = ''
+setInterval(() => {
+	const sig = lanes.map((L) => (L.riff ? L.riff.id + L.riff.turn : '')).join('|')
+	if (sig !== riffSig) { riffSig = sig; renderSeats() }
+}, 300)
 
 /* ───────── DOM chrome ───────── */
 const $ = (id) => document.getElementById(id)

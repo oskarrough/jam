@@ -86,6 +86,8 @@ export function createEngine(transport, { laneIds, instruments }) {
 	const lastSent = new Map()
 	function push(L, { now = false } = {}) {
 		const data = { instrument: L.module.id, state: structuredClone(L.instance.state), params: { ...L.params } }
+		// a robot riffing on someone's motif carries it along, so any tab can take over driving it
+		if (L.riff) data.riff = L.riff
 		lastSent.set(L.id, performance.now())
 		return transport.edit(L.id, data, { now })
 	}
@@ -100,6 +102,7 @@ export function createEngine(transport, { laneIds, instruments }) {
 	transport.on('apply', ({ lane, data, local }) => {
 		const L = laneById(lane)
 		if (!L || !data || local) return
+		L.riff = data.riff || null
 		if (data.instrument !== L.module.id) setInstrument(L, data.instrument, { state: data.state, params: data.params })
 		else { if (data.params) Object.assign(L.params, data.params); L.instance.setState(data.state) }
 		emit('apply', L)

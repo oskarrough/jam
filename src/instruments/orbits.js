@@ -5,9 +5,9 @@
 import { kit, mtof } from './lib/kit.js'
 import { isStrip, withPointer, view, absNow, theme, subSlots, SLOTS, clamp, dist, flashes, TAU } from './lib/util.js'
 
-const REVS = [8, 6, 4, 3, 2, 1]
+export const REVS = [8, 6, 4, 3, 2, 1]
 const MAX = 10
-const lapsOf = (r) => REVS[clamp(Math.floor(((r - 0.15) / 0.85) * REVS.length), 0, REVS.length - 1)]
+export const lapsOf = (r) => REVS[clamp(Math.floor(((r - 0.15) / 0.85) * REVS.length), 0, REVS.length - 1)]
 
 function gen() {
   return { planets: Array.from({ length: 4 }, () => ({ r: +(0.2 + Math.random() * 0.8).toFixed(3), a: Math.floor(Math.random() * 16) / 16, m: +Math.random().toFixed(3) })) }

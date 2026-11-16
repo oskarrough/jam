@@ -6,7 +6,7 @@ import { isStrip, withPointer, view, absOf, theme, clamp, TAU, flashes } from '.
 const RADII = [1, 0.7, 0.42]
 const VOICES = ['hat', 'snare', 'kick']
 
-const hit = (j, n, k, rot) => (((((j - rot) % n) + n) % n) * k) % n < k
+export const hit = (j, n, k, rot) => (((((j - rot) % n) + n) % n) * k) % n < k
 
 function gen(steps, p = {}) {
   const n = [p.outer ?? 16, p.middle ?? 12, p.inner ?? 16]
