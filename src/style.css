@@ -108,11 +108,24 @@ output.pending { color: var(--vermilion) }
 	.seat button { grid-template-columns: 0.7rem 3.6rem 1fr; gap: 0.35rem }
 	.inst { font-size: 14px }
 	.peers { display: none }
-	.deck { gap: 8px }
-	.token, .tempo { height: 44px }
-	.token { width: 44px }
+	/* seven pieces have to fit a 390px phone */
+	.deck { gap: 5px }
+	.token, .tempo { height: 40px }
+	.token { width: 40px }
+	.tempo { width: 96px }
+	.nib { padding: 0 8px }
+	output { font-size: 20px }
+	.deck svg { width: 24px; height: 24px }
 	.lil-gui.root { top: auto !important; bottom: 80px }
 	body.zoomed .lil-gui.root { display: none } /* the zoomed sheet needs the room; d still works on the dial */
+}
+@media (max-width: 370px) {
+	.deck { gap: 4px }
+	.token, .tempo { height: 34px }
+	.token { width: 34px }
+	.tempo { width: 80px }
+	.deck svg { width: 20px; height: 20px }
+	output { font-size: 17px }
 }
 
 /* zoom: the bar on your instrument's sheet, and the instrument picker */
