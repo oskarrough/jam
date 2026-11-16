@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>roughjam lab</title>
+<style>
+  :root {
+    --bg: #14110f;
+    --fg: #ece6dc;
+    --dim: rgba(236, 230, 220, 0.45);
+    --faint: rgba(236, 230, 220, 0.1);
+    --accent: #ff7a3d;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.5 var(--mono); }
+  body { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  header h1 { font-size: 13px; font-weight: normal; margin: 0; }
+  header h1 span { color: var(--dim); }
+  #pos { color: var(--dim); white-space: pre; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start; }
+  @media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  #stage { display: block; width: 100%; height: min(62vh, 620px); min-height: 280px; border: 1px solid var(--faint); touch-action: none; cursor: crosshair; }
+  #how { color: var(--dim); margin: 8px 0 16px; min-height: 1.5em; }
+  #how::before { content: '→ '; color: var(--accent); }
+  #strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 760px) { #strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .lane { all: unset; cursor: pointer; display: block; border: 1px solid var(--faint); padding: 0 0 4px; }
+  .lane canvas { display: block; width: 100%; height: 72px; pointer-events: none; }
+  .lane span { display: block; padding: 0 6px; color: var(--dim); }
+  .lane span b { font-weight: normal; }
+  .lane.on span::after { content: ' ●'; color: var(--accent); font-size: 9px; vertical-align: 2px; }
+  .lane.focus { border-color: var(--dim); }
+  .lane.focus span { color: var(--fg); }
+  .lane:focus-visible { outline: 1px solid var(--accent); }
+  details { margin-top: 12px; color: var(--dim); }
+  summary { cursor: pointer; }
+  details pre { color: var(--fg); max-height: 320px; overflow: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+  footer { color: var(--dim); margin-top: 24px; }
+  #start { all: unset; position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); cursor: pointer; z-index: 10; text-align: center; }
+  #start em { color: var(--accent); font-style: normal; }
+  /* lil-gui, quieted down to match */
+  #gui .lil-gui { --background-color: transparent; --title-background-color: transparent; --widget-color: rgba(236,230,220,0.08);
+    --hover-color: rgba(236,230,220,0.14); --focus-color: rgba(236,230,220,0.2); --number-color: var(--accent); --string-color: var(--fg);
+    --text-color: var(--fg); --font-family: var(--mono); --font-size: 12px; --width: 260px; --name-width: 42%; border: 1px solid var(--faint); }
+</style>
+</head>
+<body>
+<button id="start"><div>roughjam / instrument lab<br><br><em>click to light the fire</em><br><br><span style="color:var(--dim)">sound on · space plays · 1–0 switch</span></div></button>
+<header>
+  <h1>roughjam <span>/ lab /</span> <span id="title"></span></h1>
+  <div id="pos"></div>
+</header>
+<div class="layout">
+  <main>
+    <canvas id="stage"></canvas>
+    <div id="how"></div>
+    <div id="strip"></div>
+    <details id="state"><summary>state · <span id="bytes">0 B</span> (what a peer would receive)</summary><pre></pre></details>
+  </main>
+  <aside id="gui"></aside>
+</div>
+<footer>ten ways to play one lane. same clock, same key, everything you draw is plain json.</footer>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
