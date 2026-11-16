@@ -258,19 +258,29 @@ const word = (text, fn) => {
 const live = (room) => {
 	const named = room && room !== 'open'
 	const b = word(
-		named ? 'join ' + room + ' live' : 'join the live jam',
+		'← back to ' + (named ? room : 'live'),
 		() => (location.href = named ? '/j/' + encodeURIComponent(room) : '/'),
 	)
 	b.title = 'leave this recording and play along with whoever is in there now'
 	return b
 }
 if (replay) {
-	const from =
-		rec.room && rec.room !== 'open'
-			? [' of ', Object.assign(document.createElement('b'), { textContent: rec.room })]
-			: []
-	jamline.append('a recording', ...from, ' · ', saveAudio(), ' · ', live(rec.room))
-} else if (replayId) jamline.append('that recording is gone · ', live())
+	const br = () => document.createElement('br')
+	jamline.append(
+		Object.assign(document.createElement('b'), { textContent: 'Recording ' + replayId }),
+		br(),
+		saveAudio(),
+		br(),
+		br(),
+		live(rec.room),
+	)
+} else if (replayId)
+	jamline.append(
+		'That recording is gone',
+		document.createElement('br'),
+		document.createElement('br'),
+		live(),
+	)
 else if (transport.kind === 'ws') {
 	const fresh = (text) =>
 		Object.assign(
@@ -298,7 +308,7 @@ else if (transport.kind === 'ws') {
 function saveAudio() {
 	let file = null,
 		busy = false
-	const b = word('save audio', async () => {
+	const b = word('download audio', async () => {
 		if (busy) return
 		busy = true
 		try {
@@ -313,10 +323,11 @@ function saveAudio() {
 				})
 			}
 			const { deliver } = await import('./export.js')
-			b.textContent = (await deliver(file)) === 'shared' ? 'save audio' : 'saved'
+			b.textContent = (await deliver(file)) === 'shared' ? 'download audio' : 'downloaded'
 		} catch (e) {
 			// the share sheet wants a fresh tap once rendering took a while
-			b.textContent = e.name === 'NotAllowedError' && file ? 'send audio' : 'could not save'
+			b.textContent =
+				e.name === 'NotAllowedError' && file ? 'send audio' : 'could not make the audio'
 			if (e.name !== 'NotAllowedError') console.warn(e)
 		}
 		busy = false
