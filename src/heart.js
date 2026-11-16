@@ -91,7 +91,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		// palette
 		ochre: '#e0a63a', rose: '#cf6f9a', violet: '#5a3f8e', cream: '#f3e8cf', ink: '#211a2e', shade: '#211a2e', comet: '#d24b2a', scratch: false,
 		// chamber: the heart's own ground, a dark engraved well that the eye glows in. Off = sit on the view's ground.
-		chamber: true, well: '#211943',
+		chamber: true, well: '#211943', engrave: 0.2,
 		// counts (rebuild)
 		nBody: 2400, nHatch: 1500, nEdge: 800, nComet: 220, nCore: 260, nMotes: 1400,
 	}
@@ -128,13 +128,14 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	canvas.before(well)
 	let wellKey = ''
 	function paintWell() {
-		if (wellKey === opts.well) return
-		wellKey = opts.well
+		const e = opts.engrave, key = opts.well + e
+		if (wellKey === key) return
+		wellKey = key
 		const pale = 'rgba(243,232,207,'
 		well.style.background = [
 			'radial-gradient(circle at 50% 47%, rgba(255,205,140,.20), rgba(255,205,140,0) 38%)', // warmth behind the iris
-			`repeating-radial-gradient(circle, ${pale}.06) 0 1px, ${pale}0) 1px 6px)`, // engraved rings
-			`repeating-conic-gradient(${pale}.045) 0 1deg, ${pale}0) 1deg 5deg)`, // and rays: guilloché
+			`repeating-radial-gradient(circle, ${pale}${(0.06 * e).toFixed(4)}) 0 1px, ${pale}0) 1px 6px)`, // engraved rings
+			`repeating-conic-gradient(${pale}${(0.045 * e).toFixed(4)}) 0 1deg, ${pale}0) 1deg 5deg)`, // and rays: guilloché
 			`radial-gradient(circle, ${mixHex(opts.well, '#ffffff', 0.14)} 0%, ${opts.well} 50%, ${mixHex(opts.well, '#000000', 0.55)} 100%)`,
 		].join(',')
 		well.style.boxShadow = `inset 0 0 0 1.5px ${mixHex(opts.well, '#000000', 0.6)}, inset 0 10px 26px rgba(0,0,0,.55)`
@@ -463,6 +464,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		f.add(opts, 'additive', 0, 1, 0.01).name('ink ↔ light')
 		f.add(opts, 'chamber').onChange(() => { ground = ''; placed = '' })
 		f.addColor(opts, 'well').name('chamber colour').onChange(() => (ground = ''))
+		f.add(opts, 'engrave', 0, 1, 0.01).name('chamber engraving')
 		const ras = f.addFolder('raster')
 		ras.add(opts, 'pixel', 0.5, 8, 0.5).name('pixel size')
 		ras.add(opts, 'levels', 1, 8, 1).name('tone levels')
