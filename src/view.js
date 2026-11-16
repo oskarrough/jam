@@ -33,7 +33,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	let W, H, S, CX, CY, DPR
 	// zoom: the overview geometry (S0, CX0, CY0), the focus geometry (SF, CXF, CYF, dev) and zt easing between them.
 	// In focus your instrument opens big and unwrapped on a paper sheet (dev); the machine shrinks beside it, still live.
-	let S0, CX0, CY0, SF, CXF, CYF, dev = null, zt = 0
+	let S0, CX0, CY0, SF, CXF, CYF, dev = null, zt = 0, moving = false
 	const focus = { on: false, lane: -1 }
 	let bg = document.createElement('canvas'), bg2 = document.createElement('canvas')
 	// ground state: current G, and while cycling an incoming one fading in
@@ -77,9 +77,15 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		if (G2) paintBackdrop(bg2, G2)
 	}
 
+	// the zoom is one move in two beats, with no cross-fade: first the machine slides and shrinks into its corner,
+	// then the sheet slides in from the right edge, opaque. Zooming out plays it backwards.
 	const ease = (t) => t * t * (3 - 2 * t)
+	const clamp01 = (t) => Math.max(0, Math.min(1, t))
+	const eMachine = () => ease(clamp01(zt / 0.6))
+	const eSheet = () => ease(clamp01((zt - 0.45) / 0.55))
+	let sheetLane = -1 // the lane whose canvas is sized to the sheet (lags focus on the way out)
 	function applyZoom() {
-		const e = ease(zt)
+		const e = eMachine()
 		S = S0 + (SF - S0) * e
 		CX = CX0 + (CXF - CX0) * e
 		CY = CY0 + (CYF - CY0) * e
@@ -106,7 +112,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 			let w, h
 			// rings are sized at overview scale; warp() scales them down when the dial shrinks
 			const b0 = (S0 * 0.26) / n()
-			if (opts.mode === 'dial' && focus.on && i === focus.lane) ({ w, h } = dev)
+			if (opts.mode === 'dial' && i === sheetLane) ({ w, h } = dev)
 			else if (opts.mode === 'dial') { w = TAU * (S0 * 0.16 + i * b0 + (b0 * 0.82) / 2); h = b0 * 0.82 }
 			else ({ w, h } = stripRect(i))
 			L.w = Math.round(w)
@@ -119,7 +125,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	const angOf = (phase) => -Math.PI / 2 + phase * TAU
 	const polar = (a, r) => [CX + Math.cos(a) * r, CY + Math.sin(a) * r]
 	const seatAngles = () => lanes.map((_, i) => Math.PI * 0.75 - (i * TAU) / lanes.length) // first lane bottom-left
-	const seatPos = (i) => (opts.mode === 'dial' ? polar(seatAngles()[i], S * 0.468) : [stripRect(i).x - 2, stripRect(i).y + 16])
+	const seatPos = (i) => (opts.mode === 'dial' ? polar(seatAngles()[i], S * 0.505) : [stripRect(i).x - 2, stripRect(i).y + 16])
 	const seatR = () => Math.max(12, S * 0.028)
 
 	// screen -> lane hit: {lane, x, y} in the lane's 0..1 space
@@ -198,7 +204,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		if (on === focus.on && i === focus.lane) return
 		focus.on = on
 		focus.lane = on ? i : -1
-		sizeLanes()
+		if (on) { sheetLane = i; sizeLanes() } // on the way out the sheet keeps its drawing until it has slid away
 		hover = null
 		dispatchEvent(new CustomEvent('zoom', { detail: { on, lane: focus.lane, dev: on ? { ...dev } : null } }))
 	}
@@ -282,7 +288,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 
 	// wrap a lane strip onto the annulus [r0, r1] as thin rotated slices
 	function warp(L, r0, r1) {
-		const N = opts.slices, sw = L.canvas.width / N, dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
+		const N = moving ? 48 : opts.slices, sw = L.canvas.width / N, dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
 		for (let k = 0; k < N; k++) {
 			const th = angOf((k + 0.5) / N) + Math.PI / 2, c = Math.cos(th), s = Math.sin(th)
 			g.setTransform(DPR * c, DPR * s, -DPR * s, DPR * c, DPR * CX, DPR * CY)
@@ -301,7 +307,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		if (beatIdx !== lastBeat) { if (lastBeat !== -1) heat = Math.min(1, heat + (p.beat === 0 ? 0.25 : 0.08)); lastBeat = beatIdx }
 		heat = Math.max(heat * Math.pow(0.04, dt), Math.min(0.9, engine.level() * 2.5))
 		const zTarget = focus.on ? 1 : 0
-		if (zt !== zTarget) { zt += (zTarget - zt) * Math.min(1, dt * (reduce ? 60 : 7)); if (Math.abs(zTarget - zt) < 0.002) zt = zTarget; applyZoom() }
+		if (zt !== zTarget) {
+			zt = reduce ? zTarget : zTarget > zt ? Math.min(zTarget, zt + dt / 0.55) : Math.max(zTarget, zt - dt / 0.55)
+			applyZoom()
+			if (!focus.on && sheetLane >= 0 && eSheet() === 0) { sheetLane = -1; sizeLanes() }
+		}
+		moving = zt > 0 && zt < 1
 		for (const j of ringJelly) j.s.step(dt)
 		for (const j of seatJelly) j.s.step(dt)
 
@@ -324,7 +335,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		lanes.forEach(renderLane)
 		if (opts.mode === 'dial') drawDial(t, dt, phase, loop)
 		else drawStrips(phase)
-		if (opts.mode === 'dial' && zt > 0.01) drawDevice(phase)
+		if (opts.mode === 'dial' && eSheet() > 0) drawDevice(phase)
 		drawCursors()
 		requestAnimationFrame(frame)
 	}
@@ -372,15 +383,14 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 
 	// the sheet your instrument plays on in focus: paper, ink edge, flat shadow, beat ticks along the top
 	function drawDevice(phase) {
-		const e = ease(zt), { x, y, w, h } = dev, L = lanes[focus.lane]
+		const e = eSheet(), { x, y, w, h } = dev, L = lanes[sheetLane]
 		g.save()
-		g.globalAlpha = e
-		g.translate(x + w / 2, y + h / 2); g.scale(0.94 + 0.06 * e, 0.94 + 0.06 * e); g.translate(-(x + w / 2), -(y + h / 2))
+		g.translate((1 - e) * (W - x + 24), 0) // slides in from the right edge, never translucent
 		g.fillStyle = 'rgba(42,28,72,.5)'
 		g.fillRect(x + 6, y + 8, w, h)
 		g.fillStyle = PAPER
 		g.fillRect(x, y, w, h)
-		if (focus.on && L && L.w === Math.round(w)) {
+		if (L && L.w === Math.round(w)) {
 			const steps = engine.steps()
 			for (let s = 0; s < steps; s += 4) { g.fillStyle = s % 16 ? ink(0.06) : ink(0.16); g.fillRect(x + (s / steps) * w, y, 1, h) }
 			g.drawImage(L.canvas, x, y, w, h)
@@ -444,17 +454,18 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		g.textAlign = 'center'; g.textBaseline = 'middle'
 		g.fillStyle = st.name ? PAPER : ink(0.6)
 		g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
-		if (label && !small()) arcCaption(`${L.module.name.toLowerCase()} · ${st.label}`, Math.atan2(y - CY, x - CX), medallion() + Math.max(9, S * 0.02), Math.max(12, S * 0.021), st.me)
+		if (label && !small()) arcCaption(`${L.module.name.toLowerCase()} · ${st.label}`, Math.atan2(y - CY, x - CX), S * 0.505 + r + Math.max(10, S * 0.022), Math.max(11, S * 0.018), st.me)
 	}
 
 	// hand-set caption riding the outside of the dial's rim, centred on angle a. Upright on both halves:
 	// on the top half letters run clockwise with their feet on the rim, on the bottom half anticlockwise.
 	function arcCaption(text, a, R, px, strong) {
 		g.save()
-		g.font = serif(px, strong ? 600 : 400)
+		// set like dial lettering: wide grotesque capitals, tracked out
+		g.font = `${strong ? 700 : 600} ${Math.round(px)}px Syne, "Bricolage Grotesque", sans-serif`
 		g.textAlign = 'center'; g.textBaseline = 'middle'
-		const chars = [...text]
-		const ws = chars.map((ch) => g.measureText(ch).width + px * 0.04)
+		const chars = [...text.toUpperCase()]
+		const ws = chars.map((ch) => g.measureText(ch).width + px * 0.16)
 		const total = ws.reduce((x, y) => x + y, 0)
 		const bottom = Math.sin(a) > 0, dir = bottom ? -1 : 1
 		let t = a - (dir * total) / R / 2
@@ -483,48 +494,44 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	function drawDial(t, dt, phase, loop) {
 		const outer = ringIn(lanes.length - 1) + ringT() + 8, inner = ringIn(0) - 6, M = medallion()
 
-		// the medallion: a paper disc pasted onto the landscape, flat violet shadow, etched double rim
-		g.fillStyle = 'rgba(42,28,72,.5)'
-		g.beginPath(); g.arc(CX + S * 0.014, CY + S * 0.02, M, 0, TAU); g.fill()
-		g.fillStyle = PAPER
+		// the medallion: a vellum lens laid on the landscape. The field and sky show through at the rim
+		// and clear up toward the rings, so the notes sit on something quiet. Ink rim, no shadow slab.
+		const lens = g.createRadialGradient(CX, CY, inner * 0.6, CX, CY, M)
+		lens.addColorStop(0, rgba(PAPER, 0.62))
+		lens.addColorStop(Math.min(0.95, outer / M), rgba(PAPER, 0.5))
+		lens.addColorStop(1, rgba(PAPER, 0.16))
+		g.fillStyle = lens
 		wobble(g, CX, CY, M, 1, 1.2); g.fill()
-		g.strokeStyle = INK; g.lineWidth = 1.6; g.stroke()
-		g.lineWidth = 0.7; g.strokeStyle = ink(0.5)
+		g.strokeStyle = ink(0.75); g.lineWidth = 1.2; g.stroke()
+		g.lineWidth = 0.5; g.strokeStyle = ink(0.22)
 		wobble(g, CX, CY, M - 5, 2, 1); g.stroke()
-		// rivets
-		g.fillStyle = PAPER; g.strokeStyle = INK; g.lineWidth = 0.8
-		for (let k = 0; k < 32; k++) {
-			if (k % 8 === 3 || k % 8 === 5) continue // leave room for the seats
-			const [x, y] = polar(angOf(k / 32 + 1 / 64), M - S * 0.012)
-			g.beginPath(); g.arc(x, y, Math.max(1.6, S * 0.0032), 0, TAU); g.fill(); g.stroke()
+		// four rivets at the quarters, nothing more
+		g.fillStyle = ink(0.45)
+		for (let k = 0; k < 4; k++) {
+			const [x, y] = polar(angOf(k / 4 + 1 / 8), M - S * 0.012)
+			g.beginPath(); g.arc(x, y, Math.max(1.2, S * 0.0024), 0, TAU); g.fill()
 		}
 
 		// shadow wedge trailing the hand, like the flat shadow planes on a dusk field
 		const pa = angOf(phase)
-		g.fillStyle = 'rgba(90,63,142,.07)'
+		g.fillStyle = 'rgba(90,63,142,.05)'
 		g.beginPath(); g.arc(CX, CY, outer, pa - 0.9, pa); g.arc(CX, CY, inner, pa, pa - 0.9, true); g.closePath(); g.fill()
 
-		// beat and bar marks, numerals outside the outer ring
+		// beat and bar marks: hairlines, bars a touch longer. Numbers are left to the ear.
 		const beats = loop ? loop.bars * loop.beatsPerBar : 8, bpb = loop?.beatsPerBar || 4
+		g.lineWidth = 0.5
 		for (let b = 0; b < beats; b++) {
 			const a = angOf(b / beats), bar = b % bpb === 0
-			const [x1, y1] = polar(a, inner), [x2, y2] = polar(a, outer + (bar ? 6 : 0))
-			g.strokeStyle = bar ? ink(0.3) : ink(0.08)
-			g.lineWidth = bar ? 0.9 : 0.7
+			const [x1, y1] = polar(a, inner), [x2, y2] = polar(a, outer + (bar ? 5 : 0))
+			g.strokeStyle = bar ? ink(0.16) : ink(0.05)
 			g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke()
-			if (bar && !small()) {
-				g.font = serif(Math.max(12, S * 0.026))
-				g.textAlign = 'center'; g.textBaseline = 'middle'
-				g.fillStyle = ink(0.6)
-				const [x, y] = polar(a + 0.05, outer + S * 0.022)
-				g.fillText(['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii'][b / bpb] || String(b / bpb + 1), x, y)
-			}
 		}
-		// 16th ticks on the outer rim, like a dial
+		// 16th ticks on the outer rim, only the beats get a mark you'd notice
 		const steps = engine.steps()
-		g.strokeStyle = ink(0.35); g.lineWidth = 0.7
+		g.lineWidth = 0.5
 		for (let s = 0; s < steps; s++) {
-			const a = angOf(s / steps), [x1, y1] = polar(a, outer - 2), [x2, y2] = polar(a, outer + (s % 4 ? 2 : 4))
+			const a = angOf(s / steps), [x1, y1] = polar(a, outer - 1), [x2, y2] = polar(a, outer + (s % 4 ? 1.5 : 3.5))
+			g.strokeStyle = ink(s % 4 ? 0.12 : 0.3)
 			g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke()
 		}
 
@@ -533,8 +540,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 			g.beginPath(); g.arc(CX, CY, r1, 0, TAU); g.arc(CX, CY, r0, 0, TAU, true)
 			g.fillStyle = rgba(L.color, own ? 0.13 : 0.05); g.fill()
 			if (own) { g.fillStyle = hatch(L.color, 0.3); g.fill() }
-			g.strokeStyle = ink(own ? 0.9 : 0.4)
-			g.lineWidth = own ? 1.3 : 0.9
+			g.strokeStyle = ink(own ? 0.75 : 0.2)
+			g.lineWidth = own ? 1.1 : 0.6
 			// pressed: the band pinches where you press, outer edge in, inner edge out
 			const J = ringJelly[i], depth = J.s.x * ringT() * 0.28
 			wobble(g, CX, CY, r0, i * 3 + 11, own ? 0.9 : 0.6, { a: J.a, depth: -depth * 0.6, w: 0.3 }); g.stroke()
@@ -567,7 +574,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		// the centre stays bare paper with an etched rim; src/heart.js draws the machine's heart above it on its own canvas
 		g.strokeStyle = ink(0.8); g.lineWidth = 1.1
 		wobble(g, CX, CY, porthole(), 21, 0.8); g.stroke()
-		g.strokeStyle = ink(0.3); g.lineWidth = 0.6
+		g.strokeStyle = ink(0.15); g.lineWidth = 0.5
 		wobble(g, CX, CY, porthole() - 4, 22, 0.6); g.stroke()
 
 		lanes.forEach((L, i) => drawSeat(i, ...seatPos(i), true))
@@ -595,7 +602,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	}
 
 	// canvas text needs the faces loaded; repaint once they are
-	document.fonts?.load(serif(16)).then(() => document.fonts.load(serif(16, 600, false))).catch(() => {})
+	document.fonts?.load(serif(16)).then(() => document.fonts.load(serif(16, 600, false))).then(() => document.fonts.load('600 16px Syne')).catch(() => {})
 
 	addEventListener('resize', resize)
 	resize()
@@ -609,6 +616,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		repaint: () => paintBackdrop(bg, G),
 		setGround,
 		setFocus,
+		// true while zooming in or out; a cue for anything expensive to rest for half a second
+		get moving() { return moving },
+		// how far the sheet is still off to the right, in px (0 when it has arrived); DOM chrome on the sheet rides with it
+		get sheetShift() { return sheetLane < 0 ? Infinity : (1 - eSheet()) * (W - dev.x + 24) },
 		get focus() { return { ...focus, dev: focus.on ? { ...dev } : null } },
 		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
 		ground: () => ({ ...(G2 || G) }),

@@ -10,7 +10,6 @@ import { registry } from './instruments/index.js'
 import { createHeart } from './heart.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
 
-const NAMES = ['ash', 'birch', 'wren', 'sorrel', 'quill', 'juniper', 'tansy', 'rook']
 const LANE_IDS = ['lane1', 'lane2', 'lane3', 'lane4']
 const START = ['bass', 'keys', 'bell', 'drums']
 
@@ -19,7 +18,8 @@ const q = new URLSearchParams(location.search)
 const replayId = location.pathname.match(/\/r\/([\w-]{4,32})\/?$/)?.[1]
 const pathJam = decodeURIComponent(location.pathname.match(/\/j\/([\w-]{1,48})\/?$/)?.[1] || '')
 const room = (q.get('room') || pathJam || 'open').toLowerCase().slice(0, 48)
-const name = q.get('name') || NAMES[Math.floor(Math.random() * NAMES.length)]
+// no invented names: you are 'you', others are 'player N' by seat unless they set ?name=
+const name = q.get('name') || ''
 
 // Transport is the swappable part. Network when there's a relay: ?ws=url, the deployed site (jam.0sk.ar),
 // or any same-origin relay that answers /sync/relay (sync/server.js locally). Otherwise tabs in this browser; ?ws=off forces that.
@@ -65,11 +65,12 @@ const me = { name, lane: -1, erase: false }
 const humanAt = (i) => transport.peers.find((p) => p.instrument === lanes[i].id)
 const seat = (i) => {
 	const p = humanAt(i)
-	if (p && p.id === transport.id) return { name: me.name, label: 'you', me: true, human: true }
-	if (p) return { name: p.name, label: p.name, human: true }
+	if (p && p.id === transport.id) return { name: 'you', label: 'you', initial: me.name ? me.name[0] : 'Y', me: true, human: true }
+	if (p) return { name: p.name || playerName(i), label: p.name || playerName(i), initial: p.name ? p.name[0] : String(i + 1), human: true }
 	if (bots?.opts.on && lanes[i].module.generate) return { name: botName(i), label: botName(i), initial: botName(i).slice(-1), bot: true }
 	return { name: '', label: 'sit' }
 }
+const playerName = (i) => `player ${i + 1}`
 const canDraw = (i) => !replay && me.lane === i
 let bots = null
 
@@ -92,7 +93,7 @@ view = createView(document.getElementById('c'), engine, {
 		if (me.erase) e.alt = true
 		L.instance.pointer(e)
 		engine.pushSoon(L)
-		view.showCursor('me', i, e.x, e.y, me.name)
+		view.showCursor('me', i, e.x, e.y, '')
 		heart.glance?.(i, 1400) // the eye settles on you while you draw
 		transport.cursor(e.x, e.y, e.type !== 'up', L.id)
 	},
@@ -104,7 +105,7 @@ if (replay) bots.opts.on = false
 transport.on('cursor', (c) => {
 	const i = lanes.findIndex((L) => L.id === c.lane)
 	if (i >= 0) heart.glance?.(i, 700)
-	if (i >= 0) view.showCursor(c.from || 'peer' + i, i, c.x, c.y, c.name || transport.peers.find((p) => p.id === c.from)?.name)
+	if (i >= 0) view.showCursor(c.from || 'peer' + i, i, c.x, c.y, c.name || transport.peers.find((p) => p.id === c.from)?.name || playerName(i))
 })
 transport.on('peers', renderSeats)
 transport.on('welcome', () => {
@@ -117,26 +118,34 @@ engine.on('lanes', renderSeats)
 /* ───────── DOM chrome ───────── */
 const $ = (id) => document.getElementById(id)
 
-// The jam line: the open jam by default, or your own at /<name>. Words, not widgets.
+// Jams: the open one at /, your own at /j/<words>. In your own, its name sits under the title and copies the
+// link when tapped; the title leads back to the open jam. The deck's sprout token starts a new one.
 const JAM_A = ['dusk', 'amber', 'moss', 'salt', 'velvet', 'copper', 'hollow', 'paper', 'lantern', 'violet']
 const JAM_B = ['moth', 'heron', 'fern', 'kettle', 'orchard', 'tide', 'comet', 'wren', 'ember', 'quarry']
 const pick = (a) => a[Math.floor(Math.random() * a.length)]
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
 const word = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; return b }
+const live = () => word('play live', () => (location.href = '/'))
 if (replay) {
-	jamline.append('a recording', rec.room && rec.room !== 'open' ? ' from jam ' : '', rec.room && rec.room !== 'open' ? Object.assign(document.createElement('b'), { textContent: rec.room }) : '', ' · ', word('join the open jam', () => (location.href = '/')))
-} else if (replayId) jamline.append('that recording is gone · ', word('join the open jam', () => (location.href = '/')))
-else if (transport.kind !== 'ws') jamline.textContent = 'just this browser'
-else if (isOpenJam) jamline.append('the open jam · ', word('start your own', () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))))
-else {
-	const b = document.createElement('b')
-	b.textContent = room
-	const copy = word('copy link', async () => {
-		try { await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room)); copy.textContent = 'copied' } catch { copy.textContent = location.host + '/j/' + room }
-		setTimeout(() => (copy.textContent = 'copy link'), 1600)
-	})
-	jamline.append('jam ', b, ' · ', copy, ' · ', word('open jam', () => (location.href = '/')))
+	const from = rec.room && rec.room !== 'open' ? [' of ', Object.assign(document.createElement('b'), { textContent: rec.room })] : []
+	jamline.append('a recording', ...from, ' · ', live())
+} else if (replayId) jamline.append('that recording is gone · ', live())
+else if (transport.kind === 'ws') {
+	$('newjam').closest('li').hidden = false
+	$('newjam').onclick = () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))
+	if (!isOpenJam) {
+		const b = word(room, async () => {
+			try { await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room)); b.textContent = 'link copied' } catch { b.textContent = location.host + '/j/' + room }
+			setTimeout(() => (b.textContent = room), 1600)
+		})
+		b.title = 'copy the link to this jam'
+		jamline.append(b)
+		const h1 = document.querySelector('h1')
+		h1.style.cursor = 'pointer'
+		h1.title = 'back to the open jam'
+		h1.onclick = () => (location.href = '/')
+	}
 }
 function renderSeats() {
 	const ol = $('seats')
@@ -150,7 +159,7 @@ function renderSeats() {
 		const b = document.createElement('button')
 		b.innerHTML = '<span class="dot"></span><span class="inst"></span><span class="who"></span>'
 		b.querySelector('.inst').textContent = L.module.name.toLowerCase()
-		b.querySelector('.who').textContent = st.me ? me.name : st.human ? st.label : st.bot ? st.label : '…'
+		b.querySelector('.who').textContent = st.human || st.bot ? st.label : '…'
 		b.disabled = !st.me && st.human
 		b.title = st.me ? 'open your instrument' : st.human ? `${st.label}'s ring` : 'take this ring'
 		b.setAttribute('aria-label', st.me ? `${L.module.name}, your ring` : `Take the ${L.module.name} ring`)
@@ -158,7 +167,7 @@ function renderSeats() {
 		li.appendChild(b)
 		ol.appendChild(li)
 	})
-	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name)).filter(Boolean)
+	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name || playerName(lanes.findIndex((L) => L.id === p.instrument))))
 	$('peers').textContent = names.length > 1 ? names.join(', ').replace(/, ([^,]*)$/, ' & $1') : ''
 }
 
@@ -223,13 +232,27 @@ const devbar = $('devbar')
 function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.lane) }
 addEventListener('zoom', (e) => {
 	const { on, dev } = e.detail
-	devbar.hidden = !on
 	document.body.classList.toggle('zoomed', on)
-	if (!on) return picker.close()
-	devbar.style.left = dev.x + dev.w - 12 + 'px'
-	devbar.style.top = dev.y + 12 + 'px'
-	paintPick()
+	if (!on) picker.close()
+	else {
+		devbar.style.left = dev.x + dev.w - 12 + 'px'
+		devbar.style.top = dev.y + 12 + 'px'
+		paintPick()
+	}
+	rideSheet()
 })
+// the devbar is pinned to the sheet: it slides in and out with it, frame for frame
+let riding = 0
+function rideSheet() {
+	if (riding) return
+	const go = () => {
+		const x = view.sheetShift
+		devbar.hidden = !Number.isFinite(x) || x > innerWidth
+		if (!devbar.hidden) devbar.style.transform = `translateX(calc(-100% + ${x}px))`
+		riding = view.moving || (view.focus.on && x > 0) ? requestAnimationFrame(go) : 0
+	}
+	riding = requestAnimationFrame(go)
+}
 // the pick token wears the current instrument's glyph
 function paintPick() { const L = lanes[me.lane]; if (L) $('pick').innerHTML = picker.glyph(L.module.id) }
 engine.on('lanes', () => view.focus.on && paintPick())
