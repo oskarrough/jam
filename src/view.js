@@ -109,7 +109,7 @@ export function createView(
 		CX0 = W / 2
 		CY0 = top + (H - top - bottom) / 2
 		// zoomed, the sheet fills the screen between the strip and the deck, except for room kept for the machine:
-		// a left gutter (clamp(100px, 10vw, 200px)) where the small dial sits, cropped by the screen's edge; on a phone,
+		// a left gutter (clamp(100px, 10vw, 200px)) that holds the whole small dial; on a phone,
 		// where a gutter would eat a quarter of the width, a band under the sheet instead. Tap the dial to go back.
 		const sy = (narrow ? 8 : 12) + STRIP
 		if (narrow) {
@@ -121,8 +121,8 @@ export function createView(
 		} else {
 			const gutter = Math.max(100, Math.min(W * 0.1, 200))
 			sheet = { x: gutter, y: sy, w: W - gutter - 16, h: Math.max(160, H - sy - bottom - 16) }
-			SF = Math.max(150, Math.min(gutter * 1.4, 280))
-			CXF = gutter - 6 - SF * 0.5
+			SF = gutter - 12 // whole, badges and all: at 45° they reach 0.36 S + their radius, inside the disc's 0.5 S
+			CXF = gutter / 2
 			CYF = sheet.y + sheet.h / 2
 		}
 		applyZoom()
