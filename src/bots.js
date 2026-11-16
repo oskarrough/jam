@@ -1,4 +1,6 @@
-// Bots: they sit in empty seats. Every few loops one sweeps a cursor round its ring,
+// Bots: off by default, so a lone visitor hears the default song in empty seats with nobody
+// pretending to play it. The robots token turns them on for the whole jam (it rides on the loop as
+// `robots`). When on, they sit in empty seats. Every few loops one sweeps a cursor round its ring,
 // then a freshly generated part lands. Only one tab in the room (the lowest id) drives them.
 //
 // Riffs: a player can hand a robot their motif (drag your seat badge onto the robot's).
@@ -12,7 +14,7 @@ export const botName = (i) => `Robot ${String.fromCharCode(65 + i)}`
 
 export function createBots(engine, { seated, view }) {
 	const { seats, transport } = engine
-	const opts = { on: true, minLoops: 2, maxLoops: 5, sweepMs: 1600, riffSweepMs: 900 }
+	const opts = { on: false, minLoops: 2, maxLoops: 5, sweepMs: 1600, riffSweepMs: 900 }
 	const bots = new Map() // seat index -> {nextAt, sweep, riffId}
 
 	const leader = () => {

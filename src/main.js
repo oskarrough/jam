@@ -126,7 +126,6 @@ view = createView(document.getElementById('c'), engine, {
 const ghost = createGhost({ engine, view, me })
 const heart = createHeart({ engine, geom: () => { const c = view.center(); if (c) c.moving = view.moving; return c } })
 bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
-if (replay) bots.opts.on = false
 
 transport.on('cursor', (c) => {
 	const i = seats.findIndex((L) => L.id === c.seat)
@@ -244,10 +243,18 @@ $('clear').onclick = () => {
 	L.instance.clear ? L.instance.clear() : L.instance.setState(null)
 	engine.push(L)
 }
-$('bots').onclick = () => {
-	bots.opts.on = !bots.opts.on
+// robots are off unless someone in the jam turns them on; the choice rides on the loop so everyone shares it
+function setRobots(on) {
+	bots.opts.on = !!on && !replay
 	$('bots').setAttribute('aria-pressed', bots.opts.on)
 	renderSeats()
+}
+transport.on('welcome', ({ loop }) => setRobots(loop?.robots))
+transport.on('loop', ({ loop }) => setRobots(loop?.robots))
+$('bots').onclick = () => {
+	const on = !bots.opts.on
+	setRobots(on)
+	transport.setLoop({ robots: on })
 }
 addEventListener('keydown', (e) => {
 	if (e.target.closest?.('input, select, textarea, .lil-gui')) return

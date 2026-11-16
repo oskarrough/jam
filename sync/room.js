@@ -73,6 +73,8 @@ export function createRoom(io, state = {}) {
 				bars: clamp(Number(m.bars) || s.loop.bars, 1, 64),
 				// the jam's harmony rides with the loop; clients fall back to A minor pentatonic, i III iv v
 				...harmony(m, s.loop),
+				// robots in empty seats, off unless someone turns them on
+				robots: typeof m.robots === 'boolean' ? m.robots : !!s.loop.robots,
 				origin: at,
 			}
 			broadcast({ t: 'loop', loop: s.loop, at })
