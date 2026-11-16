@@ -8,6 +8,7 @@ import { jellify } from './jelly.js'
 import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
 import { createHeart } from './heart.js'
+import { createUndo } from './undo.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
 
 const LANE_IDS = ['lane1', 'lane2', 'lane3', 'lane4']
@@ -61,6 +62,7 @@ if (replay) document.body.classList.add('replay')
 const engine = createEngine(transport, { laneIds: LANE_IDS, instruments: START })
 const { lanes } = engine
 const me = { name, lane: -1, erase: false }
+const undo = createUndo(engine)
 
 const humanAt = (i) => transport.peers.find((p) => p.instrument === lanes[i].id)
 const seat = (i) => {
@@ -111,6 +113,7 @@ view = createView(document.getElementById('c'), engine, {
 		const L = lanes[i]
 		if (me.erase) e.alt = true
 		e.shape = view.focus.on && view.focus.lane === i ? 'sheet' : 'ring'
+		if (e.type === 'down') undo.remember(i)
 		L.instance.pointer(e)
 		engine.pushSoon(L)
 		view.showCursor('me', i, e.x, e.y, '')
@@ -190,6 +193,34 @@ $('sound').onclick = () => {
 }
 // the first touch on the machine wakes the sound, so nobody draws in silence; after that the speaker token is theirs
 $('c').addEventListener('pointerdown', () => { if (!engine.soundOn) $('sound').click() }, { once: true, capture: true })
+// on glass: a two-finger tap undoes, a three-finger tap redoes. The first finger has already drawn by the
+// time the second lands, so the tap first quietly puts back what that finger did.
+{
+	const c = $('c'), touches = new Map()
+	let tap = null
+	c.addEventListener('pointerdown', (e) => {
+		if (e.pointerType !== 'touch') return
+		touches.set(e.pointerId, [e.clientX, e.clientY])
+		const now = e.timeStamp // event time, not handling time: a busy frame mustn't spoil a quick tap
+		if (touches.size === 1) tap = { t: now, n: 1, moved: false, mark: me.lane >= 0 ? undo.mark(me.lane) : null }
+		else if (tap && now - tap.t < 300) tap.n = Math.max(tap.n, touches.size)
+		else tap = null
+	}, { capture: true })
+	c.addEventListener('pointermove', (e) => {
+		const p = touches.get(e.pointerId)
+		if (p && tap && Math.hypot(e.clientX - p[0], e.clientY - p[1]) > 14) tap.moved = true
+	}, { capture: true })
+	const lift = (e) => {
+		if (!touches.delete(e.pointerId) || touches.size || !tap) return
+		const t = tap
+		tap = null
+		if (t.n < 2 || t.moved || e.timeStamp - t.t > 500 || !t.mark) return
+		undo.rewind(t.mark)
+		;(t.n === 2 ? undo.undo : undo.redo)(t.mark.i)
+	}
+	c.addEventListener('pointerup', lift, { capture: true })
+	c.addEventListener('pointercancel', lift, { capture: true })
+}
 const setErase = (on) => {
 	me.erase = on
 	$('erase').setAttribute('aria-pressed', on)
@@ -205,6 +236,7 @@ $('faster').onclick = () => tempo(4)
 $('clear').onclick = () => {
 	const L = lanes[me.lane]
 	if (!L) return
+	undo.remember(me.lane)
 	L.instance.clear ? L.instance.clear() : L.instance.setState(null)
 	engine.push(L)
 }
@@ -216,6 +248,12 @@ $('bots').onclick = () => {
 addEventListener('keydown', (e) => {
 	if (e.target.closest?.('input, select, textarea, .lil-gui')) return
 	if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return
+	if ((e.metaKey || e.ctrlKey) && /^[zy]$/i.test(e.key)) {
+		e.preventDefault()
+		if (me.lane >= 0) (e.key.toLowerCase() === 'y' || e.shiftKey ? undo.redo : undo.undo)(me.lane)
+		return
+	}
+	if (e.metaKey || e.ctrlKey) return
 	if (e.key === ' ') { e.preventDefault(); $('sound').click() }
 	else if (/^[1-9]$/.test(e.key) && +e.key <= lanes.length) sit(+e.key - 1)
 	else if (e.key === 'd') debug.toggle()
@@ -245,7 +283,7 @@ jellify(document.querySelector('.tempo'), { amount: 0.08 })
 
 /* ───────── zoom: tap your badge and your instrument opens big, in its own form; the machine shrinks beside it ───────── */
 const devbar = $('devbar')
-const strip = createStrip({ engine, registry, me, el: devbar })
+const strip = createStrip({ engine, registry, me, el: devbar, before: () => undo.remember(me.lane) })
 function toggleFocus() { view.setFocus(view.focus.on ? -1 : me.lane) }
 addEventListener('zoom', (e) => {
 	const { on, dev } = e.detail
@@ -297,7 +335,7 @@ function cycleInstrument(d) {
 }
 
 // handy in the console
-Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart } })
+Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart, undo } })
 
 /* ───────── record: 8 bars from the next loop start, stored, a link to replay them at /r/<id> ───────── */
 const recBtn = $('rec')

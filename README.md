@@ -24,7 +24,7 @@ On its own the page plays across tabs in one browser. With a relay it plays acro
 
 `/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "start your own" makes one). `?name=you` sets your name, `?ws=off` keeps you local.
 
-Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `d` the controls panel.
+Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`/`⌘`-`Z` undo (`Shift` to redo), `d` the controls panel. On a phone, tap with two fingers to undo, three to redo.
 
 ## Deploy
 
@@ -42,6 +42,7 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `d` th
     src/backdrop.js         the landscape and sky squiggles, painted once per resize in the heart's dithered, stroked hand
     src/picker.js           the glyph sheet for choosing your instrument
     src/jelly.js            the springy presses on buttons and badges
+    src/undo.js             undo and redo for your own ring, for any instrument
     src/bots.js             the robots, and riffing on a motif you hand them
     src/phrase.js           parts as neutral phrases, and the musical moves robots vary them with
     src/debug.js            the panel (lil-gui, vendored)

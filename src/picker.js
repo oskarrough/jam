@@ -7,7 +7,7 @@ import { jellify } from './jelly.js'
 // each instrument module carries its own 32×32 glyph (mod.glyph); `f` marks filled bits
 const fallback = '<circle cx="16" cy="16" r="9"/>'
 
-export function createStrip({ engine, registry, me, el }) {
+export function createStrip({ engine, registry, me, el, before }) {
 	const glyph = (id) => `<svg viewBox="0 0 32 32" aria-hidden="true">${registry.get(id)?.glyph || fallback}</svg>`
 	el.classList.add('strip')
 	el.setAttribute('role', 'toolbar')
@@ -42,6 +42,7 @@ export function createStrip({ engine, registry, me, el }) {
 	function choose(id) {
 		const L = lane()
 		if (!L || L.module.id === id) return false
+		before?.()
 		engine.setInstrument(L, id, { state: registry.get(id).sample?.(engine.steps()) })
 		engine.push(L, { now: true })
 		paint()
