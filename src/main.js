@@ -1,4 +1,4 @@
-// Campfire Jam: wires transport, engine, view, frengers and the debug panel together.
+// roughjam: wires transport, engine, view, frengers and the debug panel together.
 
 import { createLocalTransport } from './transport/local.js'
 import { createEngine } from './engine.js'
@@ -32,7 +32,7 @@ async function makeTransport() {
 const transport = await makeTransport()
 const engine = createEngine(transport, { laneIds: LANE_IDS, instruments: START })
 const { lanes } = engine
-const me = { name, lane: -1 }
+const me = { name, lane: -1, erase: false }
 
 const humanAt = (i) => transport.peers.find((p) => p.instrument === lanes[i].id)
 const seat = (i) => {
@@ -59,6 +59,7 @@ const view = createView(document.getElementById('c'), engine, {
 	onSit: sit,
 	onPointer(i, e) {
 		const L = lanes[i]
+		if (me.erase) e.alt = true
 		L.instance.pointer(e)
 		engine.pushSoon(L)
 		view.showCursor('me', i, e.x, e.y, me.name)
@@ -82,35 +83,39 @@ engine.on('lanes', renderSeats)
 /* ───────── DOM chrome ───────── */
 const $ = (id) => document.getElementById(id)
 function renderSeats() {
-	const ul = $('seats')
-	if (!ul) return
-	ul.innerHTML = ''
+	const ol = $('seats')
+	if (!ol) return
+	ol.innerHTML = ''
 	;[...lanes].reverse().forEach((L) => {
 		const i = L.index, st = seat(i)
 		const li = document.createElement('li')
-		li.className = 'seat' + (st.me ? ' mine' : '')
+		li.className = 'seat' + (st.me ? ' mine' : st.bot ? ' bot' : st.human ? '' : ' empty')
 		li.style.setProperty('--c', L.color)
-		li.innerHTML = '<span class="dot"></span><span class="inst"></span><span class="who"></span>'
-		li.querySelector('.inst').textContent = L.module.name.toLowerCase()
-		li.querySelector('.who').textContent = st.me ? `${me.name} (you)` : st.bot ? `${st.label} · frenger` : st.human ? st.label : 'empty'
 		const b = document.createElement('button')
-		b.className = 'sit'
-		b.textContent = st.me ? 'seated' : 'sit'
-		b.disabled = st.me || (st.human && !st.me)
-		b.setAttribute('aria-label', `Sit at ${L.module.name}`)
+		b.innerHTML = '<span class="dot"></span><span class="inst"></span><span class="who"></span>'
+		b.querySelector('.inst').textContent = L.module.name.toLowerCase()
+		b.querySelector('.who').textContent = st.me ? me.name : st.human ? st.label : st.bot ? st.label : '…'
+		b.disabled = st.me || st.human
+		b.title = st.me ? 'your ring' : st.human ? `${st.label}'s ring` : 'take this ring'
+		b.setAttribute('aria-label', st.me ? `${L.module.name}, your ring` : `Take the ${L.module.name} ring`)
 		b.onclick = () => sit(i)
 		li.appendChild(b)
-		ul.appendChild(li)
+		ol.appendChild(li)
 	})
-	const names = transport.peers.map((p) => (p.id === transport.id ? `${me.name} (you)` : p.name)).filter(Boolean)
-	$('peers').textContent = `${names.length} at the fire: ${names.join(', ')}`
+	const names = transport.peers.map((p) => (p.id === transport.id ? 'you' : p.name)).filter(Boolean)
+	$('peers').textContent = names.length > 1 ? names.join(', ').replace(/, ([^,]*)$/, ' & $1') : ''
 }
 
 $('sound').onclick = () => {
 	engine.setSound(!engine.soundOn)
 	$('sound').setAttribute('aria-pressed', engine.soundOn)
-	$('sound').textContent = engine.soundOn ? 'Sound off' : 'Sound on'
 }
+const setErase = (on) => {
+	me.erase = on
+	$('erase').setAttribute('aria-pressed', on)
+	document.body.classList.toggle('erasing', on)
+}
+$('erase').onclick = () => setErase(!me.erase)
 const tempo = (d) => {
 	const l = transport.clock.loopAt()
 	transport.setLoop({ bpm: Math.max(50, Math.min(180, l.bpm + d)) })
@@ -134,11 +139,14 @@ addEventListener('keydown', (e) => {
 	if (e.key === ' ') { e.preventDefault(); $('sound').click() }
 	else if (/^[1-9]$/.test(e.key) && +e.key <= lanes.length) sit(+e.key - 1)
 	else if (e.key === 'd') debug.toggle()
+	else if (e.key === 'e') setErase(!me.erase)
 })
 setInterval(() => {
 	const l = transport.clock.loopAt()
 	const next = transport.clock.pending?.().at(-1)
-	$('bpm').textContent = next && next.bpm !== l.bpm ? `${l.bpm} → ${next.bpm}` : `${l.bpm} bpm`
+	const pending = next && next.bpm !== l.bpm
+	$('bpm').textContent = pending ? next.bpm : l.bpm
+	$('bpm').classList.toggle('pending', !!pending)
 }, 200)
 
 // debug panel loads its library from a CDN; the jam must work without it

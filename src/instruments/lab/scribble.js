@@ -2,7 +2,7 @@
 // in the order you drew it, as grains of a slowly morphing vowel.
 // x picks where in the vowel the grain is read (oo .. ah .. ee), y picks the pitch.
 import { kit, mtof } from './kit.js'
-import { withPointer, view, theme, subSlots, SLOTS, clamp, dist, flashes, TAU } from './util.js'
+import { withPointer, view, theme, subSlots, SLOTS, clamp, dist, flashes, TAU, tint } from './util.js'
 
 const MAX_PTS = 400
 const SRC_SECONDS = 3
@@ -148,7 +148,7 @@ export default {
           const glow = fx.glow(k, t.now, 0.5)
           if (!glow) continue
           const [x, y] = state.pts[k]
-          g.fillStyle = `rgba(255,122,61,${glow})`
+          g.fillStyle = tint(th.accent, glow)
           g.beginPath(); g.arc(x * w, y * h, 2 + (1 - glow) * Math.min(w, h) * 0.03, 0, TAU); g.fill()
         }
         if (N && t.playing) {

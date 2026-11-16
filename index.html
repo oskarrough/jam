@@ -3,35 +3,43 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Campfire Jam</title>
+<title>roughjam</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="src/style.css">
 </head>
 <body>
-<canvas id="c" aria-label="Campfire loop. One ring per instrument around a fire. Draw on your ring to play."></canvas>
+<canvas id="c" aria-label="A loop machine. One ring per player around a shared dial. Draw on your ring to play."></canvas>
 
-<div class="panel">
-	<div>
-		<h1>Campfire Jam</h1>
-		<div class="meta">A minor pentatonic · shared loop</div>
-	</div>
-	<ul class="seats" id="seats"></ul>
-</div>
+<header class="panel">
+	<h1>rough<em>jam</em></h1>
+	<ol class="seats" id="seats"></ol>
+</header>
 
-<div class="peers meta" id="peers"></div>
+<p class="peers" id="peers"></p>
 
-<div class="bar">
-	<button id="sound" aria-pressed="false">Sound on</button>
-	<div class="group">
-		<button id="slower" aria-label="Slower">−</button>
-		<span class="bpm" id="bpm">92 bpm</span>
-		<button id="faster" aria-label="Faster">+</button>
-	</div>
-	<button id="clear">Clear my ring</button>
-	<button id="bots" aria-pressed="true">Frengers</button>
-	<div class="hint"><span>Draw on your ring. <kbd>Shift</kbd>-drag erases. <kbd>d</kbd> debug.</span> <span class="long">Open another tab to take a second seat; tabs share one clock.</span></div>
-</div>
+<!-- the deck: fixed-size glyph tokens, nothing reflows when they toggle -->
+<menu class="deck" id="deck">
+	<li><button id="sound" class="token" aria-pressed="false" aria-label="Sound" title="sound · space">
+		<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 13h5l7-6v18l-7-6H5z"/><g class="on"><path d="M21 12c2 2 2 6 0 8"/><path d="M24 9c4 4 4 10 0 14"/></g><g class="off"><path d="M21 12l7 8M28 12l-7 8"/></g></svg>
+	</button></li>
+	<li class="tempo">
+		<button id="slower" class="nib" aria-label="Slower" title="slower"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3L5 8l6 5"/></svg></button>
+		<output id="bpm" aria-label="Tempo in beats per minute">92</output>
+		<button id="faster" class="nib" aria-label="Faster" title="faster"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3l6 5-6 5"/></svg></button>
+	</li>
+	<li><button id="erase" class="token" aria-pressed="false" aria-label="Eraser" title="pen or eraser · e">
+		<svg viewBox="0 0 32 32" aria-hidden="true"><g class="off"><path d="M8 24l2-6L22 6l4 4-12 12z"/><path d="M10 18l4 4"/><path d="M6 27c6-2 12 1 20-2"/></g><g class="on"><path d="M7 20l10-10 7 7-7 7h-6z" /><path class="fill" d="M7 20l4-4 7 7-1 1h-6z"/><path d="M6 27h20"/></g></svg>
+	</button></li>
+	<li><button id="clear" class="token" aria-label="Wipe my ring" title="wipe my ring">
+		<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 16c0-1.5 1.8-1.8 2.4-.6 1 1.8-1 4-3.4 3.6-3.4-.6-4-4.8-1.6-7 3.2-3 8.4-1.4 9.2 2.8 1 5-3.8 8.6-8.6 7.6C8.4 21.2 6.6 14 9.6 9.6"/></svg>
+	</button></li>
+	<li><button id="bots" class="token" aria-pressed="true" aria-label="Frengers" title="frengers: machines that play the empty rings">
+		<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="11" cy="13" r="5"/><path d="M4 26c1-5 4-7 7-7s6 2 7 7"/><circle class="fill" cx="22" cy="11" r="4"/><path d="M17 21c1-3 3-5 5-5s5 2 6 6"/><path d="M20 11h4"/></svg>
+	</button></li>
+</menu>
 
 <script type="module" src="src/main.js"></script>
 </body>

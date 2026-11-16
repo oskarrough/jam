@@ -47,6 +47,11 @@ export const THEME = {
   accent: '#ff7a3d',
   font: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
 }
+// '#rrggbb' or 'rgba(...)' at alpha a
+export function tint(c, a) {
+  if (c[0] === '#') { const n = parseInt(c.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})` }
+  return c.replace(/rgba?\(([^,]+),([^,]+),([^,)]+).*\)/, `rgba($1,$2,$3,${a})`)
+}
 export const theme = (ctx) => ({ ...THEME, ...(ctx.theme || {}), ...(typeof ctx.color === 'string' ? { accent: ctx.color } : {}) })
 
 // intersection of segments p1-p2 and p3-p4; returns t along p1-p2 or null

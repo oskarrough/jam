@@ -2,6 +2,7 @@
 // Factory used by the bass, keys and bell instruments; they differ only in voice and range.
 
 import { SCALE, fit, val, rgba } from './util.js'
+import { INK } from '../palette.js'
 
 export function stepline({ id, name, base, voice, params = {}, generate, sample }) {
 	return {
@@ -48,12 +49,10 @@ export function stepline({ id, name, base, voice, params = {}, generate, sample 
 					const n = notes.length, pos = clock.pos()
 					const X = (s) => ((s + 0.5) / n) * w, Y = (v) => (1 - (v + 0.5) / 8) * h
 					const color = ctx.color
-					g.lineWidth = Math.max(1.6, h * 0.06)
+					// ligne claire: pigment line inside an ink line, notes as inked beads
+					const lw = Math.max(1.6, h * 0.06)
 					g.lineCap = 'round'
 					g.lineJoin = 'round'
-					g.strokeStyle = color
-					g.shadowColor = color
-					g.shadowBlur = 8
 					g.beginPath()
 					for (let s = 0; s < n; s++) {
 						const a = notes[s], b = notes[(s + 1) % n]
@@ -65,16 +64,22 @@ export function stepline({ id, name, base, voice, params = {}, generate, sample 
 							k ? g.lineTo(x, y) : g.moveTo(x, y)
 						}
 					}
+					g.strokeStyle = INK
+					g.lineWidth = lw + 2.2
 					g.stroke()
-					g.shadowBlur = 0
-					const r = Math.max(2, h * 0.07)
+					g.strokeStyle = color
+					g.lineWidth = lw
+					g.stroke()
+					const r = Math.max(2.2, h * 0.075)
+					g.lineWidth = 1.1
+					g.strokeStyle = INK
 					for (let s = 0; s < n; s++) {
 						const v = notes[s]
 						if (v < 0) continue
 						const d = (pos - s + n) % n, f = d < 1.5 ? 1 - d / 1.5 : 0
-						if (f) { g.fillStyle = rgba(color, 0.25 * f); g.beginPath(); g.arc(X(s), Y(v), r + 2 + f * 8, 0, 6.283); g.fill() }
-						g.fillStyle = f ? '#fff6e8' : color
-						g.beginPath(); g.arc(X(s), Y(v), r + f * 2, 0, 6.283); g.fill()
+						if (f) { g.strokeStyle = rgba(INK, 0.6 * f); g.beginPath(); g.arc(X(s), Y(v), r + 3 + (1 - f) * 7, 0, 6.283); g.stroke(); g.strokeStyle = INK }
+						g.fillStyle = f > 0.3 ? INK : color
+						g.beginPath(); g.arc(X(s), Y(v), r + f * 2, 0, 6.283); g.fill(); g.stroke()
 					}
 				},
 				dispose() {},

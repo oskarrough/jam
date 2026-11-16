@@ -4,7 +4,8 @@
 import { registry } from './instruments/index.js'
 import { val } from './instruments/util.js'
 
-export const LANE_COLORS = ['#7cc4b0', '#a8b6ff', '#f2bcd6', '#e9a66b', '#d8e08a', '#9ad0f0']
+import { LANE_COLORS, INK_THEME } from './palette.js'
+export { LANE_COLORS }
 
 export function createEngine(transport, { laneIds, instruments }) {
 	const { clock } = transport
@@ -68,7 +69,7 @@ export function createEngine(transport, { laneIds, instruments }) {
 		L.module = mod
 		L.params = Object.fromEntries(Object.entries(mod.params || {}).map(([k, p]) => [k, val(p)]))
 		if (params) Object.assign(L.params, params)
-		L.instance = mod.create({ audio, out: L.out, clock: iclock, params: L.params, color: L.color })
+		L.instance = mod.create({ audio, out: L.out, clock: iclock, params: L.params, color: L.color, theme: INK_THEME })
 		if (state !== undefined) L.instance.setState(state)
 		applyMix(L)
 		emit('lanes')

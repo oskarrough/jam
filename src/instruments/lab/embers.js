@@ -3,7 +3,7 @@
 // Every spark keeps popping in its slot each loop until it burns out, so the
 // rhythm decays unless people keep feeding the fire.
 import { kit, mtof } from './kit.js'
-import { withPointer, view, absNow, absOf, theme, SLOTS, clamp, dist, TAU } from './util.js'
+import { withPointer, view, absNow, absOf, theme, SLOTS, clamp, dist, TAU, tint } from './util.js'
 
 const MAX = 48
 const FLIGHT = 0.45 // seconds a spark takes to rise
@@ -126,7 +126,7 @@ export default {
           if (t.playing && since >= 0 && since < 0.5) {
             // burst
             const u = since / 0.5
-            g.strokeStyle = `rgba(255,122,61,${(1 - u) * life})`
+            g.strokeStyle = tint(th.accent, (1 - u) * life)
             for (let k = 0; k < 6; k++) {
               const a = (k / 6) * TAU + sp.x * 10
               const r1 = 3 + u * 16, r2 = r1 + 4
@@ -137,7 +137,7 @@ export default {
             }
           }
           // ember resting where it pops, dimming as it burns out
-          g.fillStyle = `rgba(236,230,220,${0.2 + 0.6 * life})`
+          g.fillStyle = tint(th.fg, 0.2 + 0.6 * life)
           g.beginPath(); g.arc(tx, ty, 1.5 + life * 1.5, 0, TAU); g.fill()
         }
       },

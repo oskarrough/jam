@@ -2,7 +2,7 @@
 // x picks the pitch, y the colour (low = dark and still, high = bright and beating).
 // Voices breathe with the loop, each one offset, so the chord slowly rotates.
 import { kit } from './kit.js'
-import { withPointer, view, absOf, theme, clamp, dist, TAU } from './util.js'
+import { withPointer, view, absOf, theme, clamp, dist, TAU, tint } from './util.js'
 
 const MAX = 5
 
@@ -132,7 +132,7 @@ export default {
           const gap = m * (0.03 + s.y * 0.05)
           const off = (t.now * 20 * (1.2 - s.y)) % gap
           for (let r = off; r < m * 0.35; r += gap) {
-            g.strokeStyle = `rgba(236,230,220,${0.35 * amp * (1 - r / (m * 0.35))})`
+            g.strokeStyle = tint(th.fg, 0.35 * amp * (1 - r / (m * 0.35)))
             g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke()
           }
           // snapped pitch tick

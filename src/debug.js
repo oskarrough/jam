@@ -78,7 +78,7 @@ export function createDebug({ engine, transport, view, frengers, me, sit, regist
 
 	// ── view + frengers
 	const viewF = gui.addFolder('view')
-	viewF.add(view.opts, 'mode', ['fire', 'strips']).onChange((m) => view.setMode(m))
+	viewF.add(view.opts, 'mode', ['dial', 'strips']).onChange((m) => view.setMode(m))
 	viewF.add(view.opts, 'slices', 32, 512, 1).name('ring slices')
 	const botF = gui.addFolder('frengers')
 	botF.add(frengers.opts, 'on').onChange(() => { document.getElementById('bots')?.setAttribute('aria-pressed', frengers.opts.on); renderSeats() }).listen()

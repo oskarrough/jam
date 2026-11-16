@@ -1,6 +1,6 @@
-# Campfire Jam
+# roughjam
 
-A multiplayer loop jam in the browser. Friends sit round a fire, each takes a seat (one ring, one instrument), and draws on their ring to play over one shared loop.
+A multiplayer loop jam in the browser. Friends gather round one strange machine, each takes a seat (one ring, one instrument), and draws on their ring to play over one shared loop.
 
     python3 -m http.server 8000     # or any static server; there is no build
     open http://localhost:8000      # open a second tab to take a second seat
@@ -13,7 +13,7 @@ No server needed for local play: tabs in one browser talk over BroadcastChannel.
     src/main.js             wiring: transport, engine, view, seats, frengers, debug
     src/transport/local.js  BroadcastChannel transport, same API as sync/sync.js, with fake latency, jitter, skew
     src/engine.js           audio graph, lanes, lookahead scheduler on the shared clock
-    src/view.js             fire view (lanes wrapped round rings) and strips view, pointer mapping
+    src/view.js             dial view (lanes wrapped round rings, dusk backdrop) and strips view, pointer mapping
     src/frengers.js         bots that sit in empty seats and redraw their part every few loops
     src/debug.js            lil-gui panel: loop, lanes and instrument params, network, clock
     src/instruments/        instrument modules and the registry
