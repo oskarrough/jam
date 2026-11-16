@@ -131,7 +131,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	})
 	canvas.addEventListener('pointermove', (e) => {
 		hover = hit(e.clientX, e.clientY)
-		canvas.style.cursor = hover && canDraw(hover.lane) ? '' : 'default'
+		const onSeat = lanes.some((_, i) => { const [x, y] = seatPos(i); return Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6 })
+		canvas.style.cursor = onSeat ? 'pointer' : hover && canDraw(hover.lane) ? '' : 'default'
 		if (!drag || e.pointerId !== drag.id) return
 		const h = hit(e.clientX, e.clientY, drag.lane)
 		ringJelly[drag.lane].a = Math.atan2(e.clientY - CY, e.clientX - CX) // the dent follows the pen
@@ -439,7 +440,14 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 
 	function drawSeat(i, x, y, label) {
 		const L = lanes[i], st = seat(i), r = seatR()
-		if (st.me) { g.fillStyle = 'rgba(40,25,60,.45)'; g.beginPath(); g.arc(x + 3, y + 4, r, 0, TAU); g.fill() }
+		if (st.me) {
+			g.fillStyle = 'rgba(40,25,60,.45)'; g.beginPath(); g.arc(x + 3, y + 4, r, 0, TAU); g.fill()
+			// a slow dashed halo says: this one is yours, touch it to change instrument
+			g.save()
+			g.strokeStyle = INK; g.lineWidth = 1; g.setLineDash([3, 4]); g.lineDashOffset = reduce ? 0 : -performance.now() / 120
+			wobble(g, x, y, r + 6, i * 7 + 3, 0.8); g.stroke()
+			g.restore()
+		}
 		const J = seatJelly[i]
 		wobble(g, x, y, r, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 })
 		g.fillStyle = st.name ? L.color : PAPER
@@ -619,6 +627,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		ground: () => ({ ...(G2 || G) }),
 		// the bare disc inside the innermost ring, CSS px; null in strips mode
 		heat: () => heat,
+		// a seat badge on screen, CSS px
+		seatAt: (i) => { const [x, y] = seatPos(i); return { x, y, r: seatR() } },
 		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER } : null),
 		resize,
 	}
