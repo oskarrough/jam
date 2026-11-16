@@ -49,7 +49,7 @@ Shared sound comes from `kit(audio)` in `src/instruments/lab/kit.js`: voices (be
 kick, snare, hat, noise), the key (`degree(n, oct)`), and a four-chord progression
 that advances once per loop (`chord(absStep, steps)`).
 
-All ten implement `generate(steps, params)` and `sample(steps)`, so frengers can redraw them.
+All ten implement `generate(steps, params)` and `sample(steps)`, so bots can redraw them.
 Lanes wider than 2.5× their height (the fire view's rings, the strips view) get an unrolled
 layout where the instrument needs one: rings become three rows of pulses, orbits become
 crossing dots on orbit bands.

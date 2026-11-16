@@ -9,7 +9,7 @@ export function stepline({ id, name, base, voice, params = {}, generate, sample 
 		id,
 		name,
 		params: { octave: { value: 0, min: -1, max: 1, step: 1 }, ...params },
-		// optional hooks used by frengers (bots) and first load
+		// optional hooks used by bots and first load
 		generate: (steps) => ({ notes: fit(generate(), steps, -1) }),
 		sample: (steps) => ({ notes: fit(sample, steps, -1) }),
 		create(ctx) {

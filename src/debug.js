@@ -2,7 +2,7 @@
 
 import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.esm.min.js'
 
-export function createDebug({ engine, transport, view, frengers, me, sit, registry, renderSeats, heart }) {
+export function createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart }) {
 	const { clock } = transport
 	const gui = new GUI({ title: 'debug  (d)', width: 280 })
 	if (innerWidth < 640) gui.close()
@@ -76,18 +76,18 @@ export function createDebug({ engine, transport, view, frengers, me, sit, regist
 	clkF.add(engine.cfg, 'lookaheadMs', 20, 500, 5).name('lookahead ms')
 	clkF.add({ tick: engine.cfg.tickMs }, 'tick', 5, 100, 1).name('tick ms').onChange((v) => engine.setTick(v))
 
-	// ── view + frengers
+	// ── view + bots
 	const viewF = gui.addFolder('view')
 	viewF.add(view.opts, 'mode', ['dial', 'strips']).onChange((m) => view.setMode(m))
 	viewF.add(view.opts, 'ground', ['flamingo', 'nortel', 'vallotton', 'sand', 'cycle']).onChange((g) => view.setGround(g))
 	viewF.add(view.opts, 'cycleLoops', 1, 16, 1).name('cycle every n loops')
 	viewF.add(view.opts, 'slices', 32, 512, 1).name('ring slices')
 	heart?.addGui(gui)
-	const botF = gui.addFolder('frengers')
-	botF.add(frengers.opts, 'on').onChange(() => { document.getElementById('bots')?.setAttribute('aria-pressed', frengers.opts.on); renderSeats() }).listen()
-	botF.add(frengers.opts, 'minLoops', 1, 16, 1).name('min loops between')
-	botF.add(frengers.opts, 'maxLoops', 1, 32, 1).name('max loops between')
-	const bd = { get leading() { return frengers.leading }, get active() { return frengers.count } }
+	const botF = gui.addFolder('robots')
+	botF.add(bots.opts, 'on').onChange(() => { document.getElementById('bots')?.setAttribute('aria-pressed', bots.opts.on); renderSeats() }).listen()
+	botF.add(bots.opts, 'minLoops', 1, 16, 1).name('min loops between')
+	botF.add(bots.opts, 'maxLoops', 1, 32, 1).name('max loops between')
+	const bd = { get leading() { return bots.leading }, get active() { return bots.count } }
 	botF.add(bd, 'leading').disable().listen()
 	botF.add(bd, 'active').disable().listen()
 

@@ -1,9 +1,9 @@
-// roughjam: wires transport, engine, view, frengers and the debug panel together.
+// roughjam: wires transport, engine, view, bots and the debug panel together.
 
 import { createLocalTransport } from './transport/local.js'
 import { createEngine } from './engine.js'
 import { createView } from './view.js'
-import { createFrengers, BOT_NAMES } from './frengers.js'
+import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
 import { createHeart } from './heart.js'
 
@@ -40,11 +40,11 @@ const seat = (i) => {
 	const p = humanAt(i)
 	if (p && p.id === transport.id) return { name: me.name, label: 'you', me: true, human: true }
 	if (p) return { name: p.name, label: p.name, human: true }
-	if (frengers?.opts.on && lanes[i].module.generate) return { name: BOT_NAMES[i], label: BOT_NAMES[i], bot: true }
+	if (bots?.opts.on && lanes[i].module.generate) return { name: botName(i), label: botName(i), initial: botName(i).slice(-1), bot: true }
 	return { name: '', label: 'sit' }
 }
 const canDraw = (i) => me.lane === i
-let frengers = null
+let bots = null
 
 function sit(i) {
 	const p = humanAt(i)
@@ -68,7 +68,7 @@ const view = createView(document.getElementById('c'), engine, {
 	},
 })
 const heart = createHeart({ engine, geom: () => view.center() })
-frengers = createFrengers(engine, { seated: (i) => !!humanAt(i), view })
+bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 
 transport.on('cursor', (c) => {
 	const i = lanes.findIndex((L) => L.id === c.lane)
@@ -131,8 +131,8 @@ $('clear').onclick = () => {
 	engine.push(L)
 }
 $('bots').onclick = () => {
-	frengers.opts.on = !frengers.opts.on
-	$('bots').setAttribute('aria-pressed', frengers.opts.on)
+	bots.opts.on = !bots.opts.on
+	$('bots').setAttribute('aria-pressed', bots.opts.on)
 	renderSeats()
 }
 addEventListener('keydown', (e) => {
@@ -154,9 +154,9 @@ setInterval(() => {
 // debug panel loads its library from a CDN; the jam must work without it
 let debug = { toggle() {} }
 import('./debug.js')
-	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, frengers, me, sit, registry, renderSeats, heart })))
+	.then(({ createDebug }) => (debug = createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart })))
 	.catch((e) => console.warn('debug panel unavailable', e))
 renderSeats()
 
 // handy in the console
-Object.assign(window, { jam: { engine, transport, view, frengers, registry, me, heart } })
+Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart } })

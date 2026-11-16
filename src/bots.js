@@ -1,9 +1,9 @@
-// Frengers: bots that sit in empty seats. Every few loops one sweeps a cursor round its ring,
+// Bots: they sit in empty seats. Every few loops one sweeps a cursor round its ring,
 // then a freshly generated part lands. Only one tab in the room (the lowest id) drives them.
 
-export const BOT_NAMES = ['moth', 'fern', 'owl', 'pike', 'wick', 'sloe']
+export const botName = (i) => `Robot ${String.fromCharCode(65 + i)}`
 
-export function createFrengers(engine, { seated, view }) {
+export function createBots(engine, { seated, view }) {
 	const { lanes, transport } = engine
 	const opts = { on: true, minLoops: 2, maxLoops: 5, sweepMs: 1600 }
 	const bots = new Map() // lane index -> {nextAt, sweep}
@@ -29,8 +29,8 @@ export function createFrengers(engine, { seated, view }) {
 				b.sweep.y = Math.max(0.05, Math.min(0.95, b.sweep.y + (Math.random() - 0.5) * 0.15))
 				const x = (b.sweep.x0 ??= Math.floor(Math.random() * 4) / 4)
 				const cx = (x + Math.min(1, f)) % 1
-				view.showCursor('bot' + i, i, cx, b.sweep.y, BOT_NAMES[i])
-				transport.cursor(cx, b.sweep.y, true, L.id, BOT_NAMES[i])
+				view.showCursor('bot' + i, i, cx, b.sweep.y, botName(i))
+				transport.cursor(cx, b.sweep.y, true, L.id, botName(i))
 				if (f >= 1) {
 					L.instance.setState(b.sweep.target)
 					engine.push(L)

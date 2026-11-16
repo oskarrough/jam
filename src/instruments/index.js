@@ -2,7 +2,7 @@
 //
 // Module:   export default { id, name, params, create(ctx), generate?(steps), sample?(steps) }
 //   params:   { key: default } or { key: { value, min, max, step } | { value, options: [...] } }
-//   generate: optional, returns a fresh state; frengers (bots) use it to redraw their part
+//   generate: optional, returns a fresh state; bots use it to redraw their part
 //   sample:   optional, returns the state a lane starts with on a fresh campfire
 // ctx:      { audio: AudioContext, out: AudioNode, clock, params, color }
 //   clock:    { bpm, steps, stepDur (s), startTime (audio s), now() (audio s), pos() (fractional step), playing }

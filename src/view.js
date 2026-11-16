@@ -442,7 +442,7 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		g.font = serif(r * 1.05, 600, false)
 		g.textAlign = 'center'; g.textBaseline = 'middle'
 		g.fillStyle = st.name ? PAPER : ink(0.6)
-		g.fillText(st.name ? st.name[0].toUpperCase() : String(i + 1), x, y + 1)
+		g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
 		if (label) slip(`${L.module.name.toLowerCase()}, ${st.label}`, x, y > CY ? y + r + 13 : y - r - 13, Math.max(11, S * 0.019))
 	}
 
