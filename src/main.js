@@ -188,6 +188,8 @@ $('sound').onclick = () => {
 	engine.setSound(!engine.soundOn)
 	$('sound').setAttribute('aria-pressed', engine.soundOn)
 }
+// the first touch on the machine wakes the sound, so nobody draws in silence; after that the speaker token is theirs
+$('c').addEventListener('pointerdown', () => { if (!engine.soundOn) $('sound').click() }, { once: true, capture: true })
 const setErase = (on) => {
 	me.erase = on
 	$('erase').setAttribute('aria-pressed', on)
