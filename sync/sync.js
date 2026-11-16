@@ -97,7 +97,10 @@ export function createClock() {
 		}
 	}
 
-	return { addSample, now, toLocal, fromLocal, toAudio, setLoop, loopAt, pos, nextBar, nextLoop, stats, instrumentClock, beatMs, barMs, loopMs }
+	/** Loop changes scheduled but not yet in effect. */
+	const pending = (t = now()) => loops.filter((l) => l.from > t).map((l) => l.loop)
+
+	return { addSample, pending, now, toLocal, fromLocal, toAudio, setLoop, loopAt, pos, nextBar, nextLoop, stats, instrumentClock, beatMs, barMs, loopMs }
 }
 
 export function createTransport({ url, room = 'campfire', name = 'anon', instrument = null, color = null } = {}) {
@@ -137,7 +140,9 @@ export function createTransport({ url, room = 'campfire', name = 'anon', instrum
 
 	function connect() {
 		if (!url || closed) return
-		ws = new WebSocket(url)
+		const u = new URL(url, location.href)
+		u.searchParams.set('room', room) // the Worker routes rooms to Durable Objects by this
+		ws = new WebSocket(u)
 		ws.onopen = () => {
 			connected = true
 			retry = 0
@@ -215,7 +220,7 @@ export function createTransport({ url, room = 'campfire', name = 'anon', instrum
 		edit,
 		laneAt,
 		lanes: () => Object.fromEntries(Object.keys(lanes).map((k) => [k, laneAt(k)])),
-		cursor: (x, y, down = false, lane = me.instrument) => tx({ t: 'cursor', x, y, down, lane }),
+		cursor: (x, y, down = false, lane = me.instrument, name) => tx({ t: 'cursor', x, y, down, lane, name }),
 		setLoop: (loop) => tx({ t: 'loop', ...loop }),
 		setMe: (patch) => { Object.assign(me, patch); tx({ t: 'presence', ...patch }) },
 		clock,

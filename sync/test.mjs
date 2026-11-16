@@ -5,7 +5,9 @@ import { createRequire } from 'node:module'
 const { chromium } = createRequire(import.meta.url)('playwright') // global install ok, or npm i -D playwright
 
 const PORT = 8799, LAG = Number(process.env.LAG ?? 40), SKEW = 5000
-const server = spawn('node', ['server.js'], { env: { ...process.env, PORT, LAG }, stdio: 'inherit' })
+// BASE=http://localhost:8787 tests an already-running relay (e.g. `wrangler dev`) instead of spawning server.js.
+const BASE = process.env.BASE || `http://localhost:${PORT}`
+const server = process.env.BASE ? null : spawn('node', [new URL('server.js', import.meta.url).pathname], { env: { ...process.env, PORT, LAG }, stdio: 'inherit' })
 await new Promise((r) => setTimeout(r, 400))
 
 const browser = await chromium.launch()
@@ -13,7 +15,7 @@ const open = async (name, lane, skew = 0) => {
 	const page = await (await browser.newContext()).newPage()
 	if (skew) await page.addInitScript((s) => { const o = performance.timeOrigin + s; Object.defineProperty(performance, 'timeOrigin', { get: () => o }) }, skew)
 	page.on('pageerror', (e) => console.error(name, e))
-	await page.goto(`http://localhost:${PORT}/?name=${name}&lane=${lane}`)
+	await page.goto(`${BASE}/sync/?name=${name}&lane=${lane}&room=test${process.pid}`)
 	return page
 }
 const a = await open('alice', 'bass')
@@ -54,8 +56,23 @@ const c = await open('carol', 'lead')
 await new Promise((r) => setTimeout(r, 800))
 check((await c.evaluate(() => JSON.stringify(jam.laneAt('bass')))) === la, 'late joiner gets current lanes')
 
+// The real jam page (repo root) on the network transport.
+const wsUrl = BASE.replace(/^http/, 'ws')
+const jamPage = async (name) => {
+	const p = await (await browser.newContext()).newPage()
+	p.on('pageerror', (e) => console.error(name, e))
+	await p.goto(`${BASE}/?ws=${wsUrl}&room=fire${process.pid}&name=${name}`)
+	return p
+}
+const j1 = await jamPage('dora'), j2 = await jamPage('eli')
+await new Promise((r) => setTimeout(r, 2500))
+const kinds = await Promise.all([j1, j2].map((p) => p.evaluate(() => document.getElementById('peers')?.textContent)))
+console.log('jam page:', kinds)
+check(kinds.every((k) => /^2 at the fire/.test(k || '')), 'jam page over ws: both see 2 at the fire')
+if (process.env.SHOT) await j2.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-jam.png') })
+
 await b.screenshot({ path: process.env.SHOT || '/tmp/roughjam-sync.png' })
 await browser.close()
-server.kill()
+server?.kill()
 console.log(fails.length ? `\n${fails.length} failed` : '\nall passed')
 process.exit(fails.length ? 1 : 0)

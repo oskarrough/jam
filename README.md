@@ -5,7 +5,7 @@ A multiplayer loop jam in the browser. Friends sit round a fire, each takes a se
     python3 -m http.server 8000     # or any static server; there is no build
     open http://localhost:8000      # open a second tab to take a second seat
 
-No server needed for local play: tabs in one browser talk over BroadcastChannel. `?ws=ws://host:8787` switches to the network layer in `sync/` once that branch lands. `?room=name` and `?name=you` also work. Press `d` for the debug panel, `space` for sound, `1`–`4` to change seat, `Shift`-drag to erase.
+No server needed for local play: tabs in one browser talk over BroadcastChannel. `?ws=ws://host:8787` switches to the network layer in `sync/` (`cd sync && npm i && npm start`). `?room=name` and `?name=you` also work. Press `d` for the debug panel, `space` for sound, `1`–`4` to change seat, `Shift`-drag to erase.
 
 ## Layout
 
@@ -35,4 +35,4 @@ No server needed for local play: tabs in one browser talk over BroadcastChannel.
 
 ## Deploy
 
-Static files, no build: the whole repo root is the site. The `sync/` relay needs a long-lived WebSocket host (Node, or a Cloudflare Durable Object port).
+Static files, no build: the whole repo root is the site. `wrangler.jsonc` deploys the site plus the `sync/` relay (a Durable Object per room) to Cloudflare: `cf deploy`, then open `https://jam.0sk.ar/?ws=wss://jam.0sk.ar`. See `sync/README.md`.

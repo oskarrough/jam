@@ -2,15 +2,29 @@
 
 Multiplayer layer for the campfire: presence, shared loop clock, per-lane state, quantized edits.
 
-    cd sync && npm i && npm start        # http://localhost:8787, open twice
+    cd sync && npm i && npm start        # serves the repo root + relay on :8787
+    open 'http://localhost:8787/?ws=ws://localhost:8787'   # the jam, networked; open twice
+    open http://localhost:8787/sync/     # bare sync demo with a plain debug readout
     LAG=60 npm start                     # simulate 60 ms one-way latency (±20%)
-    npm test                             # two headless browsers, one with a +5 s skewed clock
+    npm test                             # headless: two peers, one with a +5 s skewed clock, plus the jam page
+    BASE=http://127.0.0.1:8788 npm test  # same tests against `wrangler dev --port 8788` (Durable Object)
 
-Other devices on the LAN: `http://<your-ip>:8787`. Over the internet: any tunnel (`cloudflared tunnel --url localhost:8787`) or any Node host; it's one process, one port.
+Other devices on the LAN: `http://<your-ip>:8787/?ws=ws://<your-ip>:8787`.
+
+## Deploy (Cloudflare)
+
+`worker.js` is the same relay as a Worker with one Durable Object per room (`?room=` picks it), using WebSocket hibernation and persisting loop + lanes to storage. `../wrangler.jsonc` serves the repo root as static assets and routes the custom domain `jam.0sk.ar`. From the repo root:
+
+    cf deploy                 # or: npx wrangler deploy
+    open 'https://jam.0sk.ar/?ws=wss://jam.0sk.ar'
+
+The `cf` CLI delegates Workers builds to Wrangler's config, so the `wrangler.jsonc` should be picked up; that part is untested against a real account. `wrangler dev` passes the full test suite locally.
+
+`room.js` holds the protocol; `server.js` (Node + `ws`) and `worker.js` (Durable Object) are thin wrappers.
 
 ## Why a tiny WebSocket server
 
-We send control data (patterns, cursors), never audio, and edits are quantized to the next bar anyway, so a 20–40 ms saving from peer-to-peer buys nothing audible. What we do need is one time authority and one source of truth for late joiners. A ~150-line `ws` server gives both, works behind any NAT without TURN, and has no vendor. Yjs/y-webrtc solves concurrent editing of the same document, which single-owner lanes avoid. Trystero/WebRTC stays an option for a serverless mode later: the client only depends on `send`/`onmessage`. The research thread reached the same v0 conclusion independently.
+We send control data (patterns, cursors), never audio, and edits are quantized to the next bar anyway, so a 20–40 ms saving from peer-to-peer buys nothing audible. What we do need is one time authority and one source of truth for late joiners. A ~100-line relay gives both, works behind any NAT without TURN, and has no vendor. Yjs/y-webrtc solves concurrent editing of the same document, which single-owner lanes avoid. Trystero/WebRTC stays an option for a serverless mode later: the client only depends on `send`/`onmessage`. The research thread reached the same v0 conclusion independently.
 
 ## Model
 
