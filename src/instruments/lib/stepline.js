@@ -1,18 +1,23 @@
 // Stepline: draw a line across the seat, one note per step, height = pitch.
 // Factory used by the bass, keys and bell instruments; they differ only in voice and range.
+// `voices` ([[name, fn], …]) makes the voice a choice: a `voice` param that syncs like any other; the first listed is the default.
 
 import { fit, val, rgba } from './util.js'
 import { kit } from './kit.js'
 import { wave } from './demo.js'
 import { INK } from '../../palette.js'
 
-export function stepline({ id, name, how, glyph, base, voice, params = {}, generate, sample }) {
+export function stepline({ id, name, how, glyph, base, voice, voices, params = {}, generate, sample }) {
+	const byName = voices && new Map(voices)
+	if (voices) params = { voice: { value: voices[0][0], options: voices.map(([n]) => n) }, ...params }
+	const play = (ctx) => byName?.get(ctx.params.voice) || voice || voices[0][1]
 	return {
 		id,
 		name,
 		how,
 		demo: () => [wave(0.06, 0.6, 0.55, 0.25, 1, 20)],
 		glyph,
+		voices: voices ? voices.map(([n]) => n) : null,
 		params: { octave: { value: 0, min: -1, max: 1, step: 1 }, ...params },
 		// optional hooks used by bots and first load
 		generate: (steps) => ({ notes: fit(generate(), steps, -1) }),
@@ -50,7 +55,7 @@ export function stepline({ id, name, how, glyph, base, voice, params = {}, gener
 				},
 				step(i, time, dur) {
 					const v = notes[i % notes.length]
-					if (v >= 0) voice(ctx, harmony.degree(v, oct + val(ctx.params.octave)), time, dur)
+					if (v >= 0) play(ctx)(ctx, harmony.degree(v, oct + val(ctx.params.octave)), time, dur)
 				},
 				frame(g, w, h, clock) {
 					const n = notes.length, pos = clock.pos()

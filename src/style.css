@@ -126,6 +126,13 @@ output.pending { color: var(--vermilion) }
 .glyph[aria-pressed='true'] svg .f { fill: var(--paper) }
 .caption { margin: 0; color: var(--title); font: italic 400 20px/1 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
 @media (max-width: 640px) { .caption { display: none } .glyph.token { width: 36px; height: 36px } }
+/* the voices, in the sheet's top corner (the top row is the rarest note): small italics on the ink, the one playing in your colour */
+.voices { position: absolute; left: 10px; top: 62px; margin: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; max-width: calc(100% - 20px) }
+.voices[hidden] { display: none }
+.voices button { padding: 2px 0 4px; background: none; border: 0; cursor: pointer; color: var(--paper); opacity: 0.5; font: italic 400 16px/1 var(--serif); text-shadow: 0 0 6px var(--ink), 0 0 2px var(--ink); text-decoration: underline wavy transparent 1.4px; text-underline-offset: 5px; transition: opacity 0.15s }
+.voices button:hover { opacity: 0.85 }
+.voices button[aria-pressed='true'] { opacity: 1; color: var(--c); text-decoration-color: var(--c) }
+.voices button:focus-visible { outline: 1.5px dashed var(--paper); outline-offset: 3px }
 
 /* record token: a ring that fills as the 8 bars pass; armed blinks until the loop comes round */
 #rec .arc { fill: none; stroke: var(--vermilion); stroke-width: 2.4; stroke-dasharray: calc(var(--p, 0) * 1) 1; transform: rotate(-90deg); transform-origin: 16px 16px; opacity: 0 }

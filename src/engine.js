@@ -19,15 +19,22 @@ export function createEngine(transport, { seatIds, instruments }) {
 	const on = (ev, fn) => (listeners[ev] ||= []).push(fn)
 
 
-	// master chain: seats -> master -> compressor -> analyser -> out; seats also send to a shared room
+	// master chain: seats -> master -> compressor -> limiter -> analyser -> out; seats also send to a shared room
 	const master = audio.createGain()
 	master.gain.value = 0
 	const comp = audio.createDynamicsCompressor()
 	comp.threshold.value = -14
 	comp.ratio.value = 3
+	// a brick wall just under 0 dBFS: a full machine of seats summed past the compressor and clipped
+	const limiter = audio.createDynamicsCompressor()
+	limiter.threshold.value = -3
+	limiter.knee.value = 0
+	limiter.ratio.value = 20
+	limiter.attack.value = 0.001
+	limiter.release.value = 0.1
 	const analyser = audio.createAnalyser()
 	analyser.fftSize = 512
-	master.connect(comp).connect(analyser).connect(audio.destination)
+	master.connect(comp).connect(limiter).connect(analyser).connect(audio.destination)
 	const room = audio.createConvolver()
 	room.buffer = impulse(audio, 2.8, 2.4)
 	const roomIn = audio.createGain()
