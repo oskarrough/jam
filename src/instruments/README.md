@@ -26,6 +26,7 @@ export default {
   demo: (shape, aspect) => [[[0.1, 0.5], [0.6, 0.3]]], // optional: the gesture a ghost hand plays once when someone switches to you; strokes of [x, y], one point is a tap (helpers in lib/demo.js)
   generate(steps, params) {}, // optional: a fresh state; robots play your instrument with it
   sample(steps) {},           // optional: the state an empty jam starts with
+  optional: ['vel'],          // optional: state keys an older saved part may lack; setState fills them in
   create(ctx) { return instance },
 }
 ```

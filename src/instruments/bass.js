@@ -23,7 +23,7 @@ function saw({ audio: ac, out, params }, m, t, dur) {
 
 export default stepline({
 	id: 'bass',
-	glyph: '<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/>', name: 'Bass', how: 'Draw a line along your ring; higher is a higher note. Shift-drag erases.', base: 33,
+	glyph: '<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/>', name: 'Bass', how: 'Draw a line along your ring; higher is a higher note. Tap a note to lift it off, drag right from it to hold it. Shift-drag erases.', base: 33,
 	params: { cutoff: { value: 9, min: 2, max: 24, step: 0.5 } },
 	voices: [['synbass', jukebox('synbass', -5.4)], ['saw', saw], ['808', jukebox('808', -9.9)], ['log drum', jukebox('logdrum', -10.5)], ['upright', jukebox('upright', -4.4)]],
 	generate: gen,

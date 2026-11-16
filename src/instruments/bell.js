@@ -23,7 +23,7 @@ function fm({ audio: ac, out, params }, m, t) {
 
 export default stepline({
 	id: 'bell',
-	glyph: '<path d="M10 21c0-8 2-13 6-13s6 5 6 13z"/><path d="M7 21h18M16 24v2"/>', name: 'Bell', how: 'Draw a line along your ring; higher is a higher note. Shift-drag erases.', base: 69,
+	glyph: '<path d="M10 21c0-8 2-13 6-13s6 5 6 13z"/><path d="M7 21h18M16 24v2"/>', name: 'Bell', how: 'Draw a line along your ring; higher is a higher note. Tap a note to lift it off, drag right from it to let it ring. Shift-drag erases.', base: 69,
 	params: { ratio: { value: 3.5, min: 1, max: 8, step: 0.01 }, index: { value: 2.2, min: 0, max: 8, step: 0.1 } },
 	voices: [['glock', jukebox('glock', -10.7)], ['fm', fm], ['marimba', jukebox('marimba', -7.2)], ['celesta', jukebox('celesta', -12.0)], ['music box', jukebox('musicbox', -12.0)]],
 	generate: gen,

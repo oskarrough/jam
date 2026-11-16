@@ -24,6 +24,7 @@ export function register(mod) {
 	for (const k of ['id', 'name', 'create']) if (!mod[k]) throw new Error(`instrument is missing ${k}`)
 	const create = mod.create
 	// Foreign state (bot part, older peer) must not break the seat: keep the old one.
+	// Keys a module lists in `optional` may be missing (parts saved before they existed).
 	mod.create = (ctx) => {
 		const inst = create.call(mod, ctx)
 		const setState = inst.setState
@@ -31,7 +32,7 @@ export function register(mod) {
 			if (s == null) { try { setState.call(inst, s) } catch {} return }
 			const backup = JSON.parse(JSON.stringify(inst.state ?? null))
 			const keys = backup && typeof backup === 'object' ? Object.keys(backup) : []
-			if (typeof s !== 'object' || !keys.every((k) => k in s)) return
+			if (typeof s !== 'object' || !keys.every((k) => k in s || mod.optional?.includes(k))) return
 			try { setState.call(inst, s) } catch (e) { setState.call(inst, backup); console.warn(mod.id, 'ignored a state that did not fit', e) }
 		}
 		return inst

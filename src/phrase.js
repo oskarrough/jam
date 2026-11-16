@@ -38,19 +38,21 @@ export function retime(ph, n) {
 	return { ...ph, n, notes: ph.notes.map((x) => ({ ...x, s: x.s * k })) }
 }
 
-// stepline: one note per step, value 0..7 or -1
+// stepline: one note per step, value 0..7 or -1; stack[s] holds a chord's other notes, hold[s] how long it rings
 const stepline = {
 	to(state, n) {
-		const a = state?.notes || []
-		return { n, drums: false, notes: a.flatMap((v, i) => (v >= 0 ? [{ s: (i * n) / a.length, p: v, v: 0.8 }] : [])) }
+		const a = state?.notes || [], st = state?.stack || []
+		return { n, drums: false, notes: a.flatMap((v, i) => (v >= 0 ? [v, ...(st[i] || [])].map((p) => ({ s: (i * n) / a.length, p, v: 0.8 })) : [])) }
 	},
-	from(ph, n) {
-		const notes = new Array(n).fill(-1)
+	from(ph, n, params, mod_) {
+		const notes = new Array(n).fill(-1), hold = new Array(n).fill(1), stack = Array.from({ length: n }, () => [])
+		const max = (mod_?.chords || 1) - 1
 		for (const x of fitRange(asMelody(retime(ph, n)).notes, 0, 7)) {
 			const s = mod(Math.round(x.s), n)
 			if (notes[s] < 0) notes[s] = x.p
+			else if (stack[s].length < max && x.p !== notes[s] && !stack[s].includes(x.p)) stack[s].push(x.p)
 		}
-		return { notes }
+		return { notes, hold, stack }
 	},
 }
 
