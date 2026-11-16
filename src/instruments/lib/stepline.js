@@ -1,7 +1,8 @@
 // Stepline: draw a line across the lane, one note per step, height = pitch.
 // Factory used by the bass, keys and bell instruments; they differ only in voice and range.
 
-import { SCALE, fit, val, rgba } from './util.js'
+import { fit, val, rgba } from './util.js'
+import { kit } from './kit.js'
 import { INK } from '../../palette.js'
 
 export function stepline({ id, name, how, glyph, base, voice, params = {}, generate, sample }) {
@@ -16,6 +17,8 @@ export function stepline({ id, name, how, glyph, base, voice, params = {}, gener
 		sample: (steps) => ({ notes: fit(sample, steps, -1) }),
 		create(ctx) {
 			const { clock } = ctx
+			const harmony = kit(ctx.audio)
+			const oct = Math.round((base - 57) / 12) // base is a midi note in A; the shared key moves it
 			let notes = new Array(clock.steps).fill(-1)
 			let last = null
 			const ensure = () => { if (notes.length !== clock.steps) notes = fit(notes, clock.steps, -1) }
@@ -45,7 +48,7 @@ export function stepline({ id, name, how, glyph, base, voice, params = {}, gener
 				},
 				step(i, time, dur) {
 					const v = notes[i % notes.length]
-					if (v >= 0) voice(ctx, base + 12 * val(ctx.params.octave) + SCALE[v], time, dur)
+					if (v >= 0) voice(ctx, harmony.degree(v, oct + val(ctx.params.octave)), time, dur)
 				},
 				frame(g, w, h, clock) {
 					const n = notes.length, pos = clock.pos()

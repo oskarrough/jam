@@ -1,6 +1,7 @@
 // The machine's panel (lil-gui). Press d to open or fold it. Every knob changes the jam live, for everyone in it.
 
 import GUI from './vendor/lil-gui.esm.min.js'
+import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/kit.js'
 
 export function createDebug({ engine, transport, view, bots, me, sit, registry, renderSeats, heart }) {
 	const { clock } = transport
@@ -21,12 +22,22 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	// ── loop (changes land on the next loop boundary, for everyone)
 	const loopF = gui.addFolder('loop')
 	const cur = () => clock.loopAt()
-	const loopEdit = { bpm: cur().bpm, bars: cur().bars, beatsPerBar: cur().beatsPerBar }
-	const commit = () => transport.setLoop({ ...loopEdit })
+	// chords are typed as numerals, one per bar: 'i III iv v'. Case is decoration; the key decides each chord's quality.
+	const numerals = (a) => (a?.length ? a : CHORDS).map((d) => NUMERALS[d]).join(' ')
+	const fromLoop = (l) => ({ bpm: l.bpm, bars: l.bars, beatsPerBar: l.beatsPerBar, root: l.root ?? 'A', scale: l.scale ?? 'minor pent', chords: numerals(l.chords) })
+	const loopEdit = fromLoop(cur())
+	const commit = () => {
+		const chords = parseChords(loopEdit.chords)
+		const { chords: _, ...rest } = loopEdit
+		transport.setLoop({ ...rest, ...(chords.length ? { chords } : {}) })
+	}
 	loopF.add(loopEdit, 'bpm', 50, 180, 1).onFinishChange(commit)
 	loopF.add(loopEdit, 'bars', [1, 2, 4]).onChange(commit)
 	loopF.add(loopEdit, 'beatsPerBar', [3, 4, 5, 7]).onChange(commit)
-	transport.on('loop', ({ loop }) => { Object.assign(loopEdit, { bpm: loop.bpm, bars: loop.bars, beatsPerBar: loop.beatsPerBar }); loopF.controllersRecursive().forEach((c) => c.updateDisplay()) })
+	loopF.add(loopEdit, 'root', Object.keys(ROOTS)).name('key').onChange(commit)
+	loopF.add(loopEdit, 'scale', Object.keys(SCALES)).onChange(commit)
+	loopF.add(loopEdit, 'chords').name('chords, one a bar').onFinishChange(commit)
+	transport.on('loop', ({ loop }) => { Object.assign(loopEdit, fromLoop(loop)); loopF.controllersRecursive().forEach((c) => c.updateDisplay()) })
 
 	// ── lanes: instrument per lane, mix, and the instrument's own params
 	const lanesF = gui.addFolder('lanes')

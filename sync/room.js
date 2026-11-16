@@ -4,6 +4,17 @@
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const loopMs = (l) => (l.bars * l.beatsPerBar * 60000) / l.bpm
 const nextLoopBoundary = (l, t) => l.origin + Math.ceil((t - l.origin) / loopMs(l)) * loopMs(l)
+// key and chords: kept if new ones don't look right. Chords are degrees 0..6, one per bar, at most 16.
+function harmony(m, cur) {
+	const h = {}
+	const root = /^[A-G]$/.test(m.root) ? m.root : cur.root
+	const scale = typeof m.scale === 'string' && /^[a-z ]{1,20}$/.test(m.scale) ? m.scale : cur.scale
+	const chords = Array.isArray(m.chords) && m.chords.length ? m.chords.slice(0, 16).map((d) => clamp(Math.floor(Number(d)) || 0, 0, 6)) : cur.chords
+	if (root) h.root = root
+	if (scale) h.scale = scale
+	if (chords) h.chords = chords
+	return h
+}
 
 /**
  * @param {object} io
@@ -60,6 +71,8 @@ export function createRoom(io, state = {}) {
 				bpm: clamp(Number(m.bpm) || s.loop.bpm, 30, 300),
 				beatsPerBar: clamp(Number(m.beatsPerBar) || s.loop.beatsPerBar, 1, 16),
 				bars: clamp(Number(m.bars) || s.loop.bars, 1, 64),
+				// the jam's harmony rides with the loop; clients fall back to A minor pentatonic, i III iv v
+				...harmony(m, s.loop),
 				origin: at,
 			}
 			broadcast({ t: 'loop', loop: s.loop, at })

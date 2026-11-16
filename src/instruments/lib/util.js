@@ -105,7 +105,6 @@ export const isStrip = (w, h, shape) => (shape ? shape === 'ring' : w > h * 2.5)
 
 // ── synth parts and per-step arrays (used by bass, keys, bell, drums)
 
-export const SCALE = [0, 3, 5, 7, 10, 12, 15, 17] // A minor pentatonic, 8 degrees
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 
 /** Resize a per-step array to n steps by repeating its content (16 -> 32 doubles the bar). */

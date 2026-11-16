@@ -3,6 +3,7 @@
 
 import { registry } from './instruments/index.js'
 import { val } from './instruments/lib/util.js'
+import { kit } from './instruments/lib/kit.js'
 
 import { LANE_COLORS, INK_THEME } from './palette.js'
 export { LANE_COLORS }
@@ -35,6 +36,7 @@ export function createEngine(transport, { laneIds, instruments }) {
 	roomIn.connect(room).connect(wet).connect(master)
 
 	const loop = () => clock.loopAt()
+	kit(audio).follow(loop) // key and chords ride along with the loop, so every instrument hears the same harmony
 	const steps = () => { const l = loop(); return l.bars * l.beatsPerBar * 4 }
 	const stepMs = (l = loop()) => clock.beatMs(l) / 4
 

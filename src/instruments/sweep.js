@@ -111,7 +111,7 @@ export default {
       step(i, time, dur) {
         const abs = absOf(clock, time)
         amp.gain.setTargetAtTime(params.level, time, 0.05)
-        if (i === 0) retune(abs, time)
+        if (i % engine.barSteps() === 0) retune(abs, time) // a chord per bar, from the jam's chords
         if (i % 4 === 0 && params.pump > 0) {
           pump.gain.setValueAtTime(1 - params.pump, time)
           pump.gain.setTargetAtTime(1, time + 0.01, dur * 0.9)

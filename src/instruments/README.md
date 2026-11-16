@@ -42,6 +42,6 @@ If someone sends a state your instrument doesn't understand, the registry ignore
 
 ## Helpers
 
-`lib/util.js` has small timing, pointer and drawing helpers (`withPointer`, `subSlots`, `flashes`, `view`, `isStrip`) plus synth parts (`env`, `osc`, `noiseSrc`, `mtof`). `lib/kit.js` gives the ten lab instruments a shared key, chords and voices. `lib/stepline.js` is the one-line-per-step factory behind bass, keys and bell.
+`lib/util.js` has small timing, pointer and drawing helpers (`withPointer`, `subSlots`, `flashes`, `view`, `isStrip`) plus synth parts (`env`, `osc`, `noiseSrc`, `mtof`). `lib/kit.js` holds the jam's harmony and some voices: `kit(audio).degree(d, octave)` is a scale degree in the jam's key, `kit(audio).chord(absStep)` the triad for that bar. The key and chords travel with the loop, so use these rather than fixed notes and your instrument follows when someone changes them. `lib/stepline.js` is the one-line-per-step factory behind bass, keys and bell.
 
 The [lab](../../lab/) plays the ten drawable instruments one at a time, each with its own panel.

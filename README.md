@@ -4,7 +4,7 @@ A loop machine for a few friends and some strange instruments.
 
 Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Tap your own seat to zoom into your instrument, and its glyph token to swap it for another. Empty seats are taken by robots who redraw their part every few loops until a person sits down. Drag your own seat badge onto a robot's and it takes your part as a motif and improvises on it in its own instrument: echo, a variation or two, then a call-and-response, round again.
 
-It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. The panel isn't a developer backstage; it's part of the instrument.
+It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, the key and the chords (one a bar, typed as numerals: `i III iv v`), which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. The panel isn't a developer backstage; it's part of the instrument.
 
 And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fourteen so far:
 

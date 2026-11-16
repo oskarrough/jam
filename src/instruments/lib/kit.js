@@ -10,9 +10,20 @@ export const SCALES = {
 }
 export const ROOTS = { C: 48, D: 50, E: 52, F: 53, G: 55, A: 57, B: 59 }
 
-// i  VI  III  VII over natural minor, one chord per loop
-const PROGRESSION = [0, 5, 2, 6]
-const NATURAL_MINOR = [0, 2, 3, 5, 7, 8, 10]
+// Harmony is shared by the whole jam and travels with the loop (tempo, bars, meter, key, chords), so it
+// changes for everyone on the next loop boundary. Chords are degrees of the key's seven-note parent scale,
+// one per bar, cycling: the default i III iv v is Am C Dm Em under the default song's bass.
+export const CHORDS = [0, 2, 3, 4]
+export const NUMERALS = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii']
+const PARENT = {
+  'minor pent': [0, 2, 3, 5, 7, 8, 10],
+  'major pent': [0, 2, 4, 5, 7, 9, 11],
+  dorian: [0, 2, 3, 5, 7, 9, 10],
+  minor: [0, 2, 3, 5, 7, 8, 10],
+  'hira joshi': [0, 2, 3, 5, 7, 8, 10],
+}
+// 'i III iv v' (or 'i,iii,iv,v') to degrees; case is ignored, the triad's quality comes from the key
+export const parseChords = (s) => String(s).toLowerCase().split(/[\s,·-]+/).map((w) => NUMERALS.indexOf(w)).filter((d) => d >= 0).slice(0, 16)
 
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
@@ -29,29 +40,38 @@ export function kit(audio) {
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
   }
 
+  // key is the fallback (the lab sets it); in the jam, follow() points the kit at the shared loop
   const key = { root: 'A', scale: 'minor pent' }
-  const rootMidi = () => ROOTS[key.root] ?? 57
+  let source = () => null
+  const cur = () => {
+    const l = source() || {}
+    return { root: l.root ?? key.root, scale: l.scale ?? key.scale, chords: l.chords?.length ? l.chords : CHORDS, barSteps: (l.beatsPerBar ?? 4) * 4 }
+  }
+  const rootMidi = () => ROOTS[cur().root] ?? 57
 
   // scale degree (any integer) to midi
   function degree(deg, oct = 0) {
-    const s = SCALES[key.scale] || SCALES['minor pent']
+    const s = SCALES[cur().scale] || SCALES['minor pent']
     const n = s.length
     const o = Math.floor(deg / n)
     const d = ((deg % n) + n) % n
     return rootMidi() + s[d] + 12 * (o + oct)
   }
-  // triad (midi) for the loop that contains absStep
-  function chord(absStep, steps = 16) {
-    const loop = Math.floor(absStep / steps)
-    const r = PROGRESSION[((loop % 4) + 4) % 4]
-    const tone = (i) => {
-      const o = Math.floor((r + i) / 7)
-      return rootMidi() + NATURAL_MINOR[(r + i) % 7] + 12 * o
-    }
-    return { root: tone(0), notes: [tone(0), tone(2), tone(4)], name: ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'][r] }
+  // triad (midi) for the bar that contains absStep (steps from the loop's origin)
+  function chord(absStep) {
+    const h = cur()
+    const bar = Math.floor(absStep / h.barSteps)
+    const r = h.chords[((bar % h.chords.length) + h.chords.length) % h.chords.length]
+    const parent = PARENT[h.scale] || PARENT.minor
+    const tone = (i) => rootMidi() + parent[(r + i) % 7] + 12 * Math.floor((r + i) / 7)
+    const notes = [tone(0), tone(2), tone(4)]
+    // name it by its quality: upper case major, lower minor, ° diminished
+    const third = notes[1] - notes[0], fifth = notes[2] - notes[0]
+    const n = NUMERALS[r]
+    return { root: notes[0], notes, name: third === 4 ? n.toUpperCase() : fifth === 6 ? n + '°' : n }
   }
 
-  k = { noise, key, degree, chord, voices: makeVoices(audio, noise) }
+  k = { noise, key, degree, chord, follow: (fn) => (source = fn), barSteps: () => cur().barSteps, voices: makeVoices(audio, noise) }
   kits.set(audio, k)
   return k
 }
