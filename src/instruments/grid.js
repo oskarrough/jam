@@ -46,6 +46,8 @@ function blob(g, x, y, rx, ry, seed) {
 
 export default {
   id: 'grid',
+  // columns are pattern steps (polymeter), not loop phase, so the host's playhead would lie; the playing step glows instead
+  playhead: false,
   glyph: '<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
   name: 'Grid',
   how: 'Tap a step to switch it. Drag to draw pitch, length, loud or chance (pick one along the bottom). Drag the bracket to shorten the pattern.',
