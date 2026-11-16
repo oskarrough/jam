@@ -1,6 +1,7 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	"plugins": [],
+	"plugins": ["typescript"],
+	"options": { "typeAware": true },
 	"categories": { "correctness": "off" },
 	"env": { "browser": true, "node": true },
 	"globals": { "WebSocketPair": "readonly", "HTMLRewriter": "readonly" },
@@ -8,6 +9,8 @@
 	"rules": {
 		"no-undef": "error",
 		"no-dupe-keys": "error",
+		"typescript/no-floating-promises": "warn",
+		"typescript/no-misused-promises": "warn",
 		"no-unused-vars": ["warn", { "args": "none", "caughtErrors": "none" }]
 	}
 }

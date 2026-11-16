@@ -5,12 +5,16 @@
   "scripts": {
     "new-instrument": "node scripts/new-instrument.js",
     "check": "node scripts/check.js",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "shots": "node scripts/shots.js",
     "two-tabs": "node scripts/two-tabs.js"
   },
   "devDependencies": {
     "cf": "^1.0.0-rc.0",
+    "oxfmt": "^0.79.0",
     "oxlint": "^1.94.0",
+    "oxlint-tsgolint": "^7.0.2007",
     "wrangler": "^4.163.0"
   }
 }
