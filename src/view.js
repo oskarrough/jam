@@ -6,11 +6,13 @@
 // one ring per player, ink on paper. The centre is left bare for src/heart.js.
 
 import { rgba } from './instruments/util.js'
-import { INK, PAPER, SERIF } from './palette.js'
+import { INK, SERIF, GROUNDS } from './palette.js'
 
 const TAU = Math.PI * 2
-const SKY = '#efe2c3', DUSK = '#f3cf98', LILAC = '#9a85b4', VIOLET = '#4a3870', PLUM = '#2b2142'
-const OCHRE = '#d9a03c', GRASS = '#6f9338', VERMILION = '#d64a28'
+const VERMILION = '#d64a28'
+const ORDER = ['flamingo', 'nortel', 'vallotton', 'sand']
+// hex lerp for the paper while grounds cross-fade
+const mixHex = (a, b, t) => '#' + [0, 2, 4].map((i) => Math.round(parseInt(a.substr(1 + i, 2), 16) * (1 - t) + parseInt(b.substr(1 + i, 2), 16) * t).toString(16).padStart(2, '0')).join('')
 const ink = (a) => rgba(INK, a)
 const serif = (px, w = 400, italic = true) => `${italic ? 'italic ' : ''}${w} ${Math.round(px)}px ${SERIF}`
 
@@ -24,10 +26,12 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 	const g = canvas.getContext('2d')
 	const { lanes, transport } = engine
 	const { clock } = transport
-	const opts = { mode: 'dial', slices: 192, landscape: true }
+	const opts = { mode: 'dial', slices: 192, landscape: true, ground: 'flamingo', cycleLoops: 4 }
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	let W, H, S, CX, CY, DPR
-	const bg = document.createElement('canvas'), bgg = bg.getContext('2d')
+	let bg = document.createElement('canvas'), bg2 = document.createElement('canvas')
+	// ground state: current G, and while cycling an incoming one fading in
+	let G = GROUNDS.flamingo, G2 = null, fade = 0, PAPER = G.paper, lastLoopN = -1
 	const cursors = new Map() // key -> {lane, x, y, name, until}
 	let heat = 0, lastT = performance.now(), lastBeat = -1, hover = null, drag = null
 
@@ -42,7 +46,8 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		CX = W / 2
 		CY = top + (H - top - bottom) / 2
 		sizeLanes()
-		paintBackdrop()
+		paintBackdrop(bg, G)
+		if (G2) paintBackdrop(bg2, G2)
 	}
 
 	// ring geometry, inner lane first
@@ -190,56 +195,56 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		c.restore()
 	}
 
-	function paintBackdrop() {
-		bg.width = W * DPR
-		bg.height = H * DPR
-		const c = bgg, R = rng(7)
+	function paintBackdrop(cv, G) {
+		cv.width = W * DPR
+		cv.height = H * DPR
+		const c = cv.getContext('2d'), R = rng(7)
 		c.setTransform(DPR, 0, 0, DPR, 0, 0)
 		const hy = Math.round(Math.max(H * 0.5, Math.min(H * 0.68, CY + S * 0.06))) // horizon
 
 		// sky
 		const sk = c.createLinearGradient(0, 0, 0, hy)
-		sk.addColorStop(0, SKY); sk.addColorStop(0.75, '#f2dcb0'); sk.addColorStop(1, DUSK)
+		sk.addColorStop(0, G.sky[0]); sk.addColorStop(0.75, G.sky[1]); sk.addColorStop(1, G.sky[2])
 		c.fillStyle = sk
 		c.fillRect(0, 0, W, H)
-		if (!opts.landscape) { c.fillStyle = PAPER; c.fillRect(0, 0, W, H); paintGrain(c); return }
+		if (!opts.landscape) { c.fillStyle = G.paper; c.fillRect(0, 0, W, H); paintGrain(c); return }
 
 		// low flamingo sun, and a couple of black crescents floating where birds would be
-		c.fillStyle = '#ee9d83'
+		c.fillStyle = G.sun
 		c.beginPath(); c.arc(W * 0.86, hy - H * 0.2, Math.max(14, Math.min(W, H) * 0.035), 0, TAU); c.fill()
 		// the wandering line
-		c.strokeStyle = ink(0.7); c.lineWidth = 0.9; c.lineJoin = 'round'; c.lineCap = 'round'
+		c.strokeStyle = G.line; c.lineWidth = 0.9; c.lineJoin = 'round'; c.lineCap = 'round'
 		wanderingLine(c, R, Math.max(H * 0.26, hy - H * 0.34), hy - H * 0.16)
 
 		// hills: far lilac, near violet, then a dark band of rounded tree masses
-		ridge(c, hy, [[0.22, 0.28, H * 0.24], [0.78, 0.18, H * 0.09], [1.02, 0.12, H * 0.14]], 3, R, LILAC)
+		ridge(c, hy, [[0.22, 0.28, H * 0.24], [0.78, 0.18, H * 0.09], [1.02, 0.12, H * 0.14]], 3, R, G.far)
 		// flat shadow plane on the far hill
-		c.fillStyle = 'rgba(74,56,112,.35)'
+		c.fillStyle = G.farShade
 		c.beginPath(); c.moveTo(W * 0.3, hy - H * 0.21); c.lineTo(W * 0.62, hy - H * 0.02); c.lineTo(W * 0.3, hy); c.closePath(); c.fill()
-		ridge(c, hy + H * 0.02, [[0.65, 0.22, H * 0.1], [0.05, 0.1, H * 0.05]], 2, R, VIOLET)
-		c.fillStyle = PLUM
+		ridge(c, hy + H * 0.02, [[0.65, 0.22, H * 0.1], [0.05, 0.1, H * 0.05]], 2, R, G.near)
+		c.fillStyle = G.trees
 		for (let k = 0; k < 26; k++) {
 			const x = R() * W, y = hy + H * 0.02 - R() * H * 0.03, r = 6 + R() * Math.max(10, S * 0.03)
 			c.beginPath(); c.ellipse(x, y, r * 1.1, r, 0, Math.PI, TAU); c.fill()
 		}
 
 		// fields: ochre, then a green bank cut on a diagonal, then a long violet shadow
-		c.fillStyle = OCHRE
+		c.fillStyle = G.field
 		c.beginPath(); c.moveTo(-10, hy + H * 0.02)
 		for (let x = -10; x <= W + 10; x += 20) c.lineTo(x, hy + H * 0.02 + Math.sin(x * 0.01) * 3)
 		c.lineTo(W + 10, H + 10); c.lineTo(-10, H + 10); c.closePath(); c.fill()
 		// etched furrows
-		c.strokeStyle = 'rgba(120,70,20,.28)'; c.lineWidth = 0.8
+		c.strokeStyle = G.furrow; c.lineWidth = 0.8
 		for (let k = 1; k < 14; k++) {
 			const y = hy + H * 0.02 + k * k * 1.6
 			c.beginPath(); c.moveTo(-10, y); c.bezierCurveTo(W * 0.3, y - 4, W * 0.7, y + 6, W + 10, y + 2); c.stroke()
 		}
-		c.fillStyle = GRASS
+		c.fillStyle = G.grass
 		c.beginPath(); c.moveTo(-10, H * 0.84); c.bezierCurveTo(W * 0.3, H * 0.8, W * 0.6, H * 0.9, W + 10, hy + H * 0.1); c.lineTo(W + 10, H + 10); c.lineTo(-10, H + 10); c.closePath(); c.fill()
-		c.fillStyle = 'rgba(74,56,112,.85)'
+		c.fillStyle = G.shadow
 		c.beginPath(); c.moveTo(W * 0.55, H + 10); c.bezierCurveTo(W * 0.7, H * 0.9, W * 0.85, H * 0.86, W + 10, H * 0.8); c.lineTo(W + 10, H + 10); c.closePath(); c.fill()
 		// grass hatching
-		c.strokeStyle = 'rgba(30,50,20,.35)'; c.lineWidth = 0.8
+		c.strokeStyle = G.grassInk; c.lineWidth = 0.8
 		for (let k = 0; k < 240; k++) {
 			const x = R() * W, y = H * 0.86 + R() * H * 0.16, h = 4 + R() * 7
 			c.beginPath(); c.moveTo(x, y); c.lineTo(x + 1.5, y - h); c.stroke()
@@ -249,10 +254,10 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		c.save()
 		c.translate(W * 0.06, H * 0.74); c.rotate(-0.06)
 		const gs = Math.max(9, S * 0.018)
-		c.strokeStyle = ink(0.55); c.lineWidth = 0.7
+		c.strokeStyle = G.dark ? G.line : ink(0.55); c.lineWidth = 0.7
 		for (let k = 0; k <= 6; k++) { c.beginPath(); c.moveTo(k * gs, 0); c.lineTo(k * gs, gs * 4); c.stroke() }
 		for (let k = 0; k <= 4; k++) { c.beginPath(); c.moveTo(0, k * gs); c.lineTo(gs * 6, k * gs); c.stroke() }
-		c.fillStyle = '#9fc23f'
+		c.fillStyle = G.scrap
 		for (let k = 0; k < 9; k++) { c.beginPath(); c.arc((1 + (k % 3)) * gs + gs * 0.5, (1 + Math.floor(k / 3)) * gs - gs * 0.5, gs * 0.38, 0, TAU); c.fill() }
 		c.restore()
 		c.strokeStyle = VERMILION; c.lineWidth = 2; c.fillStyle = VERMILION
@@ -324,8 +329,20 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		if (beatIdx !== lastBeat) { if (lastBeat !== -1) heat = Math.min(1, heat + (p.beat === 0 ? 0.25 : 0.08)); lastBeat = beatIdx }
 		heat = Math.max(heat * Math.pow(0.04, dt), Math.min(0.9, engine.level() * 2.5))
 
+		// cycling grounds: every few loops the next one fades in over a couple of seconds
+		if (opts.ground === 'cycle' && p) {
+			const ln = Math.floor(p.loops ?? p.beats / ((loop?.bars || 2) * (loop?.beatsPerBar || 4)))
+			if (lastLoopN >= 0 && ln !== lastLoopN && ln % opts.cycleLoops === 0 && !G2) startFade(GROUNDS[ORDER[(ORDER.indexOf(groundName()) + 1) % ORDER.length]])
+			lastLoopN = ln
+		}
+		if (G2) {
+			fade = Math.min(1, fade + dt / (reduce ? 0.01 : 2.5))
+			PAPER = mixHex(G.paper, G2.paper, fade)
+			if (fade >= 1) { [bg, bg2] = [bg2, bg]; G = G2; G2 = null; PAPER = G.paper; applyCss() }
+		}
 		g.setTransform(1, 0, 0, 1, 0, 0)
 		g.drawImage(bg, 0, 0)
+		if (G2) { g.globalAlpha = fade; g.drawImage(bg2, 0, 0); g.globalAlpha = 1 }
 		g.setTransform(DPR, 0, 0, DPR, 0, 0)
 		if (opts.landscape) drawDrifters(t)
 		lanes.forEach(renderLane)
@@ -335,11 +352,34 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 		requestAnimationFrame(frame)
 	}
 
+	const groundName = () => Object.keys(GROUNDS).find((k) => GROUNDS[k] === G)
+	function startFade(next) {
+		if (!next || next === G) return
+		G2 = next; fade = 0
+		paintBackdrop(bg2, G2)
+		applyCss(G2)
+	}
+	// the DOM chrome follows the ground: page background, paper tokens, title colour
+	function applyCss(g0 = G) {
+		const r = document.documentElement.style
+		r.setProperty('--paper', g0.paper)
+		r.setProperty('--sky', g0.sky[0])
+		r.setProperty('--title', g0.dark ? g0.paper : '#211a2e')
+		document.documentElement.dataset.ground = Object.keys(GROUNDS).find((k) => GROUNDS[k] === g0)
+		dispatchEvent(new CustomEvent('ground', { detail: { ...g0 } }))
+	}
+	function setGround(name) {
+		opts.ground = name
+		if (name === 'cycle') return
+		G2 = null; G = GROUNDS[name] || G; PAPER = G.paper
+		paintBackdrop(bg, G); applyCss()
+	}
+
 	// black crescents adrift in the sky, slow as weather; they keep clear of the dial
 	const drifters = Array.from({ length: 5 }, (_, k) => ({ u: (k * 0.23 + 0.07) % 1, v: 0.08 + ((k * 0.37) % 0.3), s: 0.6 + ((k * 0.61) % 0.8), sp: 0.4 + ((k * 0.29) % 0.6), rot: k * 1.3 }))
 	function drawDrifters(t) {
 		const T = reduce ? 0 : t / 1000
-		g.fillStyle = INK
+		g.fillStyle = G.mark
 		for (const d of drifters) {
 			const x = ((d.u + T * 0.004 * d.sp) % 1.1) * (W + 60) - 30, y = d.v * H + Math.sin(T * 0.3 * d.sp + d.rot) * 8
 			if (opts.mode === 'dial' && Math.hypot(x - CX, y - CY) < medallion() + 50) continue
@@ -532,16 +572,20 @@ export function createView(canvas, engine, { seat, canDraw, onSit, onPointer }) 
 
 	addEventListener('resize', resize)
 	resize()
+	applyCss()
 	requestAnimationFrame(frame)
 
 	return {
 		opts,
 		showCursor,
 		setMode(m) { opts.mode = m; sizeLanes() },
-		repaint: paintBackdrop,
+		repaint: () => paintBackdrop(bg, G),
+		setGround,
+		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
+		ground: () => ({ ...(G2 || G) }),
 		// the bare disc inside the innermost ring, CSS px; null in strips mode
 		heat: () => heat,
-		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0) } : null),
+		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER } : null),
 		resize,
 	}
 }

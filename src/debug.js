@@ -79,6 +79,8 @@ export function createDebug({ engine, transport, view, frengers, me, sit, regist
 	// ── view + frengers
 	const viewF = gui.addFolder('view')
 	viewF.add(view.opts, 'mode', ['dial', 'strips']).onChange((m) => view.setMode(m))
+	viewF.add(view.opts, 'ground', ['flamingo', 'nortel', 'vallotton', 'sand', 'cycle']).onChange((g) => view.setGround(g))
+	viewF.add(view.opts, 'cycleLoops', 1, 16, 1).name('cycle every n loops')
 	viewF.add(view.opts, 'slices', 32, 512, 1).name('ring slices')
 	heart?.addGui(gui)
 	const botF = gui.addFolder('frengers')
