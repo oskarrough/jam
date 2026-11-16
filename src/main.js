@@ -1,5 +1,6 @@
 // roughjam: wires transport, engine, view, bots and the debug panel together.
 
+import { rng } from './instruments/lib/util.js'
 import { createLocalTransport } from './transport/local.js'
 import { createEngine } from './engine.js'
 import { createView } from './view.js'
@@ -13,13 +14,22 @@ import { createGhost } from './ghost.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
 
 const SEAT_IDS = ['seat1', 'seat2', 'seat3', 'seat4']
-const START = ['bass', 'keys', 'bell', 'drums']
 
 const q = new URLSearchParams(location.search)
 // everyone lands in the open jam at /; your own is /j/<name>; ?room= also works
 const replayId = location.pathname.match(/\/r\/([\w-]{4,32})\/?$/)?.[1]
 const pathJam = decodeURIComponent(location.pathname.match(/\/j\/([\w-]{1,48})\/?$/)?.[1] || '')
 const room = (q.get('room') || pathJam || 'open').toLowerCase().slice(0, 48)
+// A fresh jam: bass and drums hold the floor, the middle two seats are dealt from the strange instruments.
+// Seeded by room and day, so everyone in a room sees the same lineup and the open jam changes daily.
+const STRANGE = ['contour', 'grid', 'sweep', 'drift', 'scribble', 'strum', 'swarm', 'orbits', 'embers']
+const START = (() => {
+	let h = 2166136261
+	for (const c of room + new Date().toISOString().slice(0, 10)) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
+	const r = rng(h), pile = STRANGE.slice()
+	const deal = () => pile.splice(Math.floor(r() * pile.length), 1)[0]
+	return ['bass', deal(), deal(), 'drums']
+})()
 // no invented names: 'player N' by seat unless ?name=
 const name = q.get('name') || ''
 

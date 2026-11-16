@@ -7,3 +7,4 @@
 - New instrument: `npm run new-instrument <name>`; contract in `src/instruments/README.md`; `/?instrument=<id>` opens it.
 - Poking around by hand: `agent-browser` if installed, else Playwright (`scripts/lib/browser.js` has a server and helpers).
 - Deploy is Oskar's: pull, then `bun install && npx cf deploy` from `main`.
+- Before shipping: fun in 5 seconds without reading? strange over safe? one gesture?
