@@ -344,7 +344,7 @@ Object.assign(window, { jam: { engine, transport, view, bots, registry, me, hear
 /* ───────── record: 8 bars from the next loop start, stored, a link to replay them at /r/<id> ───────── */
 const recBtn = $('rec')
 if (recBtn && transport.kind === 'ws') {
-	const recorder = createRecorder({ engine, transport, seatName: (i) => occupant(i).name || null })
+	const recorder = createRecorder({ engine, transport, seatName: (i) => { const o = occupant(i); return o.me ? me.name || playerName(i) : o.name || null } }) // a recording is for others: 'you' becomes your name or seat
 	const recline = $('recline')
 	const setRec = (state, p = 0) => { recBtn.dataset.state = state; recBtn.style.setProperty('--p', p.toFixed(3)) }
 	setRec('idle')

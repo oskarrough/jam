@@ -63,14 +63,14 @@ const jamPage = async (name, path) => {
 	await p.goto(`${BASE}${path}?name=${name}`) // no ?ws: the page finds the same-origin relay itself
 	return p
 }
-const peersText = (p) => p.evaluate(() => [document.getElementById('peers')?.textContent, document.getElementById('jamline')?.textContent])
+const peersText = (p) => p.evaluate(() => [document.getElementById('peers')?.textContent, document.getElementById('jamline')?.textContent, jam.transport.peers.length])
 const jam = `/j/t${process.pid}-jam`
 const j1 = await jamPage('dora', jam), j2 = await jamPage('eli', jam), j3 = await jamPage('fay', '/')
 await new Promise((r) => setTimeout(r, 2500))
 const seen = await Promise.all([j1, j2, j3].map(peersText))
 console.log('jam pages:', seen)
 check(/eli/.test(seen[0][0]) && /you/.test(seen[0][0]) && /dora/.test(seen[1][0]) && /you/.test(seen[1][0]), `private jam ${jam} auto-joins the relay: dora and eli see each other`)
-check(!/dora|eli/.test(seen[2][0] || '') && /open jam/.test(seen[2][1]), 'the open jam at / is a different room')
+check(seen[2][2] === 1 && !/dora|eli/.test(seen[2][0] || ''), 'the open jam at / is a different room (fay is alone there)')
 check(new RegExp(jam.slice(3)).test(seen[0][1]), 'jam line names the private jam')
 const redirect = await fetch(`${BASE}${jam}/`, { redirect: 'manual' })
 check(redirect.status === 301, '/j/<jam>/ redirects to /j/<jam>')
