@@ -120,7 +120,7 @@ export default {
 		const onsets = function* () {
 			const l = L(),
 				n = cells.length,
-				steps = own ? l : clock.steps
+				steps = span()
 			for (let k = 0; k * l < steps; k++)
 				for (let c = 0; c < n; c++) {
 					if (cells[c] < 0) continue
@@ -129,7 +129,9 @@ export default {
 					yield { t, c, v: cells[c], k }
 				}
 		}
-		const knotX = (w) => w * PAD + (L() / clock.steps) * w * (1 - 2 * PAD)
+		// steps the sheet spans: the loop, or while the knot is held, room to pull it either way
+		const span = () => (g?.mode === 'knot' ? g.ref : clock.steps)
+		const knotX = (w) => w * PAD + (L() / span()) * w * (1 - 2 * PAD)
 
 		function pointer(e) {
 			const strip = isStrip(e.w, e.h, e.shape)
@@ -138,18 +140,24 @@ export default {
 			const x = clamp((e.x - PAD) / iw, 0, 0.9999)
 			if (e.type === 'down') {
 				if (!strip && Math.abs(e.px - knotX(e.w)) < 26 && e.py > e.h * (1 - gut * 2.4))
-					return (g = { mode: 'knot' })
+					return (g = {
+						mode: 'knot',
+						ref: own ? clamp(L() * 2, 2, MAX) : clock.steps,
+						x0: x,
+						l0: L(),
+					})
 			}
 			if (g?.mode === 'knot') {
 				if (e.type === 'up' || e.type === 'cancel') return (g = null)
-				setL(clamp(Math.round(x * clock.steps), 1, Math.min(MAX, clock.steps)))
+				// relative, so the knot doesn't jump to the finger when the sheet makes room
+				setL(clamp(Math.round(g.l0 + (x - g.x0) * g.ref), 1, g.ref))
 				return
 			}
 			const l = L()
 			// drawing snaps the riff back to one cell per step
 			if (e.type === 'down' && cells.length !== l) cells = regrid(cells, l)
 			const n = cells.length
-			const s = Math.floor((x * clock.steps) % l)
+			const s = Math.floor((x * span()) % l)
 			const c = clamp(s, 0, n - 1)
 			const v = clamp(Math.floor((1 - e.y / (1 - gut)) * 8), 0, 7)
 			const erase = e.alt || e.button === 2
@@ -226,7 +234,7 @@ export default {
 				size[1] = h
 				const strip = isStrip(w, h, shape)
 				const gut = strip ? 0 : GUT
-				const steps = clock.steps,
+				const steps = span(),
 					l = L(),
 					n = cells.length,
 					pos = clock.pos()

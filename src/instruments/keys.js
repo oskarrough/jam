@@ -8,7 +8,19 @@
 import { voice as jukebox } from './lib/voices.js'
 import { voiced } from './lib/voiced.js'
 import { kit } from './lib/kit.js'
-import { mtof, env, osc, val, rgba, clamp, withPointer, isStrip, flashes } from './lib/util.js'
+import {
+	mtof,
+	env,
+	osc,
+	val,
+	rgba,
+	clamp,
+	withPointer,
+	isStrip,
+	flashes,
+	absOf,
+	absNow,
+} from './lib/util.js'
 import { wave } from './lib/demo.js'
 import { INK } from '../palette.js'
 
@@ -131,8 +143,8 @@ export function crossings(ys, j0, j1, threadsAt) {
 			b = ys[j % W]
 		if (b === null) continue
 		const th = threadsAt(j)
-		if (a === null) {
-			// water arrives: the thread nearest the surface
+		// water arrives, or the chord changes under it: the thread nearest the surface
+		if (a === null || (th !== threadsAt(j - 1) && !th.some((t) => (t.y - a) * (t.y - b) < 0))) {
 			let best = null
 			for (const t of th) if (!best || Math.abs(t.y - b) < Math.abs(best.y - b)) best = t
 			if (best) out.push({ at: j, m: best.m, y: best.y, entry: true })
@@ -170,13 +182,16 @@ export default {
 		const oct = () => val(ctx.params.octave)
 		const stepOf = (j) => (j * clock.steps) / W
 		const memo = new Map()
-		// threads change per bar; cache a bar's by its first step and the chord's notes
+		// threads change with the jam's bar, wherever this seat's loop is in it: base is the jam step
+		// this loop pass began on. Cache a bar's threads by its first step and the chord's notes.
+		let base = 0
 		const threadsAt = (j) => {
-			const s = Math.floor(stepOf(j))
+			const s = base + Math.floor(stepOf(j))
 			const bs = harmony.barSteps(),
 				bar = Math.floor(s / bs) * bs
 			const ch = harmony.chord(bar).notes.join() + ':' + oct()
 			let t = memo.get(bar)
+			if (memo.size > 64) memo.clear()
 			if (!t || t.key !== ch) memo.set(bar, (t = { key: ch, list: threads(harmony, bar, oct()) }))
 			return t.list
 		}
@@ -232,6 +247,7 @@ export default {
 				const j0 = Math.ceil((i * W) / clock.steps),
 					j1 = Math.ceil(((i + 1) * W) / clock.steps)
 				const fn = play(ctx)
+				base = absOf(clock, time) - i
 				for (const c of crossings(ys, j0, j1, threadsAt)) {
 					const t = stepOf(c.at)
 					// it rings until the water next crosses a thread, or dries, at most a bar
@@ -240,7 +256,11 @@ export default {
 					for (; end < lim; end++) {
 						const a = ys[(end - 1 + W) % W],
 							b = ys[end % W]
-						if (b === null || (a !== null && threadsAt(end).some((h) => (h.y - a) * (h.y - b) < 0)))
+						if (
+							b === null ||
+							threadsAt(end) !== threadsAt(end - 1) ||
+							(a !== null && threadsAt(end).some((h) => (h.y - a) * (h.y - b) < 0))
+						)
 							break
 					}
 					const d = Math.max(0.5, stepOf(end) - t) * dur
@@ -259,11 +279,12 @@ export default {
 				const now = clock.now()
 				const bs = harmony.barSteps(),
 					steps = clock.steps
+				base = Math.floor(absNow(clock) / steps) * steps
 				gx.lineCap = 'round'
 				gx.lineJoin = 'round'
 				// threads, bar by bar
-				for (let b = 0; b < steps; b += bs) {
-					const j0 = Math.round((b * W) / steps),
+				for (let b = -(base % bs); b < steps; b += bs) {
+					const j0 = Math.max(0, Math.round((b * W) / steps)),
 						j1 = Math.round((Math.min(steps, b + bs) * W) / steps)
 					for (const t of threadsAt(j0)) {
 						gx.strokeStyle = rgba(color, t.root ? 0.55 : 0.28)
