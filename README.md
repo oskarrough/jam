@@ -31,7 +31,7 @@ And the instruments are **creative**, in the sense that each one is a different 
 
 On its own the page plays across tabs in one browser. With a relay it plays across machines:
 
-    cd sync && npm i && npm start   # the page plus a WebSocket relay on :8787
+    cd sync && pnpm i && pnpm start   # the page plus a WebSocket relay on :8787
     open http://localhost:8787      # finds the relay by itself
 
 `/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "start your own" makes one). `?name=you` sets your name, `?ws=off` keeps you local.
@@ -61,7 +61,7 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`
     src/debug.js            the panel (lil-gui, vendored)
     src/transport/local.js  tabs in one browser, same API as sync/sync.js, with fake latency, jitter and skew
     src/instruments/        one file per instrument, the registry, and README.md with the contract
-    scripts/new-instrument.js  npm run new-instrument <name>
+    scripts/new-instrument.js  pnpm new-instrument <name>
     sync/                   the network: shared clock, quantized edits, relay for Node and Cloudflare
     lab/                    the ten lab instruments one at a time, each with its own panel
 
@@ -69,7 +69,7 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`
 
 Every instrument is one file in `src/instruments/`, and there's room for more. To start one:
 
-    npm run new-instrument pebbles
+    pnpm new-instrument pebbles
     open 'http://localhost:8000/?instrument=pebbles'
 
 That writes a small working instrument, registers it, and the link seats you with it, zoomed in. An instrument does five things: keep its drawing as plain JSON (that's all that goes over the network), take pointer input, schedule notes ahead of time, draw itself twice (a thin summary round its ring, and a big sheet when zoomed), and tidy up. The contract is in [src/instruments/README.md](src/instruments/README.md).

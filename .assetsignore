@@ -5,7 +5,7 @@ sync/node_modules
 wrangler.jsonc
 .jj
 package.json
-bun.lock
+pnpm-lock.yaml
 cloudflare.config.ts
 wrangler.config.ts
 .cloudflare
@@ -13,3 +13,4 @@ scripts
 shots
 eslint.config.js
 .github
+pnpm-workspace.yaml

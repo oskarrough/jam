@@ -2,7 +2,7 @@
 
 Each instrument is one file in this folder, and each one is a different answer to "what could drawing a sound mean?" Make your own:
 
-    npm run new-instrument pebbles      # writes pebbles.js from a working template and registers it
+    pnpm new-instrument pebbles      # writes pebbles.js from a working template and registers it
     python3 -m http.server              # from the repo root
     open 'http://localhost:8000/?instrument=pebbles'
 

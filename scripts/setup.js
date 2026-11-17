@@ -1,4 +1,4 @@
-// npm run setup: get a checkout ready in one call. Safe to run any time, never discards work.
+// pnpm run setup (plain `pnpm setup` is pnpm's own command): get a checkout ready in one call. Safe to run any time, never discards work.
 // Fetches origin; fast-forwards (never resets, never merges) a clean checkout with no commits of its own; installs deps if missing.
 // Anything dirty, ahead or diverged is left alone and reported.
 import { spawnSync } from 'node:child_process'
@@ -24,7 +24,7 @@ else {
 }
 
 if (!existsSync(join(ROOT, 'node_modules/.bin/oxlint'))) {
-	const r = spawnSync('npm', ['i', '--no-save', '--no-audit', '--no-fund'], { cwd: ROOT, stdio: 'ignore' })
-	say.push(r.status ? 'npm install failed: run it by hand' : 'installed deps')
+	const r = spawnSync('pnpm', ['i'], { cwd: ROOT, stdio: 'ignore' })
+	say.push(r.status ? 'pnpm install failed: run it by hand' : 'installed deps')
 }
 console.log('setup: ' + say.join('; ') + `\nat ${out('log', '--oneline', '-1')}`)

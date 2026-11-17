@@ -9,7 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'src/instruments')
 const raw = process.argv[2]
 if (!raw) {
-	console.error('usage: npm run new-instrument <name>')
+	console.error('usage: pnpm new-instrument <name>')
 	process.exit(1)
 }
 const id = raw
@@ -105,7 +105,7 @@ export default {
 
 const index = join(dir, 'index.js')
 let src = readFileSync(index, 'utf8')
-const marker = '// new instruments: imported above this line by `npm run new-instrument`'
+const marker = '// new instruments: imported above this line by `pnpm new-instrument`'
 src = src.replace(marker, `import ${ident} from './${id}.js'\n${marker}`)
 src = src.replace(/(export const instruments = \[[^\]]*)\]/, `$1, ${ident}]`)
 writeFileSync(index, src)

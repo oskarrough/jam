@@ -15,7 +15,7 @@ import strum from './strum.js'
 import swarm from './swarm.js'
 import orbits from './orbits.js'
 import embers from './embers.js'
-// new instruments: imported above this line by `npm run new-instrument`
+// new instruments: imported above this line by `pnpm new-instrument`
 
 export const instruments = [
 	bass,

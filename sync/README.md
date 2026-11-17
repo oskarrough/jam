@@ -2,12 +2,12 @@
 
 Multiplayer layer for the jam: presence, shared loop clock, per-seat state, quantized edits.
 
-    cd sync && npm i && npm start        # serves the repo root + relay on :8787
+    cd sync && pnpm i && pnpm start        # serves the repo root + relay on :8787
     open 'http://localhost:8787/?ws=ws://localhost:8787'   # the jam, networked; open twice
     open http://localhost:8787/sync/     # bare sync demo with a plain debug readout
-    LAG=60 npm start                     # simulate 60 ms one-way latency (±20%)
-    npm test                             # headless: two peers, one with a +5 s skewed clock, plus the jam page
-    BASE=http://127.0.0.1:8788 npm test  # same tests against a local Worker dev server on :8788 (Durable Object)
+    LAG=60 pnpm start                     # simulate 60 ms one-way latency (±20%)
+    pnpm test                             # headless: two peers, one with a +5 s skewed clock, plus the jam page
+    BASE=http://127.0.0.1:8788 pnpm test  # same tests against a local Worker dev server on :8788 (Durable Object)
 
 Jams: `/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "start your own" makes one). Both `server.js` and the Worker serve the page there with `<base href="/">`. The page goes multiplayer on its own when the host answers `/sync/relay`; `?ws=off` keeps it to this browser.
 

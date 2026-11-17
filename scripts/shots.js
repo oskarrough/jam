@@ -1,4 +1,4 @@
-// npm run shots [-- <instrument>|all] [--phone] [--at <ms>]: screenshots of the dial and each instrument's sheet into shots/.
+// pnpm shots [-- <instrument>|all] [--phone] [--at <ms>]: screenshots of the dial and each instrument's sheet into shots/.
 // --at jumps the page clock forward, so a timed effect (a blink every 8-14 s) is on screen without waiting.
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'

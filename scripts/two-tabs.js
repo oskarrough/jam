@@ -1,4 +1,4 @@
-// npm run two-tabs: two players in one browser (the local transport, no relay). Each takes a seat, one draws,
+// pnpm two-tabs: two players in one browser (the local transport, no relay). Each takes a seat, one draws,
 // the other must receive it on the next bar. Exits non-zero if they don't see each other or the edit.
 import { serve, playwright, play } from './lib/browser.js'
 

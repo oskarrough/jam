@@ -1,4 +1,4 @@
-// npm run perf [-- --zoom] [--quick]: main-thread JS per frame on a phone viewport, split by loop (view = dial, heart = splats).
+// pnpm perf [-- --zoom] [--quick]: main-thread JS per frame on a phone viewport, split by loop (view = dial, heart = splats).
 // Headless draws WebGL in software, so frame rate here says little; the JS cost per frame is what taps wait behind.
 import { serve, playwright } from './lib/browser.js'
 
