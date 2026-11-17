@@ -14,6 +14,8 @@ import { kit } from './kit.js'
 import { wave } from './demo.js'
 import { INK } from '../../palette.js'
 
+// side inset (fraction of the width) so a note on the first or last step is not clipped by the panel
+const PAD = 0.03
 const ones = (n) => new Array(n).fill(1)
 const empties = (n) => Array.from({ length: n }, () => [])
 const part = (notes, extra = {}) => ({
@@ -118,6 +120,7 @@ export function stepline({
 				pointer(e) {
 					ensure()
 					const n = clock.steps
+					e = { ...e, x: Math.max(0, Math.min(0.9999, (e.x - PAD) / (1 - 2 * PAD))) }
 					const s = Math.min(n - 1, Math.floor(e.x * n))
 					const v = Math.max(0, Math.min(7, Math.floor((1 - e.y) * 8)))
 					const erase = e.alt || e.button === 2
@@ -199,7 +202,8 @@ export function stepline({
 					ensure()
 					const n = notes.length,
 						pos = clock.pos()
-					const X = (s) => ((s + 0.5) / n) * w,
+					const iw = w * (1 - 2 * PAD)
+					const X = (s) => w * PAD + ((s + 0.5) / n) * iw,
 						Y = (v) => (1 - (v + 0.5) / 8) * h
 					const color = ctx.color
 					const lw = Math.max(1.6, Math.min(5, h * 0.06))
@@ -209,7 +213,7 @@ export function stepline({
 					gx.beginPath()
 					for (let s = 0; s < n; s++) {
 						if (notes[s] < 0 || span(s) < 2) continue
-						const x1 = X(s) + (span(s) - 0.5) * (w / n) - lw
+						const x1 = X(s) + (span(s) - 0.5) * (iw / n) - lw
 						for (const v of [notes[s], ...(stack[s] || [])]) {
 							gx.moveTo(X(s), Y(v))
 							gx.lineTo(x1, Y(v))
@@ -227,7 +231,7 @@ export function stepline({
 							b = notes[(s + 1) % n]
 						if (a < 0 || b < 0 || span(s) > 1) continue
 						const x0 = X(s),
-							x1 = s + 1 === n ? w + X(0) : X(s + 1)
+							x1 = s + 1 === n ? iw + X(0) : X(s + 1)
 						for (let k = 0; k <= 8; k++) {
 							const f = k / 8,
 								e = f * f * (3 - 2 * f)
