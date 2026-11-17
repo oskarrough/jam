@@ -16,7 +16,7 @@ import { nextLoopAt } from '../../sync/room.js'
 const LOOKAHEAD = 120
 const localNow = () => performance.timeOrigin + performance.now()
 
-export function createLocalClock() {
+function createLocalClock() {
 	const loops = []
 	const self = {
 		skew: 0, // ms added to this tab's idea of "shared" time; simulates an unsynced clock
