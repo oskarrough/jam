@@ -234,7 +234,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 	const BODY = 0,
 		HATCH = 1,
 		EDGE = 2
-	let band, comet, core, shade, motes, scratch, sorted, zs, keys, cap
+	let band, comet, core, shade, lid, motes, scratch, sorted, zs, keys, cap
 	function build() {
 		const nb = opts.nBody + opts.nHatch + opts.nEdge
 		band = {
@@ -302,6 +302,14 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			shade.y[i] = Math.sin(a) * r
 			shade.rnd[i] = Math.random()
 		}
+		lid = { n: 260, x: new Float32Array(260), y: new Float32Array(260), rnd: new Float32Array(260) }
+		for (let i = 0; i < lid.n; i++) {
+			const a = Math.random() * TAU,
+				r = Math.sqrt(Math.random())
+			lid.x[i] = Math.cos(a) * r
+			lid.y[i] = Math.sin(a) * r
+			lid.rnd[i] = Math.random()
+		}
 		const nm = opts.nMotes
 		motes = {
 			n: nm,
@@ -313,7 +321,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			max: new Float32Array(nm),
 			size: new Float32Array(nm),
 		}
-		cap = band.n + comet.n + core.n + shade.n + nm
+		cap = band.n + comet.n + core.n + shade.n + lid.n + nm
 		scratch = new Float32Array(cap * STRIDE)
 		sorted = new Float32Array(cap * STRIDE)
 		zs = new Float32Array(cap)
@@ -381,6 +389,20 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 	const head = { p: [0, 0, 0], t: [1, 0, 0], n: [0, 0, 1] }
 
 	// a glance holds briefly; after a quiet spell the eye drifts home
+	// slow blink: every 8-14 s a dithered lid sweeps down over the eye and lifts again
+	const blink = { at: performance.now() + 4000 + Math.random() * 6000, c: 0 }
+	const BLINK = { down: 520, hold: 140, up: 900 }
+	function blinkCover(now) {
+		const t = now - blink.at
+		if (t < 0) return 0
+		const ease = (u) => u * u * (3 - 2 * u)
+		if (t < BLINK.down) return ease(t / BLINK.down)
+		if (t < BLINK.down + BLINK.hold) return 1
+		const u = (t - BLINK.down - BLINK.hold) / BLINK.up
+		if (u < 1) return 1 - ease(u)
+		blink.at = now + 8000 + Math.random() * 6000
+		return 0
+	}
 	const gaze = { x: 0, y: 0, tx: 0, ty: 0, hold: 0, at: 0 }
 	// matches the view: first seat bottom-left, then round
 	const seatAngle = (i) =>
@@ -785,6 +807,20 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 					0.85,
 					0,
 				)
+		}
+
+		const cover = blinkCover(now)
+		if (cover > 0.01) {
+			const R = 0.26 * swell,
+				cx = gaze.x * 1.15,
+				cy = lift + gaze.y * 1.15
+			for (let i = 0; i < lid.n; i++) {
+				const lx = lid.x[i],
+					d = lid.y[i] - (1.15 - 2.3 * cover + 0.35 * cover * lx * lx)
+				if (d <= 0 || lid.rnd[i] > d / 0.35) continue
+				const sz = 0.014 + 0.016 * lid.rnd[i]
+				put(5, cx + lx * R, cy + lid.y[i] * R, 0, sz, 0, 0, 0, sz, 0, shd[0], shd[1], shd[2], 0.92, 0)
+			}
 		}
 
 		const m = motes,
