@@ -39,7 +39,7 @@ export default {
 }
 ```
 
-`ctx` is `{ audio, out, clock, params, color }`. Connect your sound to `out`, never to `audio.destination`. `color` is your ring's colour as `#rrggbb`. `clock` is `{ bpm, steps, stepDur, startTime, now(), pos(), playing }` in AudioContext seconds, with `pos()` the fractional step in the loop. The loop length changes live (bars and meter are knobs too), so read `clock.steps` rather than assuming 16.
+`ctx` is `{ audio, out, clock, params, color, setLen }`. Connect your sound to `out`, never to `audio.destination`. `color` is your ring's colour as `#rrggbb`. `clock` is `{ bpm, steps, stepDur, startTime, now(), pos(), playing }` in AudioContext seconds, with `pos()` the fractional step in the loop. `clock` is your seat's own: each seat sets its loop length on its sheet (1, 2, 4 or 8 bars, like a clip), so `clock.steps` and `pos()` are your loop's while `startTime` stays the jam's. It changes live, so read `clock.steps` rather than assuming 16. `ctx.setLen(n)` sets it from a gesture of yours (n steps, `null` for the jam's length); arrays in your state that are one entry per step are cut or repeated to fit.
 
 The instance does five things:
 

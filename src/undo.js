@@ -9,10 +9,12 @@ export function createUndo(engine, { limit = 64 } = {}) {
 		instrument: L.module.id,
 		state: structuredClone(L.instance.state),
 		params: { ...L.params },
+		len: L.len,
 	})
 	const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 	function restore(L, d) {
+		L.len = d.len ?? null
 		if (d.instrument !== L.module.id)
 			engine.setInstrument(L, d.instrument, { state: d.state, params: d.params })
 		else {

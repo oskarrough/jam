@@ -148,7 +148,9 @@ function pointerTo(i, e) {
 	if (me.erase || e.button === 2) e.alt = true
 	e.shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
 	if (e.type === 'down') undo.remember(i)
-	L.instance.pointer(e)
+	// the ring is the jam's loop; a seat with its own length goes round it more (or less) than once
+	const { rep, off } = engine.ringMap(L)
+	L.instance.pointer(e.shape === 'ring' && rep !== 1 ? { ...e, x: (off + e.x * rep) % 1 } : e)
 	engine.pushSoon(L)
 	lastPt = e.type === 'up' ? null : { seat: i, x: e.x, y: e.y, id: e.id }
 	view.showCursor('me', i, e.x, e.y, '', !!e.alt)
@@ -222,7 +224,7 @@ transport.on('welcome', () => {
 	if (want && me.seat >= 0) {
 		const L = seats[me.seat]
 		if (L.module !== want) {
-			engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps()) })
+			engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps(L)) })
 			engine.push(L)
 		}
 		view.setFocus?.(me.seat)
@@ -574,6 +576,7 @@ function rideSheet() {
 	riding = requestAnimationFrame(go)
 }
 engine.on('seats', () => view.focus.on && strip.paint())
+engine.on('apply', (L) => view.focus.on && L.index === me.seat && strip.paint())
 
 const flash = document.createElement('div')
 flash.className = 'flash'

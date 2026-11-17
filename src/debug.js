@@ -76,7 +76,7 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 				return L.module.id
 			},
 			set instrument(v) {
-				engine.setInstrument(L, v, { state: registry.get(v).sample?.(engine.steps()) })
+				engine.setInstrument(L, v, { state: registry.get(v).sample?.(engine.steps(L)) })
 				engine.push(L)
 				buildParams()
 			},

@@ -49,6 +49,21 @@ try {
 			() => false,
 		)
 	check(got, "ben hears ana's drawing")
+	await a.click('.loops button:text-is("1")')
+	const len = await b
+		.waitForFunction(
+			(seat) => {
+				const L = window.jam.engine.seats[seat]
+				return L.len === 16 && L.instance.state.notes.length === 16
+			},
+			seat,
+			{ timeout: 8000 },
+		)
+		.then(
+			() => true,
+			() => false,
+		)
+	check(len, "ben's copy of ana's bass loops one bar")
 	const errs = [...a.errors, ...b.errors]
 	check(!errs.length, 'no page errors' + errs.map((e) => '\n  ' + e).join(''))
 } finally {

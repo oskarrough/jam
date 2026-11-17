@@ -39,15 +39,19 @@ export async function renderRecording(rec, seatIds) {
 	master.gain.setValueAtTime(0.8, end)
 	master.gain.linearRampToValueAtTime(0, end + TAIL)
 
-	const clock = {
+	// each seat runs its own loop length (seat data `len`, in steps), on the jam's tempo
+	const at = rec.step || 0 // where the loop was when the recording began
+	const clockOf = (L) => ({
 		bpm: loop.bpm,
-		steps: n,
+		get steps() {
+			return L.len || n
+		},
 		stepDur,
-		startTime: LEAD,
+		startTime: LEAD - at * stepDur,
 		now: () => cursor,
-		pos: () => ((((cursor - LEAD) / stepDur) % n) + n) % n,
+		pos: () => ((cursor - LEAD) / stepDur + at) % (L.len || n),
 		playing: true,
-	}
+	})
 
 	const seats = seatIds.map((id, i) => {
 		const out = off.createGain()
@@ -63,11 +67,13 @@ export async function renderRecording(rec, seatIds) {
 			mod: null,
 			inst: null,
 			params: null,
+			len: null,
 		}
 	})
 	function apply(L, data) {
 		const mod = registry.get(data.instrument)
 		if (!mod) return
+		L.len = Number.isInteger(data.len) && data.len > 0 ? data.len : null
 		if (mod !== L.mod) {
 			L.inst?.dispose?.()
 			L.mod = mod
@@ -75,7 +81,7 @@ export async function renderRecording(rec, seatIds) {
 			L.inst = mod.create({
 				audio,
 				out: L.out,
-				clock,
+				clock: clockOf(L),
 				params: L.params,
 				color: L.color,
 				theme: INK_THEME,
@@ -94,7 +100,7 @@ export async function renderRecording(rec, seatIds) {
 		}
 		for (const L of seats) {
 			try {
-				L.inst?.step(g % n, cursor, stepDur)
+				L.inst?.step((g + at) % (L.len || n), cursor, stepDur)
 			} catch (e) {
 				console.error(L.mod.id, e)
 			}

@@ -780,7 +780,10 @@ export function createView(
 		lg.save()
 		const shape = opts.mode === 'dial' && focus.on && L.index === focus.seat ? 'sheet' : 'ring'
 		try {
-			L.instance.frame(lg, L.w, L.h, engine.iclock, shape)
+			// a shorter loop goes round the ring more than once: draw one turn of it at its true width
+			const rep = shape === 'ring' ? engine.ringMap(L).rep : 1
+			L.frac = rep > 1 ? 1 / rep : 1
+			L.instance.frame(lg, L.w * L.frac, L.h, L.clock, shape)
 		} catch (e) {
 			if (!L.err) console.error(L.module.id, e)
 			L.err = true
@@ -791,17 +794,34 @@ export function createView(
 	function warp(L, r0, r1, src = L.canvas) {
 		// each slice is a straight chord of the ring: enough of them that the chord's bulge stays under 0.15 px
 		// (bulge ≈ r·θ²/8), which is ~60 on a phone ring, not the 192 drawImage calls per ring it used to be
-		const N = moving
-				? 48
-				: Math.min(opts.slices, Math.max(48, Math.ceil(TAU * Math.sqrt(r1 / 1.2)))),
-			sw = src.width / N,
+		// a seat with a shorter loop goes round its ring several times; a longer one shows the part playing now
+		const { rep, off } = engine.ringMap(L)
+		const N =
+				Math.ceil(
+					(moving
+						? 48
+						: Math.min(opts.slices, Math.max(48, Math.ceil(TAU * Math.sqrt(r1 / 1.2))))) / 8,
+				) * 8,
+			W = src.width * (L.frac || 1),
+			sw = (W / N) * rep,
 			dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
 		for (let k = 0; k < N; k++) {
 			const th = angOf((k + 0.5) / N) + Math.PI / 2,
 				c = Math.cos(th),
-				s = Math.sin(th)
+				s = Math.sin(th),
+				u = (off + (k / N) * rep) % 1
 			g.setTransform(DPR * c, DPR * s, -DPR * s, DPR * c, DPR * CX, DPR * CY)
-			g.drawImage(src, k * sw, 0, sw, src.height, -dw / 2, -r1, dw, r1 - r0)
+			g.drawImage(
+				src,
+				u * W,
+				0,
+				Math.min(sw, W * (1 - u)),
+				src.height,
+				-dw / 2,
+				-r1,
+				dw,
+				r1 - r0,
+			)
 		}
 		g.setTransform(DPR, 0, 0, DPR, 0, 0)
 	}
@@ -984,7 +1004,7 @@ export function createView(
 		g.fillStyle = dark ? CHAMBER : PAPER
 		g.fillRect(x, y, w, h)
 		if (L && L.w === Math.round(w)) {
-			const steps = engine.steps(),
+			const steps = engine.steps(L),
 				fg = dark ? (a) => rgba(PALE, a) : ink
 			for (let s = 0; s < steps; s += 4) {
 				g.fillStyle = s % 16 ? fg(0.07) : fg(0.18)
@@ -994,11 +1014,11 @@ export function createView(
 				ph = { color: L.color, ink: dark ? PALE : INK, axis }
 			g.save()
 			g.translate(x, y)
-			if (axis) playhead.under(g, w, h, engine.iclock, ph)
+			if (axis) playhead.under(g, w, h, L.clock, ph)
 			if (dark) g.filter = 'invert(1) hue-rotate(180deg)'
 			g.drawImage(L.canvas, 0, 0, w, h)
 			g.filter = 'none'
-			if (axis) playhead.over(g, w, h, engine.iclock, ph)
+			if (axis) playhead.over(g, w, h, L.clock, ph)
 			g.restore()
 		}
 		g.strokeStyle = INK
@@ -1027,7 +1047,22 @@ export function createView(
 				g.fillStyle = s % 16 === 0 ? ink(0.25) : ink(0.07)
 				g.fillRect(R.x + (s / steps) * R.w, R.y, 1, R.h)
 			}
-			g.drawImage(L.canvas, R.x, R.y, R.w, R.h)
+			const { rep, off } = engine.ringMap(L),
+				cw = L.canvas.width
+			if (rep >= 1)
+				for (let k = 0; k < rep; k++)
+					g.drawImage(
+						L.canvas,
+						0,
+						0,
+						cw * (L.frac || 1),
+						L.canvas.height,
+						R.x + (k * R.w) / rep,
+						R.y,
+						R.w / rep,
+						R.h,
+					)
+			else g.drawImage(L.canvas, off * cw, 0, rep * cw, L.canvas.height, R.x, R.y, R.w, R.h)
 			g.fillStyle = INK
 			g.fillRect(R.x + phase * R.w, R.y - 4, 1.5, R.h + 8)
 			const st = occupant(i)

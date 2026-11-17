@@ -21,7 +21,7 @@ export function createBots(engine, { seated, view }) {
 	function riffTurn(L) {
 		const r = L.riff
 		const v = vary(r.motif, r.turn || 0, r.last)
-		const state = fromPhrase(v.phrase, L, engine.steps())
+		const state = fromPhrase(v.phrase, L, engine.steps(L))
 		return state && { state, riff: { ...r, turn: (r.turn || 0) + 1, last: v.move, label: v.label } }
 	}
 
@@ -45,7 +45,7 @@ export function createBots(engine, { seated, view }) {
 			if (!riffing) b.riffId = null
 			if (!b.sweep && now > b.nextAt) {
 				const turn = riffing ? riffTurn(L) : null
-				const target = turn ? turn.state : L.module.generate?.(engine.steps(), L.params)
+				const target = turn ? turn.state : L.module.generate?.(engine.steps(L), L.params)
 				if (target)
 					b.sweep = {
 						t0: now,
@@ -87,7 +87,7 @@ export function createBots(engine, { seated, view }) {
 			B = seats[to]
 		if (!A || !B || from === to || seated(to) || !canPhrase(A.module.id) || !canPhrase(B.module.id))
 			return false
-		const motif = toPhrase(A, engine.steps())
+		const motif = toPhrase(A, engine.steps(A))
 		if (!motif?.notes.length) return false
 		B.riff = {
 			id: Math.random().toString(36).slice(2, 10),

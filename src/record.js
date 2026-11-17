@@ -18,6 +18,7 @@ export function createRecorder({ engine, transport, seatName }) {
 		state: structuredClone(L.instance.state),
 		params: { ...L.params },
 		...(L.mix.mute ? { mute: true } : {}),
+		...(L.len ? { len: L.len } : {}),
 	})
 	const same = (a, b) => a && b && JSON.stringify(a) === JSON.stringify(b)
 
@@ -72,6 +73,8 @@ export function createRecorder({ engine, transport, seatName }) {
 			frames: [],
 			cursors: [],
 			at: Date.now(),
+			// 16ths since the loop began, so seats with their own loop length replay from where they were
+			step: Math.round((start - l.origin) / (barMs / beatsPerBar / 4)) % 3360,
 		}
 		let resolve
 		const promise = new Promise((r) => (resolve = r))
@@ -142,7 +145,8 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 	)
 
 	let origin = Math.ceil(clock.now() + 300)
-	let loop = { ...rec.loop, origin }
+	const lead = ((rec.step || 0) * 15000) / rec.loop.bpm
+	let loop = { ...rec.loop, origin: origin - lead }
 	clock.setLoop(loop)
 	const barMs = clock.barMs(loop),
 		totalMs = rec.bars * barMs
@@ -219,7 +223,7 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 		// back to bar 1, so whoever presses play hears the recording from the top
 		restart() {
 			origin = Math.ceil(clock.now() + 120)
-			loop = { ...rec.loop, origin }
+			loop = { ...rec.loop, origin: origin - lead }
 			clock.setLoop(loop)
 			bar = -1
 			lastPass = -1
