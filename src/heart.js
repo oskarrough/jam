@@ -77,14 +77,14 @@ const mixHex = (a, b, t) => {
 const randn = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.87
 
 export function createHeart({ engine, geom, after = document.getElementById('c') }) {
-	// phones: roughly a third of the per-frame cost (half the splats, a coarser grid, 30 fps)
+	// phones: roughly half the per-frame cost (half the splats, 30 fps); same raster as desktop so the eye stays crisp
 	const coarse = matchMedia('(pointer: coarse)').matches
 	const lite = coarse ? 0.5 : 1
 	const opts = {
 		on: true,
 		scale: 0.86,
 		reach: 2.2,
-		pixel: coarse ? 2 : 1.5,
+		pixel: 1.5,
 		levels: 3,
 		dither: 0.85,
 		// blend: 0 = pigment laid over the ground (paper), 1 = light added to it (dusk)
