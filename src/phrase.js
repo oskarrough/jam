@@ -2,6 +2,7 @@
 // phrase = { n steps, drums, notes: [{ s onset in steps (fractional ok), p degree (5/octave) or drum row 0 kick 1 snare 2 hat, v 0..1 }] }
 
 import { adapters as labAdapters } from './instruments/lib/phrases.js'
+import { parseTide, tideOf, through, W } from './instruments/keys.js'
 
 export const OCT = 5
 
@@ -90,6 +91,33 @@ const bass = {
 	},
 }
 
+// keys: a tide, { tide } one height per sample. Read as a melody that moves with the water, 10 degrees tall;
+// written as water through the notes.
+const keys = {
+	to(state, n) {
+		const ys = parseTide(state?.tide),
+			notes = []
+		let prev = null
+		ys.forEach((y, j) => {
+			const p = y === null ? null : Math.round(y * 10)
+			if (p !== null && p !== prev) notes.push({ s: (j * n) / W, p, v: 0.8 })
+			prev = p
+		})
+		return { n, drums: false, notes }
+	},
+	from(ph, n) {
+		const ns = fitRange(asMelody(retime(ph, n)).notes, 0, 10)
+		return {
+			tide: tideOf(
+				through(
+					ns.map((x) => [mod(x.s, n) / n, x.p / 10]),
+					0.6,
+				),
+			),
+		}
+	},
+}
+
 // drums: per-step bitmask, 1 kick, 2 snare, 4 hat; vel[s][row] is how loud, 1..9
 const drums = {
 	to(state, n) {
@@ -114,7 +142,7 @@ const drums = {
 	},
 }
 
-const adapters = { bass, keys: stepline, bell: stepline, drums, ...labAdapters }
+const adapters = { bass, keys, bell: stepline, drums, ...labAdapters }
 
 export const canPhrase = (id) => !!adapters[id]
 

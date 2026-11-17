@@ -65,7 +65,10 @@ const V = voiced(
 		['log drum', jukebox('logdrum', -10.5)],
 		['upright', jukebox('upright', -4.4)],
 	],
-	{ octave: { value: 0, min: -1, max: 1, step: 1 }, cutoff: { value: 9, min: 2, max: 24, step: 0.5 } },
+	{
+		octave: { value: 0, min: -1, max: 1, step: 1 },
+		cutoff: { value: 9, min: 2, max: 24, step: 0.5 },
+	},
 )
 
 const SAMPLE = [
@@ -76,7 +79,8 @@ const SAMPLE = [
 
 export default {
 	id: 'bass',
-	glyph: '<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/><circle class="f" cx="29" cy="19" r="2.6"/>',
+	glyph:
+		'<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/><circle class="f" cx="29" cy="19" r="2.6"/>',
 	name: 'Bass',
 	how: 'An elastic riff: draw notes, higher is higher. Pull the knot at the end to stretch the whole riff longer or squeeze it shorter. Tap a note to lift it off; Shift-drag erases.',
 	voices: V.voices,
@@ -85,7 +89,16 @@ export default {
 	demo: (shape) =>
 		shape === 'ring'
 			? [wave(0.06, 0.5, 0.55, 0.25, 1, 16)]
-			: [wave(0.06, 0.45, 0.5, 0.25, 1, 16), [[0.97, 0.94], [0.8, 0.94], [0.62, 0.94], [0.75, 0.94], [0.97, 0.94]]],
+			: [
+					wave(0.06, 0.45, 0.5, 0.25, 1, 16),
+					[
+						[0.97, 0.94],
+						[0.8, 0.94],
+						[0.62, 0.94],
+						[0.75, 0.94],
+						[0.97, 0.94],
+					],
+				],
 	generate: (steps) => gen(steps),
 	sample: (steps) => ({ riff: riffOf(fit(SAMPLE, steps, -1)) }),
 	create(ctx) {
@@ -163,7 +176,9 @@ export default {
 			if (d < -n / 2) d += n
 			const k = Math.abs(d)
 			for (let j = 1; j <= k; j++)
-				cells[(g.c + Math.sign(d) * j + n) % n] = g.erase ? -1 : Math.round(g.v + ((v - g.v) * j) / k)
+				cells[(g.c + Math.sign(d) * j + n) % n] = g.erase
+					? -1
+					: Math.round(g.v + ((v - g.v) * j) / k)
 			if (!k) cells[c] = g.erase ? -1 : v
 			g = { ...g, c, v }
 		}
@@ -178,7 +193,9 @@ export default {
 				if (s && typeof s.riff === 'string') cells = parseRiff(s.riff)
 				else if (Array.isArray(s?.notes))
 					// a part saved by the old line-drawing bass
-					cells = s.notes.slice(0, MAX).map((v) => (Number.isInteger(v) && v >= 0 && v <= 7 ? v : -1))
+					cells = s.notes
+						.slice(0, MAX)
+						.map((v) => (Number.isInteger(v) && v >= 0 && v <= 7 ? v : -1))
 				else cells = new Array(clock.steps).fill(-1)
 				if (!cells.length) cells = [-1]
 				len = !own && Number.isInteger(s?.len) ? clamp(s.len, 1, MAX) : null
