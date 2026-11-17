@@ -1,15 +1,13 @@
-// Showing a newcomer that their badge holds other instruments, until they first switch.
-// ?hint=fan    on arrival the badge fans the other glyphs out like a hand of cards, then folds them back
-// ?hint=wobble the badge nudges every few seconds and one other glyph peeks out of it
-// ?hint=open   your instrument opens zoomed, the strip of glyphs on top
-// Tap a card to switch at once. Retires for good (this browser) after your first switch, unless ?hint= forces it.
+// Showing a newcomer that their badge holds other instruments: a moment after you sit, the other glyphs
+// fan out of your badge into the dial like a hand of cards, then fold back. Tap a card to switch at once.
+// Every visit until your first switch; after that never again in this browser.
 
 const KEY = 'roughjam.switched'
 
-export function createHint({ kind, forced, engine, view, me, registry, glyph, choose }) {
+export function createHint({ engine, view, me, registry, glyph, choose }) {
 	let done = false
 	try {
-		done = !forced && !!localStorage.getItem(KEY)
+		done = !!localStorage.getItem(KEY)
 	} catch {}
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	const layer = document.createElement('div')
@@ -42,19 +40,16 @@ export function createHint({ kind, forced, engine, view, me, registry, glyph, ch
 		layer.append(b)
 		return b
 	}
-	// pointing from the badge into the dial, where there is always room
-	function inward() {
-		const s = view.seatAt(me.seat),
-			c = view.center()
-		return { s, a: c ? Math.atan2(c.y - s.y, c.x - s.x) : -Math.PI / 2 }
-	}
 
 	function fan() {
 		if (done || me.seat < 0 || view.focus.on) return
-		const { s, a } = inward()
+		const s = view.seatAt(me.seat),
+			c = view.center()
+		// pointing from the badge into the dial, where there is always room
+		const a = c ? Math.atan2(c.y - s.y, c.x - s.x) : -Math.PI / 2
 		const ids = others(),
 			n = ids.length
-		// a hand of cards: a wide arc into the dial, each card half over the next
+		// a wide arc, each card half over the next
 		const spread = Math.min(2.2, n * 0.2),
 			R = Math.max(s.r * 3, (30 * (n - 1)) / spread)
 		ids.forEach((id, k) => {
@@ -75,31 +70,6 @@ export function createHint({ kind, forced, engine, view, me, registry, glyph, ch
 		later(clear, 3800)
 	}
 
-	let peekAt = 0
-	function wobble() {
-		if (done || me.seat < 0) return
-		if (!view.focus.on) {
-			view.jolt(me.seat)
-			const { s, a } = inward()
-			const ids = others()
-			const id = ids[peekAt++ % ids.length]
-			clear()
-			const b = card(id, s.x, s.y)
-			b.classList.add('peek')
-			b.style.setProperty('--dx', Math.cos(a - 0.5) * s.r * 1.9 + 'px')
-			b.style.setProperty('--dy', Math.sin(a - 0.5) * s.r * 1.9 + 'px')
-			b.style.setProperty('--rot', '-14deg')
-			requestAnimationFrame(() => layer.classList.add('out'))
-			later(() => layer.classList.remove('out'), 1300)
-		}
-		later(wobble, 3200)
-	}
-
-	function open() {
-		if (done || me.seat < 0 || view.focus.on) return
-		view.setFocus(me.seat)
-	}
-
 	function clear() {
 		layer.classList.remove('out')
 		layer.replaceChildren()
@@ -108,12 +78,9 @@ export function createHint({ kind, forced, engine, view, me, registry, glyph, ch
 	return {
 		// once you have a seat
 		start() {
-			if (done || !kind || started) return
+			if (done || started) return
 			started = true
-			view.quietNudge()
-			if (kind === 'fan') later(fan, 900)
-			else if (kind === 'wobble') later(wobble, 1500)
-			else if (kind === 'open') later(open, 600)
+			later(fan, 900)
 		},
 		// you switched: the hint has done its job
 		switched() {

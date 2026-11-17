@@ -719,7 +719,7 @@ body.replay canvas {
 	}
 }
 
-/* ?hint=: other instruments' glyphs coming out of your badge (src/hint.js) */
+/* other instruments' glyphs fanning out of your badge on a first visit (src/hint.js) */
 .hint {
 	position: fixed;
 	inset: 0;
@@ -748,9 +748,4 @@ body.replay canvas {
 .hint.out .card {
 	opacity: 1;
 	transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
-}
-.hint .peek {
-	width: 34px;
-	height: 34px;
-	margin: -17px 0 0 -17px;
 }

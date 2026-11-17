@@ -589,7 +589,6 @@ export function createView(
 		if (on) {
 			sheetSeat = i
 			sizeSeats()
-			opened()
 		} // on the way out the sheet keeps its drawing until it has slid away
 		hover = null
 		dispatchEvent(
@@ -901,7 +900,6 @@ export function createView(
 		drawHanding()
 		drawHandHint()
 		if (opts.mode === 'dial') {
-			drawNudge()
 			drawOffer()
 		}
 		requestAnimationFrame(frame)
@@ -1086,77 +1084,6 @@ export function createView(
 		e.img.src = 'data:image/svg+xml,' + encodeURIComponent(svg)
 		glyphs.set(key, e)
 		return null
-	}
-
-	let nudge = null,
-		nudgeOff = false
-	try {
-		nudgeOff = localStorage.getItem('roughjam.opened') === 'yes'
-	} catch {}
-	function opened() {
-		nudge = null
-		if (!nudgeOff) {
-			nudgeOff = true
-			try {
-				localStorage.setItem('roughjam.opened', 'yes')
-			} catch {}
-		}
-	}
-	function maybeNudge(mine) {
-		if (
-			nudgeOff ||
-			nudge ||
-			focus.on ||
-			handing ||
-			drag ||
-			hint ||
-			(loopsSeated !== 2 && loopsSeated !== 6 && loopsSeated !== 14)
-		)
-			return
-		const others = [...registry.keys()].filter(
-			(id) => id !== seats[mine].module.id && registry.get(id).glyph,
-		)
-		const ids = Array.from(
-			{ length: 3 },
-			() => others.splice(Math.floor(Math.random() * others.length), 1)[0],
-		)
-		nudge = { seat: mine, ids, t0: performance.now() }
-		seatJelly[mine].s.v += 14
-	}
-	function drawNudge() {
-		if (!nudge) return
-		const t = (performance.now() - nudge.t0) / 1000
-		if (t > 1.9 || focus.on || !canDraw(nudge.seat)) {
-			nudge = null
-			return
-		}
-		const [x, y] = seatPos(nudge.seat),
-			r = seatR()
-		const out =
-			t < 1.3 ? EASES['out back'](clamp01(t / 0.45)) : 1 - EASES.smooth(clamp01((t - 1.3) / 0.5))
-		nudge.ids.forEach((id, k) => {
-			// along the rim, counter-clockwise (the broom sits the other side), each a step further
-			const [rx, ry] = rimFrom(nudge.seat, -(k + 1) * 0.95),
-				tr = r * 0.8 * Math.min(1, out * 1.4)
-			const gx = x + (rx - x) * out,
-				gy = y + (ry - y) * out
-			if (tr <= 0.5) return
-			g.save()
-			g.globalAlpha = Math.min(1, out * 1.5)
-			g.fillStyle = 'rgba(40,25,60,.35)'
-			g.beginPath()
-			g.arc(gx + 2, gy + 3, tr, 0, TAU)
-			g.fill()
-			wobble(g, gx, gy, tr, 31 + k * 3, 0.5)
-			g.fillStyle = PAPER
-			g.fill()
-			g.strokeStyle = INK
-			g.lineWidth = 1
-			g.stroke()
-			const img = glyphImg(id, INK)
-			if (img) g.drawImage(img, gx - tr * 0.7, gy - tr * 0.7, tr * 1.4, tr * 1.4)
-			g.restore()
-		})
 	}
 
 	function drawSeat(i, x, y, label) {
@@ -1552,7 +1479,6 @@ export function createView(
 			return
 		}
 		loopsSeated++
-		maybeNudge(mine)
 		if (hintOff || hint || hintsShown >= 2 || focus.on || handing || drag) return
 		if (loopsSeated !== 3 && loopsSeated !== 12) return
 		const targets = seats.map((_, j) => j).filter((j) => canHand?.(mine, j))
@@ -1758,15 +1684,6 @@ export function createView(
 		},
 		offerSweep: (list, ms) =>
 			(offer = list.length ? { seats: list, t0: performance.now(), ms } : null),
-		nudge: () => {
-			const i = seats.findIndex((_, j) => canDraw(j))
-			if (i >= 0) {
-				nudge = null
-				nudgeOff = false
-				loopsSeated = 2
-				maybeNudge(i)
-			}
-		},
 		// how far the sheet is still off to the right, in px (0 when it has arrived); DOM chrome on the sheet rides with it
 		get sheetShift() {
 			return sheetSeat < 0 ? Infinity : (1 - eBar()) * slideDist()
@@ -1800,13 +1717,6 @@ export function createView(
 		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
 		ground: () => ({ ...(G2 || G) }),
 		heat: () => heat,
-		// a jolt of seat i's badge, as if tapped from angle a
-		// another hint (src/hint.js) has the job: no rim nudge this visit
-		quietNudge: () => ((nudgeOff = true), (nudge = null)),
-		jolt: (i, a = Math.random() * TAU) => {
-			press(seatJelly[i], a)
-			setTimeout(() => release(seatJelly[i]), 120)
-		},
 		// a seat badge on screen, CSS px
 		seatAt: (i) => {
 			const [x, y] = seatPos(i)

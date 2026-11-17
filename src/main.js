@@ -540,8 +540,6 @@ const strip = createStrip({
 	},
 })
 const hint = createHint({
-	kind: q.get('hint'),
-	forced: q.has('hint'),
 	engine,
 	view,
 	me,
@@ -549,8 +547,10 @@ const hint = createHint({
 	glyph: strip.glyph,
 	choose: (id) => strip.choose(id) && popFlash(id),
 })
-if (me.seat >= 0) hint.start()
-else transport.on('welcome', () => hint.start())
+if (!replay) {
+	if (me.seat >= 0) hint.start()
+	else transport.on('welcome', () => hint.start())
+}
 function toggleFocus() {
 	view.setFocus(view.focus.on ? -1 : me.seat)
 }
