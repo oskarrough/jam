@@ -313,7 +313,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			max: new Float32Array(nm),
 			size: new Float32Array(nm),
 		}
-		cap = band.n + comet.n + core.n + shade.n + nm
+		cap = band.n + comet.n + core.n + shade.n + LID_N + nm
 		scratch = new Float32Array(cap * STRIDE)
 		sorted = new Float32Array(cap * STRIDE)
 		zs = new Float32Array(cap)
@@ -377,6 +377,16 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		level = Math.min(1, sum * 2.2 * opts.sensitivity)
 		thump = Math.max(low * low, thump * Math.pow(0.01, dt))
 	}
+
+	// a slow blink: every 8-14 s a lid of ink splats sweeps down over the eye and lifts again
+	const LID_N = 110
+	const lidPts = Array.from({ length: LID_N }, (_, i) => {
+		const a = i * 2.39996,
+			r = Math.sqrt((i + 0.5) / LID_N)
+		return { x: Math.cos(a) * r, y: Math.sin(a) * r, rnd: Math.random() }
+	})
+	const blink = { next: 0, start: -1 }
+	const BLINK_MS = 1100
 
 	const head = { p: [0, 0, 0], t: [1, 0, 0], n: [0, 0, 1] }
 
@@ -785,6 +795,45 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 					0.85,
 					0,
 				)
+		}
+
+		if (!blink.next) blink.next = now + 8000 + Math.random() * 6000
+		if (blink.start < 0 && now > blink.next) blink.start = now
+		if (blink.start >= 0) {
+			const u = (now - blink.start) / BLINK_MS
+			if (u >= 1) {
+				blink.start = -1
+				blink.next = now + 8000 + Math.random() * 6000
+			} else {
+				// close fast, open slower; the lid edge travels from above the eye to below it
+				const c = Math.sin(Math.PI * Math.min(1, u < 0.4 ? u / 0.8 : 0.5 + (u - 0.4) / 1.2))
+				const R = 0.16 * swell,
+					edge = R * (1.15 - 2.3 * c * c * (3 - 2 * c))
+				for (let i = 0; i < LID_N; i++) {
+					const q = lidPts[i],
+						py = q.y * R
+					const f = Math.min(1, (py - edge) / (R * 0.18) + 0.5)
+					if (f <= 0 || q.x * q.x + q.y * q.y > 1) continue
+					const sz = 0.02 + 0.014 * q.rnd
+					put(
+						0.7,
+						q.x * R + gaze.x,
+						py + lift + gaze.y,
+						0.7,
+						sz,
+						0,
+						0,
+						0,
+						sz,
+						0,
+						shd[0],
+						shd[1],
+						shd[2],
+						0.95 * f,
+						0,
+					)
+				}
+			}
 		}
 
 		const m = motes,
