@@ -313,7 +313,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			max: new Float32Array(nm),
 			size: new Float32Array(nm),
 		}
-		cap = band.n + comet.n + core.n + shade.n + nm
+		cap = band.n + comet.n + core.n + shade.n + nm + 26
 		scratch = new Float32Array(cap * STRIDE)
 		sorted = new Float32Array(cap * STRIDE)
 		zs = new Float32Array(cap)
@@ -378,6 +378,8 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		thump = Math.max(low * low, thump * Math.pow(0.01, dt))
 	}
 
+	const NLID = 26
+	const blink = { t0: 0, next: 0 }
 	const head = { p: [0, 0, 0], t: [1, 0, 0], n: [0, 0, 1] }
 
 	// a glance holds briefly; after a quiet spell the eye drifts home
@@ -736,6 +738,30 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		const gk = Math.min(1, dt * (now - gaze.at > 2600 ? 1.5 : 11))
 		gaze.x += (gaze.tx - gaze.x) * gk
 		gaze.y += (gaze.ty - gaze.y) * gk
+		// slow blink: every 8-14 s a lid sweeps down over the eye and lifts again
+		if (!blink.next) blink.next = T + 8 + Math.random() * 6
+		if (!blink.t0 && T > blink.next && !reduce) blink.t0 = T
+		let lid = 0
+		if (blink.t0) {
+			const k = (T - blink.t0) / 0.9
+			if (k >= 1) {
+				blink.t0 = 0
+				blink.next = T + 8 + Math.random() * 6
+			} else lid = Math.sin(Math.PI * k) ** 1.5
+		}
+		const er = 0.2 * swell
+		if (lid > 0) {
+			// the lid: columns of ink from above the eye down to a curved edge
+			const top = lift + gaze.y + er * 1.5,
+				edge = lift + gaze.y + er * (1.2 - 2.6 * lid)
+			for (let j = 0; j < NLID; j++) {
+				const u = ((j + 0.5) / NLID) * 2 - 1,
+					e = edge - er * 0.25 * (1 - u * u) * lid,
+					h = Math.max(0, top - e)
+				put(0.3, gaze.x + u * er * 1.25, e + h / 2, 0.3, ((er * 1.25) / NLID) * 1.6, 0, 0, 0, h / 3.2, 0,
+					shd[0] * 0.6, shd[1] * 0.6, shd[2] * 0.6, 0.95, 0)
+			}
+		}
 		for (let i = 0; i < core.n; i++) {
 			const glow = i < core.nGlow
 			const rad = glow ? 0.105 * swell : 0.034 * opts.eye * (1.25 - 0.7 * thump)
