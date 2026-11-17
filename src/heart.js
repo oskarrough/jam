@@ -76,12 +76,16 @@ const mixHex = (a, b, t) => {
 }
 const randn = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.87
 
+// phones: fewer splats, coarser canvas, ~30 fps. Desktop is untouched.
+const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+const lite = coarse ? 0.6 : 1
+
 export function createHeart({ engine, geom, after = document.getElementById('c') }) {
 	const opts = {
 		on: true,
 		scale: 0.86,
 		reach: 2.2,
-		pixel: 1.5,
+		pixel: coarse ? 2 : 1.5,
 		levels: 3,
 		dither: 0.85,
 		// blend: 0 = pigment laid over the ground (paper), 1 = light added to it (dusk)
@@ -116,12 +120,12 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		well: '#211943',
 		engrave: 0.2,
 		// counts: changing them rebuilds
-		nBody: 2400,
-		nHatch: 1500,
-		nEdge: 800,
-		nComet: 220,
-		nCore: 260,
-		nMotes: 1400,
+		nBody: Math.round(2400 * lite),
+		nHatch: Math.round(1500 * lite),
+		nEdge: Math.round(800 * lite),
+		nComet: Math.round(220 * lite),
+		nCore: Math.round(260 * lite),
+		nMotes: Math.round(1400 * lite),
 	}
 	const stats = { splats: 0, ms: 0 }
 
@@ -503,6 +507,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			paintWell()
 			setGround(opts.well)
 		} else if (G.ground) setGround(G.ground)
+		if (coarse && now - last < 30) return
 		const t0 = performance.now()
 		const dt = Math.min(0.05, (now - last) / 1000)
 		last = now
