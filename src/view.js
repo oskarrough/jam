@@ -780,7 +780,9 @@ export function createView(
 	function warp(L, r0, r1, src = L.canvas) {
 		// each slice is a straight chord of the ring: enough of them that the chord's bulge stays under 0.15 px
 		// (bulge ≈ r·θ²/8), which is ~60 on a phone ring, not the 192 drawImage calls per ring it used to be
-		const N = moving ? 48 : Math.min(opts.slices, Math.max(48, Math.ceil(TAU * Math.sqrt(r1 / 1.2)))),
+		const N = moving
+				? 48
+				: Math.min(opts.slices, Math.max(48, Math.ceil(TAU * Math.sqrt(r1 / 1.2)))),
 			sw = src.width / N,
 			dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
 		for (let k = 0; k < N; k++) {
