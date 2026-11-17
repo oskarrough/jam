@@ -378,6 +378,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		thump = Math.max(low * low, thump * Math.pow(0.01, dt))
 	}
 
+	const blink = { next: 0, start: 0 }
 	const head = { p: [0, 0, 0], t: [1, 0, 0], n: [0, 0, 1] }
 
 	// a glance holds briefly; after a quiet spell the eye drifts home
@@ -736,6 +737,19 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		const gk = Math.min(1, dt * (now - gaze.at > 2600 ? 1.5 : 11))
 		gaze.x += (gaze.tx - gaze.x) * gk
 		gaze.y += (gaze.ty - gaze.y) * gk
+		// blink: every 8-14 s a lid sweeps down over the eye (0.5 s) and lifts again
+		if (!blink.next) blink.next = now + 4000 + Math.random() * 6000
+		if (!blink.start && now > blink.next) blink.start = now
+		let lid = 0
+		if (blink.start) {
+			const u = (now - blink.start) / 520
+			if (u >= 1) {
+				blink.start = 0
+				blink.next = now + 8000 + Math.random() * 6000
+			} else lid = Math.sin(Math.PI * u) ** 1.5
+		}
+		const lidR = 0.2 * opts.eye,
+			lidY = lidR * (1 - 2.2 * lid)
 		for (let i = 0; i < core.n; i++) {
 			const glow = i < core.nGlow
 			const rad = glow ? 0.105 * swell : 0.034 * opts.eye * (1.25 - 0.7 * thump)
@@ -746,7 +760,28 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			const x = M[0] * ox + M[1] * oy + M[2] * oz + gaze.x * gz,
 				y = M[3] * ox + M[4] * oy + M[5] * oz + lift + gaze.y * gz,
 				z = M[6] * ox + M[7] * oy + M[8] * oz
-			if (glow) {
+			const yr = y - lift - gaze.y * gz
+			if (lid > 0 && yr > lidY) {
+				// under the lid: stippled ink instead of the eye, denser at the edge
+				const edge = Math.min(1, (yr - lidY) / (0.06 * opts.eye))
+				put(
+					z + 0.25,
+					x,
+					y,
+					z,
+					0.02,
+					0,
+					0,
+					0,
+					0.02,
+					0,
+					shd[0] * 0.7,
+					shd[1] * 0.7,
+					shd[2] * 0.7,
+					(glow ? 0.35 : 0.9) * (0.6 + 0.4 * (1 - edge)),
+					0,
+				)
+			} else if (glow) {
 				const fl = 0.75 + 0.25 * Math.sin(T * 3.1 + core.rnd[i] * 40),
 					sz = (0.022 + 0.03 * core.rnd[i]) * swell * fl
 				const m = Math.min(1, Math.hypot(ox, oy, oz) / (0.16 * swell))
