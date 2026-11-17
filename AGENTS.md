@@ -1,5 +1,6 @@
 # Notes for agents
 
+- `npm run setup` first: fetches, fast-forwards a clean checkout, installs deps, never discards work.
 - Commit to `main`, no branches. Pull (rebase) before you start and again before you push; several agents push here.
 - `npm run check` (lint, 2 s; installs deps if missing) before every push. Touched `sync/` or `src/transport/`? Also `cd sync && NODE_PATH=$(npm root -g) node test.mjs` (needs Playwright).
 - `npm run shots [-- <instrument>] [--phone]` puts dial and sheet screenshots in `shots/` (ignored). `npm run two-tabs` is the two-player smoke test. `npm run perf` prints JS ms per frame (keep it low: taps wait behind it).
