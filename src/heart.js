@@ -123,6 +123,12 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		nCore: 260,
 		nMotes: 1400,
 	}
+	// phones: about half the splats and a coarser raster; desktop is untouched
+	if (matchMedia('(pointer: coarse)').matches) {
+		opts.pixel = 2
+		for (const k of ['nBody', 'nHatch', 'nEdge', 'nComet', 'nCore', 'nMotes'])
+			opts[k] = Math.round(opts[k] * 0.55)
+	}
 	const stats = { splats: 0, ms: 0 }
 
 	let ground = ''
