@@ -77,11 +77,14 @@ const mixHex = (a, b, t) => {
 const randn = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.87
 
 export function createHeart({ engine, geom, after = document.getElementById('c') }) {
+	// phones: roughly a third of the per-frame cost (half the splats, a coarser grid, 30 fps)
+	const coarse = matchMedia('(pointer: coarse)').matches
+	const lite = coarse ? 0.5 : 1
 	const opts = {
 		on: true,
 		scale: 0.86,
 		reach: 2.2,
-		pixel: 1.5,
+		pixel: coarse ? 2 : 1.5,
 		levels: 3,
 		dither: 0.85,
 		// blend: 0 = pigment laid over the ground (paper), 1 = light added to it (dusk)
@@ -116,12 +119,12 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		well: '#211943',
 		engrave: 0.2,
 		// counts: changing them rebuilds
-		nBody: 2400,
-		nHatch: 1500,
-		nEdge: 800,
+		nBody: Math.round(2400 * lite),
+		nHatch: Math.round(1500 * lite),
+		nEdge: Math.round(800 * lite),
 		nComet: 220,
 		nCore: 260,
-		nMotes: 1400,
+		nMotes: Math.round(1400 * lite),
 	}
 	const stats = { splats: 0, ms: 0 }
 
@@ -265,7 +268,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			band.c2[i] = Math.cos(th / 2)
 			band.s2[i] = Math.sin(th / 2)
 			band.rnd[i] = Math.random()
-			band.size[i] = 0.7 + Math.random() * 0.6
+			band.size[i] = (0.7 + Math.random() * 0.6) / Math.sqrt(lite) // fewer splats, each a bit larger
 		}
 		comet = {
 			n: opts.nComet,
@@ -485,6 +488,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 	function frame(now) {
 		raf = requestAnimationFrame(frame)
 		const G = opts.on ? geom() : null
+		if (coarse && now - last < 30 && G && !G.moving) return // ~30 fps; canvas keeps the last frame
 		if (!G || !(G.r > 4)) {
 			canvas.style.display = well.style.display = 'none'
 			last = now
