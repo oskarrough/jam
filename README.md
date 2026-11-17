@@ -10,7 +10,7 @@ It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars
 
 And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fourteen so far:
 
-- **bass, keys, bell**: draw a line, height is pitch
+- **bass**: an elastic riff; pull the knot to stretch it. **keys**: draw water, notes ring where it crosses the chord's threads. **bell**: tap for a bell, drag up to drop a bouncing marble
 - **drums**: paint kick, snare and hat in three bands
 - **contour, grid, rings, sweep, drift, scribble, strum, swarm, orbits, embers**: ten stranger ones, described in [lab/README.md](lab/README.md)
 
@@ -19,7 +19,7 @@ And the instruments are **creative**, in the sense that each one is a different 
 - **seat**: your place at the machine, and who sits there (you, a friend, a robot). Code says seat too.
 - **ring**: what's drawn on the dial for a seat. Only a picture.
 - **instrument**: what you play, a gesture plus its sound. The thing you pick from the glyphs.
-- **voice**: the sound alone. Bass, keys and bell are one stepline instrument with three voices.
+- **voice**: the sound alone. Bass, keys and bell each have a few voices to pick from.
 - **erase** rubs out under the pen; **wipe** clears your whole ring.
 - **loud** is one note's level; **level** is an instrument's volume. **range** is pitch spread, **decay** is tail length.
 - **controls**: the `d` panel.

@@ -3,6 +3,7 @@
 
 import { adapters as labAdapters } from './instruments/lib/phrases.js'
 import { parseTide, tideOf, through, W } from './instruments/keys.js'
+import { parseMarbles, marblesOf, strikes } from './instruments/bell.js'
 
 export const OCT = 5
 
@@ -118,6 +119,27 @@ const keys = {
 	},
 }
 
+// bell: marbles, { marbles: 't,y,h;…' }; every bounce is a note. Written back as taps (no bounces).
+const bell = {
+	to(state, n) {
+		const notes = []
+		for (const m of parseMarbles(state?.marbles))
+			for (const s of strikes(m, n))
+				notes.push({
+					s: mod(m.t * n + s.at, n),
+					p: Math.round(m.y * 9),
+					v: 0.8 * Math.pow(0.74, s.k),
+				})
+		return { n, drums: false, notes }
+	},
+	from(ph, n) {
+		const ns = fitRange(asMelody(retime(ph, n)).notes, 0, 9).slice(0, 32)
+		return {
+			marbles: marblesOf(ns.map((x) => ({ t: mod(Math.round(x.s), n) / n, y: x.p / 9, h: 0 }))),
+		}
+	},
+}
+
 // drums: per-step bitmask, 1 kick, 2 snare, 4 hat; vel[s][row] is how loud, 1..9
 const drums = {
 	to(state, n) {
@@ -142,7 +164,7 @@ const drums = {
 	},
 }
 
-const adapters = { bass, keys, bell: stepline, drums, ...labAdapters }
+const adapters = { bass, keys, bell, drums, ...labAdapters }
 
 export const canPhrase = (id) => !!adapters[id]
 

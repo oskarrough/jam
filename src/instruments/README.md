@@ -8,7 +8,7 @@ Each instrument is one file in this folder, and each one is a different answer t
 
 The link seats you with your instrument and opens it up. Edit the file, reload, play. Everyone in the jam gets it once it's deployed.
 
-Words: an **instrument** is a gesture plus its sound; its **voice** is the sound alone (bass, keys and bell share `lib/stepline.js` and differ only in voice). A **seat** is where someone plays it; its **ring** is the drawing on the dial. Knob names to reuse: `level`, `range`, `decay`, `octave`.
+Words: an **instrument** is a gesture plus its sound; its **voice** is the sound alone (bass, keys and bell each offer a few voices). A **seat** is where someone plays it; its **ring** is the drawing on the dial. Knob names to reuse: `level`, `range`, `decay`, `octave`.
 
 ## The contract
 
@@ -55,6 +55,6 @@ If someone sends a state your instrument doesn't understand, the registry ignore
 
 ## Helpers
 
-`lib/util.js` has small timing, pointer and drawing helpers (`withPointer`, `subSlots`, `flashes`, `view`, `isStrip`) plus synth parts (`env`, `osc`, `noiseSrc`, `mtof`). `lib/kit.js` holds the jam's harmony and some voices: `kit(audio).degree(d, octave)` is a scale degree in the jam's key, `kit(audio).chord(absStep)` the triad for that bar. The key and chords travel with the loop, so use these rather than fixed notes and your instrument follows when someone changes them. `lib/stepline.js` is the one-line-per-step factory behind bass, keys and bell. Give it `voices: [[name, fn], …]` and the voice becomes a choice: a `voice` param that syncs, listed in the sheet's corner. `lib/voices.js` is a trimmed copy of the jukebox synth's voices (synbass, 808, rhodes, glock…); `voice('rhodes', -9)` plays one, trimmed in dB.
+`lib/util.js` has small timing, pointer and drawing helpers (`withPointer`, `subSlots`, `flashes`, `view`, `isStrip`) plus synth parts (`env`, `osc`, `noiseSrc`, `mtof`). `lib/kit.js` holds the jam's harmony and some voices: `kit(audio).degree(d, octave)` is a scale degree in the jam's key, `kit(audio).chord(absStep)` the triad for that bar. The key and chords travel with the loop, so use these rather than fixed notes and your instrument follows when someone changes them. `lib/voiced.js` turns `[[name, fn], …]` into a choice of voice: a `voice` param that syncs, listed in the sheet's corner (bass, keys and bell use it). `lib/voices.js` is a trimmed copy of the jukebox synth's voices (synbass, 808, rhodes, glock…); `voice('rhodes', -9)` plays one, trimmed in dB.
 
 The [lab](../../lab/) plays the ten drawable instruments one at a time, each with its own panel.
