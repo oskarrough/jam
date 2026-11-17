@@ -54,7 +54,7 @@ try {
 		.waitForFunction(
 			(seat) => {
 				const L = window.jam.engine.seats[seat]
-				return L.len === 16 && L.instance.state.notes.length === 16
+				return L.len === 16 && L.clock.steps === 16
 			},
 			seat,
 			{ timeout: 8000 },
