@@ -1,5 +1,6 @@
 // npm run setup: get a checkout ready in one call. Safe to run any time, never discards work.
-// Fetches origin, moves a clean checkout with no commits of its own onto origin/main, installs deps if missing.
+// Fetches origin; fast-forwards (never resets, never merges) a clean checkout with no commits of its own; installs deps if missing.
+// Anything dirty, ahead or diverged is left alone and reported.
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,10 +16,10 @@ else {
 		ahead = +out('rev-list', '--count', 'origin/main..HEAD') || 0,
 		behind = +out('rev-list', '--count', 'HEAD..origin/main') || 0
 	if (dirty) say.push(`uncommitted changes, left alone (${behind} behind origin/main)`)
-	else if (ahead) say.push(`${ahead} local commit(s) ahead of origin/main, left alone (${behind} behind): pull --rebase before you push`)
+	else if (ahead) say.push(`${ahead} local commit(s) ahead of origin/main${behind ? `, ${behind} behind (diverged)` : ''}, left alone: pull --rebase before you push`)
 	else if (behind) {
-		git('reset', '-q', '--hard', 'origin/main')
-		say.push(`moved ${behind} commit(s) forward to origin/main`)
+		const ff = git('merge', '-q', '--ff-only', 'origin/main')
+		say.push(ff.status ? `could not fast-forward (${behind} behind), left alone` : `fast-forwarded ${behind} commit(s) to origin/main`)
 	} else say.push('up to date with origin/main')
 }
 
