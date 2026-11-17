@@ -55,12 +55,22 @@ export function playwright() {
 
 // A page that records every uncaught error and console.error. Relay 404s are expected with ?ws=off.
 // ready: wait for window.jam (the jam page); pass false for pages without it, like the lab.
-export async function open(browser, url, { phone = false, ready = true, small = false } = {}) {
+export async function open(browser, url, { phone = false, ready = true, small = false, at = 0 } = {}) {
 	const ctx = await browser.newContext(
 		phone
 			? { ...playwright().devices['iPhone 13'] }
 			: { viewport: small ? { width: 720, height: 520 } : { width: 1280, height: 860 } },
 	)
+	// at: jump the page clock forward by this many ms (rAF timestamps and performance.now) to catch timed effects.
+	// It also fixes Math.random to 0 (the shortest random delays), so `--at 9000` lands on an '8 to 14 s' event.
+	if (at)
+		await ctx.addInitScript((at) => {
+			const raf = window.requestAnimationFrame.bind(window),
+				now = performance.now.bind(performance)
+			window.requestAnimationFrame = (cb) => raf((t) => cb(t + at))
+			performance.now = () => now() + at
+			Math.random = () => 0
+		}, at)
 	const page = await ctx.newPage()
 	page.errors = []
 	page.on('pageerror', (e) => page.errors.push(e.stack || e.message))
