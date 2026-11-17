@@ -71,6 +71,25 @@ const stepline = {
 	},
 }
 
+// bass: an elastic riff, { riff: '0..3.' one cell per char, len? the steps it stretches over }; copies tile the loop
+const bass = {
+	to(state, n) {
+		const cells = [...(state?.riff || '')].map((c) => (c >= '0' && c <= '7' ? +c : -1))
+		const l = Math.min(n, state?.len || n),
+			notes = []
+		for (let k = 0; k * l < n; k++)
+			cells.forEach((p, c) => {
+				const s = k * l + (c * l) / cells.length
+				if (p >= 0 && s < n) notes.push({ s, p, v: 0.8 })
+			})
+		return { n, drums: false, notes }
+	},
+	from(ph, n) {
+		const { notes } = stepline.from(ph, n, {}, null)
+		return { riff: notes.map((v) => (v >= 0 ? String(v) : '.')).join('') }
+	},
+}
+
 // drums: per-step bitmask, 1 kick, 2 snare, 4 hat; vel[s][row] is how loud, 1..9
 const drums = {
 	to(state, n) {
@@ -95,7 +114,7 @@ const drums = {
 	},
 }
 
-const adapters = { bass: stepline, keys: stepline, bell: stepline, drums, ...labAdapters }
+const adapters = { bass, keys: stepline, bell: stepline, drums, ...labAdapters }
 
 export const canPhrase = (id) => !!adapters[id]
 
