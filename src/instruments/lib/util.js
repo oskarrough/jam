@@ -145,7 +145,7 @@ export function osc(ac, type, f, t, dur, dest) {
 }
 
 const noiseCache = new WeakMap()
-export function noise(ac) {
+function noise(ac) {
 	let b = noiseCache.get(ac)
 	if (!b) {
 		b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate)

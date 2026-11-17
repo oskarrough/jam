@@ -442,7 +442,6 @@ function input(S, out, name, trim) {
 }
 const P = { bright: 1, att: null, rel: null, glide: null, drive: 0, from: null }
 
-export const NAMES = Object.keys(INST)
 export function voice(name, trim = 0) {
 	const def = INST[name]
 	return ({ audio, out }, m, t, dur, vel = 0.7) => {

@@ -31,7 +31,6 @@ export const parseChords = (s) =>
 		.slice(0, 16)
 
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 
 const kits = new WeakMap()
 export function kit(audio) {

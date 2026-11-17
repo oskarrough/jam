@@ -1,6 +1,5 @@
 // Dusk palette: pale paper sky, violet hills, ochre fields, ink line. Shared by the view, the engine (seat colours) and the instruments.
 export const INK = '#211a2e'
-export const PAPER = '#f3e8cf'
 export const SERIF = 'Fraunces, "Iowan Old Style", Georgia, serif'
 export const SANS = '"Bricolage Grotesque", system-ui, sans-serif'
 export const SEAT_COLORS = ['#5a3f8e', '#2f7a58', '#d65f7c', '#2b4fa6', '#c08419', '#d24b2a']
