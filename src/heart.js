@@ -77,11 +77,13 @@ const mixHex = (a, b, t) => {
 const randn = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.87
 
 export function createHeart({ engine, geom, after = document.getElementById('c') }) {
+	const coarse = matchMedia('(pointer: coarse)').matches
+	let drawn = 0 // coarse pointers redraw at ~30 fps; the canvas keeps the last frame between
 	const opts = {
 		on: true,
 		scale: 0.86,
 		reach: 2.2,
-		pixel: 1.5,
+		pixel: coarse ? 2 : 1.5,
 		levels: 3,
 		dither: 0.85,
 		// blend: 0 = pigment laid over the ground (paper), 1 = light added to it (dusk)
@@ -116,12 +118,13 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		well: '#211943',
 		engrave: 0.2,
 		// counts: changing them rebuilds
-		nBody: 2400,
-		nHatch: 1500,
-		nEdge: 800,
-		nComet: 220,
-		nCore: 260,
-		nMotes: 1400,
+		// phones: ~40% fewer splats, they read the same at the coarser pixel size
+		nBody: coarse ? 1400 : 2400,
+		nHatch: coarse ? 900 : 1500,
+		nEdge: coarse ? 500 : 800,
+		nComet: coarse ? 140 : 220,
+		nCore: coarse ? 170 : 260,
+		nMotes: coarse ? 800 : 1400,
 	}
 	const stats = { splats: 0, ms: 0 }
 
@@ -497,6 +500,8 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 			last = now
 			return
 		}
+		if (coarse && now - drawn < 30) return
+		drawn = now
 		well.style.display = opts.chamber ? '' : 'none'
 		place(G)
 		if (opts.chamber) {
