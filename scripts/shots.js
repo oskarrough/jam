@@ -1,18 +1,20 @@
-// npm run shots [-- <instrument>|all] [--phone]: screenshots of the dial and each instrument's sheet into shots/.
+// npm run shots [-- <instrument>|all] [--phone] [--at <ms>]: screenshots of the dial and each instrument's sheet into shots/.
+// --at jumps the page clock forward, so a timed effect (a blink every 8-14 s) is on screen without waiting.
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { ROOT, serve, playwright, open, play } from './lib/browser.js'
 
 const args = process.argv.slice(2),
 	phone = args.includes('--phone'),
-	want = args.find((a) => !a.startsWith('--')) || 'all'
+	at = +(args[args.indexOf('--at') + 1] || 0) * args.includes('--at'),
+	want = args.find((a) => !a.startsWith('--') && a !== String(at)) || 'all'
 const dir = join(ROOT, 'shots'),
 	tag = phone ? '-phone' : ''
 mkdirSync(dir, { recursive: true })
 const srv = await serve()
 const browser = await playwright().chromium.launch()
 try {
-	const page = await open(browser, `${srv.url}/?ws=off`, { phone })
+	const page = await open(browser, `${srv.url}/?ws=off`, { phone, at })
 	await page.click('#sound')
 	const ids = want === 'all' ? await page.evaluate(() => [...window.jam.registry.keys()]) : [want]
 	for (const id of ids) {
