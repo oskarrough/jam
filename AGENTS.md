@@ -7,6 +7,6 @@
 - Verify once: `check` always; a visible change gets one `npm run shots -- <instrument> [--phone] [--at <ms>]` and you read the png (`--at 9000` jumps the clock and pins Math.random to 0, so an "every 8-14 s" effect is on screen); render cost gets `npm run perf -- --quick`.
 - Words: **seat** (a place at the machine), **ring** (its drawing on the dial), **instrument** (gesture + sound), **voice** (the sound alone). Full list in README.
 - New instrument: `npm run new-instrument <name>`; contract in `src/instruments/README.md`; `/?instrument=<id>` opens it.
-- Poking around by hand: `agent-browser` (`npm i -g agent-browser`, 1 s; its snapshot can't see the canvas sheet, so screenshot) else Playwright (`scripts/lib/browser.js` has a server and helpers).
+- Poking around by hand: `npm i -g agent-browser` (1 s). `python3 -m http.server 8000 &`, then `agent-browser set viewport 390 844`, `agent-browser open 'http://localhost:8000/?ws=off&instrument=bell'` (`?instrument=x` seats you and zooms in), `agent-browser wait 1500`, `agent-browser screenshot /tmp/x.png`, read the png, `agent-browser close`. Skip `set device` (layout comes out wrong). Its snapshot can't see the canvas sheet, so screenshot, and prefer `npm run shots`.
 - Deploy is Oskar's: pull, then `bun install && npx cf deploy` from `main`.
 - Before shipping: fun in 5 seconds without reading? strange over safe? one gesture?
