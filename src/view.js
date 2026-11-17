@@ -6,6 +6,7 @@ import { INK, SERIF, GROUNDS } from './palette.js'
 import { spring, dentAt } from './jelly.js'
 import { paintLandscape, makeWisps } from './backdrop.js'
 import { registry } from './instruments/index.js'
+import { seatVariant, seatDemo, demoOccupant, variants } from './seat-variants.js'
 
 const TAU = Math.PI * 2
 const BROOM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="96" height="96" fill="none" stroke="${INK}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 3l-4.6 10.4"/><path d="M14.5 11.6l8.6 3.6"/><path d="M14.5 11.6C11 15 8 19.5 6.3 24.5c4.6 2.4 10.4 3.7 15.4 3.7 1.2-4.6 1.5-9 1.4-13"/><path d="M17.3 12.8l-5.2 13.4M20.3 14l-2.3 13.8"/><circle fill="${INK}" cx="26" cy="28" r=".9"/><circle fill="${INK}" cx="28.6" cy="25.6" r=".7"/></svg>`
@@ -603,7 +604,9 @@ export function createView(
 	const RUB_MS = 700
 	// on screen, about the reach of lib/erase.js on the sheet
 	const rubR = (onSheet) =>
-		onSheet && sheet ? Math.max(14, Math.min(sheet.w, sheet.h) * 0.045) : Math.max(8, (S || 600) * 0.018)
+		onSheet && sheet
+			? Math.max(14, Math.min(sheet.w, sheet.h) * 0.045)
+			: Math.max(8, (S || 600) * 0.018)
 	function showCursor(key, seat, x, y, name, rub = false) {
 		const now = performance.now()
 		cursors.set(key, { seat, x, y, name, rub, until: now + 700 })
@@ -611,7 +614,13 @@ export function createView(
 		if (!segs) trails.set(key, (segs = []))
 		let seg = segs[segs.length - 1]
 		const last = seg?.pts[seg.pts.length - 1]
-		if (!seg || seg.seat !== seat || seg.rub !== rub || now - last.t > 250 || Math.abs(x - last.x) > 0.5)
+		if (
+			!seg ||
+			seg.seat !== seat ||
+			seg.rub !== rub ||
+			now - last.t > 250 ||
+			Math.abs(x - last.x) > 0.5
+		)
 			segs.push((seg = { seat, rub, pts: [] }))
 		if (!last || seg.pts.length === 0 || Math.hypot(x - last.x, y - last.y) > 0.002)
 			seg.pts.push({ x, y, t: now })
@@ -810,17 +819,7 @@ export function createView(
 				s = Math.sin(th),
 				u = (off + (k / N) * rep) % 1
 			g.setTransform(DPR * c, DPR * s, -DPR * s, DPR * c, DPR * CX, DPR * CY)
-			g.drawImage(
-				src,
-				u * W,
-				0,
-				Math.min(sw, W * (1 - u)),
-				src.height,
-				-dw / 2,
-				-r1,
-				dw,
-				r1 - r0,
-			)
+			g.drawImage(src, u * W, 0, Math.min(sw, W * (1 - u)), src.height, -dw / 2, -r1, dw, r1 - r0)
 		}
 		g.setTransform(DPR, 0, 0, DPR, 0, 0)
 	}
@@ -1088,8 +1087,52 @@ export function createView(
 
 	function drawSeat(i, x, y, label) {
 		const L = seats[i],
-			st = occupant(i),
+			st = seatDemo ? demoOccupant(i, occupant(i)) : occupant(i),
 			r = seatR()
+		const VV = variants[seatVariant]
+		if (VV && opts.mode === 'dial') {
+			const c = {
+				g,
+				x,
+				y,
+				r,
+				i,
+				L,
+				st,
+				J: seatJelly[i],
+				wobble,
+				glyphImg,
+				PAPER,
+				G,
+				CX,
+				CY,
+				S,
+				reduce,
+				me: !!st.me,
+				empty: !st.name,
+				color: L.color,
+				dark: !!G.dark,
+				name: L.module.name.toLowerCase(),
+				t: performance.now(),
+				phase: dialPhase,
+				tag: L.mix.mute ? ' · muted' : engine.solo === i ? ' · solo' : '',
+				a: Math.atan2(y - CY, x - CX),
+				Rbadge: S * 0.505,
+				Rcap: S * 0.505 + r + Math.max(10, S * 0.022),
+				px: Math.max(11, S * 0.018),
+				ringMid: ringIn(i) + ringT() / 2,
+			}
+			VV.badge(c)
+			if (L.mix.mute) muteSlash(x, y, r)
+			if (engine.solo === i) {
+				g.strokeStyle = L.color
+				g.lineWidth = 2
+				wobble(g, x, y, r + 9, i * 11 + 5, 1.1)
+				g.stroke()
+			}
+			if (label && !small()) VV.caption(c)
+			return
+		}
 		if (st.me) {
 			g.fillStyle = 'rgba(40,25,60,.45)'
 			g.beginPath()
@@ -1131,20 +1174,7 @@ export function createView(
 		const img = glyphImg(L.module.id, st.name ? PAPER : ink(0.6))
 		if (img) g.drawImage(img, x - r * 0.78, y - r * 0.78, r * 1.56, r * 1.56)
 		else g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
-		if (L.mix.mute) {
-			// muted: an ink slash through the badge, edged in paper so it reads over the glyph
-			g.strokeStyle = PAPER
-			g.lineWidth = 5
-			g.lineCap = 'round'
-			g.beginPath()
-			g.moveTo(x - r * 0.95, y + r * 0.95)
-			g.lineTo(x + r * 0.95, y - r * 0.95)
-			g.stroke()
-			g.strokeStyle = INK
-			g.lineWidth = 2.2
-			g.stroke()
-			g.lineCap = 'butt'
-		}
+		if (L.mix.mute) muteSlash(x, y, r)
 		if (engine.solo === i) {
 			// soloed in your ears: a second, looser ring round the badge
 			g.strokeStyle = L.color
@@ -1161,6 +1191,21 @@ export function createView(
 				Math.max(11, S * 0.018),
 				st.me,
 			)
+	}
+
+	// muted: an ink slash through the badge, edged in paper so it reads over the glyph
+	function muteSlash(x, y, r) {
+		g.strokeStyle = PAPER
+		g.lineWidth = 5
+		g.lineCap = 'round'
+		g.beginPath()
+		g.moveTo(x - r * 0.95, y + r * 0.95)
+		g.lineTo(x + r * 0.95, y - r * 0.95)
+		g.stroke()
+		g.strokeStyle = INK
+		g.lineWidth = 2.2
+		g.stroke()
+		g.lineCap = 'butt'
 	}
 
 	// hand-set caption riding the outside of the dial's rim, centred on angle a. Upright on both halves:
@@ -1213,7 +1258,9 @@ export function createView(
 		return (cv.frost = b)
 	}
 
+	let dialPhase = 0
 	function drawDial(t, dt, phase, loop) {
+		dialPhase = phase
 		const outer = ringIn(seats.length - 1) + ringT() + 8,
 			inner = ringIn(0) - 6,
 			M = medallion()
