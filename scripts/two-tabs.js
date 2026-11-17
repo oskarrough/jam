@@ -64,6 +64,27 @@ try {
 			() => false,
 		)
 	check(len, "ben's copy of ana's bass loops one bar")
+	// the eye holds the chords: ana taps it, ben's loop rolls the same bar on
+	await a.mouse.click(5, 5)
+	await a.waitForFunction(() => !window.jam.view.focus.on && !window.jam.view.moving)
+	const c = await a.evaluate(() => window.jam.view.center())
+	await a.mouse.click(c.x + c.r * 0.4, c.y - c.r * 0.4)
+	const want = await a.evaluate(() =>
+		JSON.stringify(window.jam.transport.clock.pending().at(-1)?.chords),
+	)
+	const rolled = await b
+		.waitForFunction(
+			(w) => JSON.stringify(window.jam.transport.clock.loopAt().chords) === w,
+			want,
+			{
+				timeout: 8000,
+			},
+		)
+		.then(
+			() => true,
+			() => false,
+		)
+	check(want && rolled, `ben plays ana's chords (${want})`)
 	const errs = [...a.errors, ...b.errors]
 	check(!errs.length, 'no page errors' + errs.map((e) => '\n  ' + e).join(''))
 } finally {

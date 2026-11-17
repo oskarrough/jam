@@ -392,8 +392,13 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		const now = performance.now()
 		if (now < gaze.hold && holdMs <= 280) return
 		const a = seatAngle(i)
-		gaze.tx = Math.cos(a) * opts.gaze
-		gaze.ty = -Math.sin(a) * opts.gaze
+		look(Math.cos(a), Math.sin(a), holdMs)
+	}
+	// look along a screen direction (y down)
+	function look(dx, dy, holdMs = 1200) {
+		const now = performance.now()
+		gaze.tx = dx * opts.gaze
+		gaze.ty = -dy * opts.gaze
 		gaze.hold = now + holdMs
 		gaze.at = now
 	}
@@ -939,6 +944,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		emit,
 		setGround,
 		glance,
+		look,
 		destroy() {
 			cancelAnimationFrame(raf)
 			taps.forEach((t) => t.L.out.disconnect(t.an))

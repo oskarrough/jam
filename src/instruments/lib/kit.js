@@ -30,6 +30,21 @@ export const parseChords = (s) =>
 		.filter((d) => d >= 0)
 		.slice(0, 16)
 
+// The chord a loop plays at bar `bar` (counted from its origin): {deg, name}, e.g. {deg: 2, name: 'III'}
+export function chordOf(l, bar) {
+	const chords = l?.chords?.length ? l.chords : CHORDS
+	const deg = chords[((bar % chords.length) + chords.length) % chords.length]
+	return { deg, name: nameOf(l?.scale, deg) }
+}
+// numeral with the key's quality: upper case major, ° diminished, lower case minor
+export function nameOf(scale, r) {
+	const p = PARENT[scale] || PARENT['minor pent']
+	const at = (i) => p[(r + i) % 7] + 12 * Math.floor((r + i) / 7)
+	const third = at(2) - at(0),
+		fifth = at(4) - at(0)
+	return third === 4 ? NUMERALS[r].toUpperCase() : fifth === 6 ? NUMERALS[r] + '°' : NUMERALS[r]
+}
+
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 
@@ -73,14 +88,7 @@ export function kit(audio) {
 		const parent = PARENT[h.scale] || PARENT.minor
 		const tone = (i) => rootMidi() + parent[(r + i) % 7] + 12 * Math.floor((r + i) / 7)
 		const notes = [tone(0), tone(2), tone(4)]
-		const third = notes[1] - notes[0],
-			fifth = notes[2] - notes[0]
-		const n = NUMERALS[r]
-		return {
-			root: notes[0],
-			notes,
-			name: third === 4 ? n.toUpperCase() : fifth === 6 ? n + '°' : n,
-		}
+		return { root: notes[0], notes, name: nameOf(h.scale, r) }
 	}
 
 	k = {

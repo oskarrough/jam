@@ -1,9 +1,10 @@
 // Souvenirs: record 8 bars of the jam, store them, replay them read-only at /r/<id>.
-//   rec = { v: 1, loop: {bpm, beatsPerBar, bars, root, scale, chords}, bars: N, seats: [name|null ×seats],
+//   rec = { v: 1, loop: {bpm, beatsPerBar, bars, root, scale, chords: [degree ×N bars]}, bars: N, seats: [name|null ×seats],
 //           frames: [{seat: data} ×N],   // seat data per bar; a seat is omitted if unchanged since the bar before
 //           cursors: [[ms, seatIndex, x, y, down, name], …], room, at }
 
 import { createClock } from '../sync/sync.js'
+import { chordOf } from './instruments/lib/kit.js'
 
 const MIN_BARS = 8
 const CURSOR_HZ = 15
@@ -64,10 +65,10 @@ export function createRecorder({ engine, transport, seatName }) {
 		const barMs = clock.barMs(l)
 		const bars = l.bars >= MIN_BARS ? l.bars : l.bars * Math.ceil(MIN_BARS / l.bars)
 		const start = clock.nextLoop(clock.now() + 50)
-		const { bpm, beatsPerBar, root, scale, chords } = l
+		const { bpm, beatsPerBar, root, scale } = l
 		const rec = {
 			v: 1,
-			loop: { bpm, beatsPerBar, bars: l.bars, root, scale, chords },
+			loop: { bpm, beatsPerBar, bars: l.bars, root, scale, chords: [] },
 			bars,
 			seats: [],
 			frames: [],
@@ -95,6 +96,10 @@ export function createRecorder({ engine, transport, seatName }) {
 					if (!same(d, prev[L.id])) f[L.id] = prev[L.id] = d
 				})
 				rec.frames.push(f)
+				// the chord each bar actually played, so chords changed mid-take replay as they happened
+				const at = start + bar * barMs + barMs / 2,
+					lb = clock.loopAt(at)
+				rec.loop.chords[bar] = chordOf(lb, Math.floor((at - lb.origin) / clock.barMs(lb))).deg
 				if (bar === 0) rec.seats = seats.map((L, i) => seatName(i) || null)
 				bar++
 			}

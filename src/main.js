@@ -10,6 +10,7 @@ import { jellify } from './jelly.js'
 import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
 import { createHeart } from './heart.js'
+import { createHarmony } from './harmony.js'
 import { createUndo } from './undo.js'
 import { createGhost } from './ghost.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
@@ -191,6 +192,7 @@ const heart = createHeart({
 		return c
 	},
 })
+createHarmony({ canvas: document.getElementById('c'), view, transport, heart, readOnly: replay })
 bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 
 transport.on('cursor', (c) => {
