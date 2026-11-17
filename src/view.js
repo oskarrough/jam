@@ -1697,16 +1697,14 @@ export function createView(
 
 	return {
 		opts,
-<<<<<<< Updated upstream
 		get dpr() {
 			return DPR
-=======
+		},
 		// turn the stroke in progress into an erasing one (a second finger joined it); returns its seat or -1
 		rubDrag() {
 			if (!drag || drag.pending || drag.alt) return -1
 			drag.alt = true
 			return drag.seat
->>>>>>> Stashed changes
 		},
 		showCursor,
 		setMode(m) {
