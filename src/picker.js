@@ -121,5 +121,5 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 			buttons[(i + step + buttons.length) % buttons.length].focus()
 		}
 	})
-	return { paint, cycle, glyph }
+	return { paint, cycle, glyph, choose }
 }

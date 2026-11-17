@@ -5,6 +5,7 @@ import { createLocalTransport } from './transport/local.js'
 import { createEngine } from './engine.js'
 import { createView } from './view.js'
 import { createStrip } from './picker.js'
+import { createHint } from './hint.js'
 import { jellify } from './jelly.js'
 import { createBots, botName } from './bots.js'
 import { registry } from './instruments/index.js'
@@ -529,8 +530,23 @@ const strip = createStrip({
 	me,
 	el: sheetbar,
 	before: () => undo.remember(me.seat),
-	chosen: () => ghost.play(),
+	chosen: () => {
+		ghost.play()
+		hint.switched()
+	},
 })
+const hint = createHint({
+	kind: q.get('hint'),
+	forced: q.has('hint'),
+	engine,
+	view,
+	me,
+	registry,
+	glyph: strip.glyph,
+	choose: (id) => strip.choose(id) && popFlash(id),
+})
+if (me.seat >= 0) hint.start()
+else transport.on('welcome', () => hint.start())
 function toggleFocus() {
 	view.setFocus(view.focus.on ? -1 : me.seat)
 }
@@ -568,7 +584,11 @@ let flashT = 0
 function cycleInstrument(d) {
 	if (replay || me.seat < 0) return
 	const id = strip.cycle(d)
-	if (!id || view.focus.on) return
+	if (id) popFlash(id)
+}
+// the instrument you just switched to, popped up on your badge for a second
+function popFlash(id) {
+	if (view.focus.on) return
 	const s = view.seatAt(me.seat),
 		L = seats[me.seat]
 	flash.style.setProperty('--c', L.color)

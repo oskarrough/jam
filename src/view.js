@@ -1765,6 +1765,13 @@ export function createView(
 		// current ground colours ({ paper, dark, sky, ... }); a 'ground' event fires on window when it changes
 		ground: () => ({ ...(G2 || G) }),
 		heat: () => heat,
+		// a jolt of seat i's badge, as if tapped from angle a
+		// another hint (src/hint.js) has the job: no rim nudge this visit
+		quietNudge: () => ((nudgeOff = true), (nudge = null)),
+		jolt: (i, a = Math.random() * TAU) => {
+			press(seatJelly[i], a)
+			setTimeout(() => release(seatJelly[i]), 120)
+		},
 		// a seat badge on screen, CSS px
 		seatAt: (i) => {
 			const [x, y] = seatPos(i)

@@ -655,3 +655,39 @@ body.replay canvas {
 		animation: none;
 	}
 }
+
+/* ?hint=: other instruments' glyphs coming out of your badge (src/hint.js) */
+.hint {
+	position: fixed;
+	inset: 0;
+	z-index: 6;
+	pointer-events: none;
+}
+.hint .card {
+	position: fixed;
+	width: 44px;
+	height: 44px;
+	margin: -22px 0 0 -22px;
+	background: var(--c);
+	pointer-events: auto;
+	opacity: 0;
+	transform: translate(0, 0) rotate(0) scale(0.4);
+	transition:
+		transform 0.42s cubic-bezier(0.3, 1.5, 0.5, 1) var(--d, 0ms),
+		opacity 0.25s var(--d, 0ms);
+}
+.hint .card svg {
+	stroke: var(--paper);
+}
+.hint .card svg .f {
+	fill: var(--paper);
+}
+.hint.out .card {
+	opacity: 1;
+	transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+}
+.hint .peek {
+	width: 34px;
+	height: 34px;
+	margin: -17px 0 0 -17px;
+}
