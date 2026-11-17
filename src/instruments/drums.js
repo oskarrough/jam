@@ -61,38 +61,59 @@ function drumGen() {
 	return { d: a, v }
 }
 
-const gainOf = (lv) => Math.pow(lv / LV, 1.25)
+// steeper than linear: level 2 is a ghost note, 9 is roughly twice a plain hit
+const gainOf = (lv) => Math.pow(lv / LV, 1.8)
+// accents (8, 9) go through a soft clipper: louder peak, harder transient, compressor sees it
+let clip
+const punchBus = (ac, out, lv) => {
+	if (lv < 8) return out
+	if (!clip || clip.ac !== ac) {
+		const c = new Float32Array(1024)
+		for (let i = 0; i < 1024; i++) c[i] = Math.tanh(((i / 511.5 - 1) * 2.2)) / Math.tanh(2.2)
+		clip = { ac, c }
+	}
+	const sh = ac.createWaveShaper(),
+		pre = ac.createGain()
+	sh.curve = clip.c
+	pre.gain.value = lv >= 9 ? 1.6 : 1.2
+	pre.connect(sh)
+	sh.connect(out)
+	return pre
+}
 const hitVoice = {
-	1({ audio: ac, out }, t, lv) {
+	1({ audio: ac, out: dry }, t, lv) {
+		const out = punchBus(ac, dry, lv)
 		const g = ac.createGain()
-		env(g, t, 0.002, 0.9 * gainOf(lv), 0.3 + lv * 0.01)
+		env(g, t, 0.002, 0.7 * gainOf(lv), 0.3 + lv * 0.01)
 		g.connect(out)
 		const f0 = 120 + lv * 7
 		const o = osc(ac, 'sine', f0, t, 0.5, g)
 		o.frequency.setValueAtTime(f0, t)
 		o.frequency.exponentialRampToValueAtTime(42, t + 0.12)
 	},
-	2({ audio: ac, out }, t, lv) {
+	2({ audio: ac, out: dry }, t, lv) {
+		const out = punchBus(ac, dry, lv)
 		const g = ac.createGain(),
 			bp = ac.createBiquadFilter()
 		bp.type = 'bandpass'
 		bp.frequency.value = 1300 + lv * 110
 		bp.Q.value = 0.8
-		env(g, t, 0.002, 0.45 * gainOf(lv), 0.1 + lv * 0.012)
+		env(g, t, 0.002, 0.5 * gainOf(lv), 0.1 + lv * 0.012)
 		bp.connect(g)
 		g.connect(out)
 		noiseSrc(ac, t, 0.25, bp)
 		const g2 = ac.createGain()
-		env(g2, t, 0.002, 0.25 * gainOf(lv), 0.07)
+		env(g2, t, 0.002, 0.3 * gainOf(lv), 0.07)
 		g2.connect(out)
 		osc(ac, 'triangle', 190, t, 0.12, g2)
 	},
-	4({ audio: ac, out, params }, t, lv) {
+	4({ audio: ac, out: dry, params }, t, lv) {
+		const out = punchBus(ac, dry, lv)
 		const g = ac.createGain(),
 			hp = ac.createBiquadFilter()
 		hp.type = 'highpass'
 		hp.frequency.value = 6000 + lv * 200
-		env(g, t, 0.001, 0.16 * gainOf(lv), val(params.decay) * (0.6 + lv / 15))
+		env(g, t, 0.001, 0.2 * gainOf(lv), val(params.decay) * (0.6 + lv / 15))
 		hp.connect(g)
 		g.connect(out)
 		noiseSrc(ac, t, 0.3, hp)
