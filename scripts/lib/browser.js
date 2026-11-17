@@ -62,12 +62,14 @@ export async function open(browser, url, { phone = false, ready = true, small = 
 			: { viewport: small ? { width: 720, height: 520 } : { width: 1280, height: 860 } },
 	)
 	// at: jump the page clock forward by this many ms (rAF timestamps and performance.now) to catch timed effects.
+	// It also fixes Math.random to 0 (the shortest random delays), so `--at 9000` lands on an '8 to 14 s' event.
 	if (at)
 		await ctx.addInitScript((at) => {
 			const raf = window.requestAnimationFrame.bind(window),
 				now = performance.now.bind(performance)
 			window.requestAnimationFrame = (cb) => raf((t) => cb(t + at))
 			performance.now = () => now() + at
+			Math.random = () => 0
 		}, at)
 	const page = await ctx.newPage()
 	page.errors = []
