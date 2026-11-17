@@ -331,6 +331,13 @@ function saveAudio() {
 	return b
 }
 
+// a toggle acts when the finger lands, like a hardware button; keyboard clicks (detail 0) still work
+const onPress = (el, fn) => {
+	el.addEventListener('pointerdown', (e) => e.button === 0 && fn())
+	el.onclick = (e) => e.detail === 0 && fn()
+}
+// iOS only paints :active when some touch listener exists
+document.addEventListener('touchstart', () => {}, { passive: true })
 $('sound').onclick = () => {
 	engine.setSound(!engine.soundOn)
 	$('sound').setAttribute('aria-pressed', engine.soundOn)
@@ -399,7 +406,7 @@ const setErase = (on) => {
 	$('erase').setAttribute('aria-pressed', on)
 	document.body.classList.toggle('erasing', on)
 }
-$('erase').onclick = () => setErase(!me.erase)
+onPress($('erase'), () => setErase(!me.erase))
 // tempo lands on the next bar; `want` shows your ask before the relay echoes it (kept up to 2 s)
 let want = null // { bpm, t }
 const heading = () => {
@@ -413,8 +420,8 @@ const tempo = (d) => {
 	transport.setLoop({ bpm })
 	showTempo()
 }
-$('slower').onclick = () => tempo(-4)
-$('faster').onclick = () => tempo(4)
+onPress($('slower'), () => tempo(-4))
+onPress($('faster'), () => tempo(4))
 // broom: wipes your ring (undo restores); a second tap also sweeps rings no other person sits at
 const SWEEP_AGAIN_MS = 1600
 let swept = 0
@@ -438,11 +445,11 @@ function setRobots(on) {
 }
 transport.on('welcome', ({ loop }) => setRobots(loop?.robots))
 transport.on('loop', ({ loop }) => setRobots(loop?.robots))
-$('bots').onclick = () => {
+onPress($('bots'), () => {
 	const on = !bots.opts.on
 	setRobots(on)
 	transport.setLoop({ robots: on })
-}
+})
 addEventListener('keydown', (e) => {
 	if (e.target.closest?.('input, select, textarea, .lil-gui')) return
 	if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return

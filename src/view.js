@@ -41,6 +41,21 @@ export function createView(
 	const opts = { mode: 'dial', slices: 192, landscape: true, ground: 'vallotton', cycleLoops: 4 }
 	const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 	let W, H, S, CX, CY, DPR
+	// sharpness gives way to speed: if frames keep running long (a busy phone), draw the canvas at fewer pixels
+	let dprCap = 2,
+		slowFrames = 0,
+		seenFrames = 0
+	function adapt(t, raw) {
+		if (t < 5000 || raw > 500 || dprCap <= 1) return // intro, or back from a hidden tab
+		seenFrames++
+		if (raw > 24) slowFrames++
+		if (seenFrames < 60) return
+		if (slowFrames > seenFrames / 3 && DPR > 1) {
+			dprCap = Math.max(1, Math.min(dprCap, DPR) - 0.5)
+			resize()
+		}
+		seenFrames = slowFrames = 0
+	}
 	// zoom: the overview geometry (S0, CX0, CY0), the focus geometry (SF, CXF, CYF, sheet) and zt easing between them.
 	let S0,
 		CX0,
@@ -52,8 +67,18 @@ export function createView(
 		zt = 0,
 		moving = false
 	const focus = { on: false, seat: -1 }
+	// the ground is painted once into its own layers under the machine, not copied into every frame
 	let bg = document.createElement('canvas'),
 		bg2 = document.createElement('canvas')
+	for (const b of [bg, bg2]) {
+		b.setAttribute('aria-hidden', 'true')
+		b.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;opacity:0'
+	}
+	canvas.before(bg, bg2)
+	const show = (b, o) => {
+		const v = o >= 1 ? '' : String(Math.round(o * 1000) / 1000)
+		if (b.style.opacity !== v) b.style.opacity = v
+	}
 	// ground state: current G, and while cycling an incoming one fading in
 	let G = GROUNDS.vallotton,
 		G2 = null,
@@ -96,7 +121,7 @@ export function createView(
 	}
 
 	function resize() {
-		DPR = Math.min(2, devicePixelRatio || 1)
+		DPR = Math.min(dprCap, devicePixelRatio || 1)
 		W = innerWidth
 		H = innerHeight
 		canvas.width = W * DPR
@@ -753,7 +778,9 @@ export function createView(
 	}
 
 	function warp(L, r0, r1, src = L.canvas) {
-		const N = moving ? 48 : opts.slices,
+		// each slice is a straight chord of the ring: enough of them that the chord's bulge stays under 0.15 px
+		// (bulge ≈ r·θ²/8), which is ~60 on a phone ring, not the 192 drawImage calls per ring it used to be
+		const N = moving ? 48 : Math.min(opts.slices, Math.max(48, Math.ceil(TAU * Math.sqrt(r1 / 1.2)))),
 			sw = src.width / N,
 			dw = ((r0 + r1) / 2) * (TAU / N) + 0.6
 		for (let k = 0; k < N; k++) {
@@ -767,6 +794,7 @@ export function createView(
 	}
 
 	function frame(t) {
+		adapt(t, t - lastT)
 		const dt = Math.min(0.05, (t - lastT) / 1000)
 		lastT = t
 		introTick(t)
@@ -814,6 +842,7 @@ export function createView(
 			PAPER = mixHex(G.paper, G2.paper, fade)
 			if (fade >= 1) {
 				;[bg, bg2] = [bg2, bg]
+				canvas.before(bg, bg2) // the incoming one always sits on top
 				G = G2
 				G2 = null
 				PAPER = G.paper
@@ -821,15 +850,12 @@ export function createView(
 			}
 		}
 		g.setTransform(1, 0, 0, 1, 0, 0)
-		const land = EASES.smooth(ip(INTRO.land, INTRO.landMs))
-		if (land < 1) g.clearRect(0, 0, canvas.width, canvas.height) // the page's own sky shows through until the land is up
-		g.globalAlpha = land
-		g.drawImage(bg, 0, 0)
-		if (G2) {
-			g.globalAlpha = fade * land
-			g.drawImage(bg2, 0, 0)
-		}
+		g.clearRect(0, 0, canvas.width, canvas.height)
+		const land = EASES.smooth(ip(INTRO.land, INTRO.landMs)) // the page's own sky shows through until the land is up
+		show(bg, land)
+		show(bg2, G2 ? fade * land : 0)
 		g.setTransform(DPR, 0, 0, DPR, 0, 0)
+		g.globalAlpha = land
 		if (opts.landscape) drawDrifters(t)
 		g.globalAlpha = 1
 		seats.forEach(renderSeat)
@@ -1647,6 +1673,9 @@ export function createView(
 
 	return {
 		opts,
+		get dpr() {
+			return DPR
+		},
 		showCursor,
 		setMode(m) {
 			opts.mode = m

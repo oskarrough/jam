@@ -23,6 +23,13 @@ body {
 	height: 100%;
 	margin: 0;
 }
+/* feel installed, not browsed: no tap flash, no double-tap zoom wait, no rubber band, no landscape font boost */
+html {
+	-webkit-tap-highlight-color: transparent;
+	-webkit-text-size-adjust: 100%;
+	overscroll-behavior: none;
+	touch-action: manipulation;
+}
 body {
 	background: var(--sky);
 	transition: background-color 2s;
@@ -98,8 +105,13 @@ h1 {
 	text-decoration: underline wavy color-mix(in srgb, currentColor 45%, transparent) 1px;
 	text-underline-offset: 3px;
 }
-.jamline button:hover,
-.jamline button:focus-visible {
+@media (hover: hover) and (pointer: fine) {
+	.jamline button:hover {
+		text-decoration-color: currentColor;
+	}
+}
+.jamline button:focus-visible,
+.jamline button:active {
 	text-decoration-color: currentColor;
 }
 .jamline .dl::before {
@@ -190,9 +202,11 @@ button {
 		box-shadow 0.08s,
 		background-color 0.15s;
 }
-.token:hover {
-	transform: translate(-1px, -1px);
-	box-shadow: 4px 5px 0 var(--shadow);
+@media (hover: hover) and (pointer: fine) {
+	.token:hover {
+		transform: translate(-1px, -1px);
+		box-shadow: 4px 5px 0 var(--shadow);
+	}
 }
 .token:active {
 	transform: translate(2px, 3px);
@@ -283,8 +297,10 @@ svg .fill {
 	height: 14px;
 	stroke-width: 1.8;
 }
-.nib:hover svg {
-	stroke: var(--vermilion);
+@media (hover: hover) and (pointer: fine) {
+	.nib:hover svg {
+		stroke: var(--vermilion);
+	}
 }
 .nib:active {
 	background: color-mix(in srgb, var(--ink) 8%, transparent);
@@ -498,13 +514,18 @@ body.zoomed .lil-gui.root {
 	text-underline-offset: 5px;
 	transition: opacity 0.15s;
 }
-.voices button:hover {
-	opacity: 0.85;
+@media (hover: hover) and (pointer: fine) {
+	.voices button:hover {
+		opacity: 0.85;
+	}
 }
 .voices button[aria-pressed='true'] {
 	opacity: 1;
 	color: var(--c);
 	text-decoration-color: var(--c);
+}
+.voices button:active {
+	opacity: 1;
 }
 .voices button:focus-visible {
 	outline: 1.5px dashed var(--paper);

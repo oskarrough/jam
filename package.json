@@ -8,7 +8,8 @@
 		"format": "oxfmt --write .",
 		"format:check": "oxfmt --check .",
 		"shots": "node scripts/shots.js",
-		"two-tabs": "node scripts/two-tabs.js"
+		"two-tabs": "node scripts/two-tabs.js",
+		"perf": "node scripts/perf.js"
 	},
 	"devDependencies": {
 		"cf": "^1.0.0-rc.0",

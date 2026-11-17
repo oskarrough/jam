@@ -76,7 +76,7 @@ const mixHex = (a, b, t) => {
 }
 const randn = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.87
 
-export function createHeart({ engine, geom, after = document.querySelector('canvas') }) {
+export function createHeart({ engine, geom, after = document.getElementById('c') }) {
 	const opts = {
 		on: true,
 		scale: 0.86,
@@ -234,7 +234,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 	const BODY = 0,
 		HATCH = 1,
 		EDGE = 2
-	let band, comet, core, shade, motes, scratch, sorted, zs, order, cap
+	let band, comet, core, shade, motes, scratch, sorted, zs, keys, cap
 	function build() {
 		const nb = opts.nBody + opts.nHatch + opts.nEdge
 		band = {
@@ -317,7 +317,7 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		scratch = new Float32Array(cap * STRIDE)
 		sorted = new Float32Array(cap * STRIDE)
 		zs = new Float32Array(cap)
-		order = new Uint32Array(cap)
+		keys = new Float64Array(cap)
 		gl.bindBuffer(gl.ARRAY_BUFFER, inst)
 		gl.bufferData(gl.ARRAY_BUFFER, sorted.byteLength, gl.DYNAMIC_DRAW)
 	}
@@ -342,7 +342,6 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		scratch[o + 12] = a
 		scratch[o + 13] = add
 		zs[count] = z
-		order[count] = count
 		count++
 	}
 
@@ -835,10 +834,19 @@ export function createHeart({ engine, geom, after = document.querySelector('canv
 		}
 
 		// sorted back to front: blending is order dependent
-		const ord = order.subarray(0, count)
-		ord.sort((a, b) => zs[a] - zs[b])
+		// depth and index packed into one number, so the native sort runs without a JS comparator per pair
+		let z0 = Infinity,
+			z1 = -Infinity
 		for (let k = 0; k < count; k++) {
-			const src = ord[k] * STRIDE,
+			if (zs[k] < z0) z0 = zs[k]
+			if (zs[k] > z1) z1 = zs[k]
+		}
+		const zq = 16777215 / Math.max(1e-9, z1 - z0),
+			ord = keys.subarray(0, count)
+		for (let k = 0; k < count; k++) ord[k] = Math.round((zs[k] - z0) * zq) * 65536 + k
+		ord.sort()
+		for (let k = 0; k < count; k++) {
+			const src = (ord[k] % 65536) * STRIDE,
 				dst = k * STRIDE
 			for (let j = 0; j < STRIDE; j++) sorted[dst + j] = scratch[src + j]
 		}
