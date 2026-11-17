@@ -40,7 +40,7 @@ Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`
 
 ## Deploy
 
-    cf deploy
+    cf deploy    # CI does this on every push to main
 
 `cloudflare.config.ts` ships the repo root as static assets plus the relay as a Worker with a Durable Object per jam, on jam.0sk.ar. The deployed page connects to the relay on its own. Details in [sync/README.md](sync/README.md).
 
