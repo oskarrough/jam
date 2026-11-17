@@ -6,7 +6,6 @@ import { INK, SERIF, GROUNDS } from './palette.js'
 import { spring, dentAt } from './jelly.js'
 import { paintLandscape, makeWisps } from './backdrop.js'
 import { registry } from './instruments/index.js'
-import { seatVariant, seatDemo, demoOccupant, variants } from './seat-variants.js'
 
 const TAU = Math.PI * 2
 const BROOM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="96" height="96" fill="none" stroke="${INK}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 3l-4.6 10.4"/><path d="M14.5 11.6l8.6 3.6"/><path d="M14.5 11.6C11 15 8 19.5 6.3 24.5c4.6 2.4 10.4 3.7 15.4 3.7 1.2-4.6 1.5-9 1.4-13"/><path d="M17.3 12.8l-5.2 13.4M20.3 14l-2.3 13.8"/><circle fill="${INK}" cx="26" cy="28" r=".9"/><circle fill="${INK}" cx="28.6" cy="25.6" r=".7"/></svg>`
@@ -335,7 +334,7 @@ export function createView(
 		const i = seats.findIndex((_, j) => canDraw(j))
 		return i < 0 || focus.on || zt > 0 || opts.mode !== 'dial'
 			? null
-			: { i, xy: rimFrom(i, 1), r: seatR() * 0.72 }
+			: { i, xy: rimFrom(i, 1.75), r: seatR() * 0.72 }
 	}
 	const wipeJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
 
@@ -1087,110 +1086,108 @@ export function createView(
 
 	function drawSeat(i, x, y, label) {
 		const L = seats[i],
-			st = seatDemo ? demoOccupant(i, occupant(i)) : occupant(i),
-			r = seatR()
-		const VV = variants[seatVariant]
-		if (VV && opts.mode === 'dial') {
-			const c = {
-				g,
-				x,
-				y,
-				r,
-				i,
-				L,
-				st,
-				J: seatJelly[i],
-				wobble,
-				glyphImg,
-				PAPER,
-				G,
-				CX,
-				CY,
-				S,
-				reduce,
-				me: !!st.me,
-				empty: !st.name,
-				color: L.color,
-				dark: !!G.dark,
-				name: L.module.name.toLowerCase(),
-				t: performance.now(),
-				phase: dialPhase,
-				tag: L.mix.mute ? ' · muted' : engine.solo === i ? ' · solo' : '',
-				a: Math.atan2(y - CY, x - CX),
-				Rbadge: S * 0.505,
-				Rcap: S * 0.505 + r + Math.max(10, S * 0.022),
-				px: Math.max(11, S * 0.018),
-				ringMid: ringIn(i) + ringT() / 2,
-			}
-			VV.badge(c)
-			if (L.mix.mute) muteSlash(x, y, r)
-			if (engine.solo === i) {
-				g.strokeStyle = L.color
-				g.lineWidth = 2
-				wobble(g, x, y, r + 9, i * 11 + 5, 1.1)
-				g.stroke()
-			}
-			if (label && !small()) VV.caption(c)
-			return
+			st = occupant(i),
+			r = seatR(),
+			empty = !st.name,
+			dial = opts.mode === 'dial',
+			a = Math.atan2(y - CY, x - CX)
+		// the spoke: a hairline from the badge onto its own ring, since the four badges can't sit by their rings
+		if (dial && !small()) {
+			const ux = Math.cos(a),
+				uy = Math.sin(a),
+				R = ringIn(i) + ringT() / 2
+			g.save()
+			g.strokeStyle = empty ? ink(0.45) : L.color
+			g.lineWidth = st.me ? 2 : 1.2
+			if (empty) g.setLineDash([2, 4])
+			g.beginPath()
+			g.moveTo(x - ux * r, y - uy * r)
+			g.lineTo(CX + ux * R, CY + uy * R)
+			g.stroke()
+			g.setLineDash([])
+			g.fillStyle = empty ? PAPER : L.color
+			g.strokeStyle = INK
+			g.lineWidth = 1
+			g.beginPath()
+			g.arc(CX + ux * R, CY + uy * R, st.me ? 4.5 : 3.2, 0, TAU)
+			g.fill()
+			g.stroke()
+			g.restore()
 		}
 		if (st.me) {
 			g.fillStyle = 'rgba(40,25,60,.45)'
 			g.beginPath()
 			g.arc(x + 3, y + 4, r, 0, TAU)
 			g.fill()
-			g.save()
-			g.strokeStyle = INK
-			g.lineWidth = 1
-			g.setLineDash([3, 4])
-			g.lineDashOffset = reduce ? 0 : -performance.now() / 120
-			wobble(g, x, y, r + 6, i * 7 + 3, 0.8)
-			g.stroke()
-			g.restore()
 		}
 		if (st.riff) {
 			g.strokeStyle = st.riff.color
-			g.lineWidth = 2.4
-			wobble(g, x, y, r + 5, i * 9 + 4, 0.7)
-			g.stroke()
-			g.strokeStyle = ink(0.55)
-			g.lineWidth = 0.7
-			wobble(g, x, y, r + 6.6, i * 9 + 4, 0.7)
+			g.lineWidth = 2
+			wobble(g, x, y, r + 3.5, i * 9 + 4, 0.5)
 			g.stroke()
 		}
-		const J = seatJelly[i]
-		wobble(g, x, y, r, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 })
-		g.fillStyle = st.name ? L.color : PAPER
+		// the badge is a moon whose phase says who sits there, lit side toward the eye:
+		// empty a new moon, a robot half, a player gibbous, you full
+		const J = seatJelly[i],
+			disc = () => wobble(g, x, y, r, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 }),
+			lit = empty ? 0.04 : st.me ? 1 : st.bot ? 0.5 : 0.78
+		disc()
+		g.fillStyle = INK
 		g.fill()
-		g.strokeStyle = INK
-		g.lineWidth = st.me ? 2.4 : 1.1
-		if (!st.name) g.setLineDash([2.5, 3])
+		g.save()
+		g.clip()
+		g.translate(x, y)
+		g.rotate(a + Math.PI)
+		const k = 1 - 2 * lit // the terminator: an ellipse from +r (a sliver) to -r (full)
+		g.beginPath()
+		g.arc(0, 0, r + 1, -Math.PI / 2, Math.PI / 2)
+		g.ellipse(0, 0, Math.abs(k) * (r + 1), r + 1, 0, Math.PI / 2, -Math.PI / 2, k > 0)
+		g.fillStyle = L.color
+		g.fill()
+		g.restore()
+		disc()
+		g.strokeStyle = empty ? rgba(PAPER, 0.7) : INK
+		g.lineWidth = st.me ? 2.2 : 1.1
+		if (empty) g.setLineDash([2.5, 3])
 		g.stroke()
 		g.setLineDash([])
-		g.font = serif(r * 1.05, 600, false)
-		g.textAlign = 'center'
-		g.textBaseline = 'middle'
-		g.fillStyle = st.name ? PAPER : ink(0.6)
-		// every badge wears its instrument's glyph: pale on a taken seat, faint ink on an empty one
-		const img = glyphImg(L.module.id, st.name ? PAPER : ink(0.6))
-		if (img) g.drawImage(img, x - r * 0.78, y - r * 0.78, r * 1.56, r * 1.56)
-		else g.fillText(st.name ? (st.initial || st.name[0]).toUpperCase() : String(i + 1), x, y + 1)
-		if (L.mix.mute) muteSlash(x, y, r)
-		if (engine.solo === i) {
-			// soloed in your ears: a second, looser ring round the badge
-			g.strokeStyle = L.color
-			g.lineWidth = 2
-			wobble(g, x, y, r + 9, i * 11 + 5, 1.1)
+		if (st.me) {
+			// yours: a second, inner rim in paper
+			wobble(g, x, y, r - 3.5, i * 3 + 1, 0.4)
+			g.strokeStyle = PAPER
+			g.lineWidth = 1
 			g.stroke()
 		}
+		// every badge wears its instrument's glyph: pale on a taken seat, faint ink on an empty one
+		const img = glyphImg(L.module.id, empty ? rgba(PAPER, 0.45) : PAPER)
+		if (img) g.drawImage(img, x - r * 0.7, y - r * 0.7, r * 1.4, r * 1.4)
+		if (L.mix.mute) muteSlash(x, y, r)
+		if (!label || small()) return
+		// the legend runs round the badge like a coin's edge, centred on the side away from the dial:
+		// instrument ✦ who sits there. An empty seat names only its instrument; the rest of the rim is dashed, waiting.
 		const tag = L.mix.mute ? ' · muted' : engine.solo === i ? ' · solo' : ''
-		if (label && !small())
-			arcCaption(
-				`${L.module.name.toLowerCase()} · ${st.label}${tag}`,
-				Math.atan2(y - CY, x - CX),
-				S * 0.505 + r + Math.max(10, S * 0.022),
-				Math.max(11, S * 0.018),
-				st.me,
-			)
+		const px = Math.max(10, S * 0.016),
+			R = r + px * 0.95,
+			col = G.dark ? G.paper : INK
+		const o = {
+			px,
+			col,
+			halo: rgba(G.sky[G.dark ? 0 : 2], 0.85),
+			max: Math.PI * 1.7,
+			font: (p) =>
+				`${st.me ? 800 : 700} ${Math.round(p * 10) / 10}px Syne, "Bricolage Grotesque", sans-serif`,
+		}
+		const name = L.module.name.toLowerCase()
+		if (!empty) return arcText(x, y, `${name} ✦ ${st.name}${tag}`, a, R, o)
+		const w = arcText(x, y, name + tag, a, R, o)
+		g.save()
+		g.strokeStyle = rgba(col, 0.55)
+		g.lineWidth = 1
+		g.setLineDash([2, 4])
+		g.beginPath()
+		g.arc(x, y, R, a + w / 2 + 0.25, a + TAU - w / 2 - 0.25)
+		g.stroke()
+		g.restore()
 	}
 
 	// muted: an ink slash through the badge, edged in paper so it reads over the glyph
@@ -1208,33 +1205,38 @@ export function createView(
 		g.lineCap = 'butt'
 	}
 
-	// hand-set caption riding the outside of the dial's rim, centred on angle a. Upright on both halves:
-	// on the top half letters run clockwise with their feet on the rim, on the bottom half anticlockwise.
-	function arcCaption(text, a, R, px, strong) {
+	// hand-set letters along a circle round (ox, oy), centred on angle a. Upright on both halves: on the top half
+	// they run clockwise with their feet toward the centre, on the bottom half anticlockwise. Returns the angle spanned.
+	function arcText(ox, oy, text, a, R, o) {
+		const px = o.px
 		g.save()
-		g.font = `${strong ? 700 : 600} ${Math.round(px)}px Syne, "Bricolage Grotesque", sans-serif`
+		g.font = o.font(px)
 		g.textAlign = 'center'
 		g.textBaseline = 'middle'
 		const chars = [...text.toUpperCase()]
-		const ws = chars.map((ch) => g.measureText(ch).width + px * 0.16)
+		const ws = chars.map((ch) => g.measureText(ch).width + px * 0.22)
 		const total = ws.reduce((x, y) => x + y, 0)
-		const bottom = Math.sin(a) > 0,
+		// too long for the circle: set it smaller until it fits in o.max radians
+		if (o.max && total / R > o.max && px > 7) {
+			g.restore()
+			return arcText(ox, oy, text, a, R - px * 0.06, { ...o, px: px * 0.92 })
+		}
+		const bottom = Math.sin(a) > 0.05,
 			dir = bottom ? -1 : 1
-		let t = a - (dir * total) / R / 2
-		const col = G.dark ? G.paper : INK
+		const t = a - (dir * total) / R / 2
 		g.lineJoin = 'round'
 		g.lineWidth = Math.max(2.5, px * 0.28)
-		g.strokeStyle = rgba(G.sky[G.dark ? 0 : 2], 0.85)
+		g.strokeStyle = o.halo
 		for (const pass of ['stroke', 'fill']) {
 			let u = t
 			for (let k = 0; k < ws.length; k++) {
 				const mid = u + (dir * ws[k]) / R / 2
 				g.save()
-				g.translate(CX + Math.cos(mid) * R, CY + Math.sin(mid) * R)
+				g.translate(ox + Math.cos(mid) * R, oy + Math.sin(mid) * R)
 				g.rotate(mid + (bottom ? -Math.PI / 2 : Math.PI / 2))
 				if (pass === 'stroke') g.strokeText(chars[k], 0, 0)
 				else {
-					g.fillStyle = col
+					g.fillStyle = o.col
 					g.fillText(chars[k], 0, 0)
 				}
 				g.restore()
@@ -1242,6 +1244,7 @@ export function createView(
 			}
 		}
 		g.restore()
+		return total / R
 	}
 
 	// a blurred copy of a backdrop: shrink it twice and let smoothing do the blur on the way back up. Cached until repaint.
@@ -1258,9 +1261,7 @@ export function createView(
 		return (cv.frost = b)
 	}
 
-	let dialPhase = 0
 	function drawDial(t, dt, phase, loop) {
-		dialPhase = phase
 		const outer = ringIn(seats.length - 1) + ringT() + 8,
 			inner = ringIn(0) - 6,
 			M = medallion()
