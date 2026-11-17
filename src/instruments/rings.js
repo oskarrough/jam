@@ -1,5 +1,6 @@
 // 03 Rings: three euclidean rhythms on concentric rings, each with its own length.
 // Ring lengths that differ from 16 drift against the loop (polymeter).
+import { rubbing } from './lib/erase.js'
 import { kit } from './lib/kit.js'
 import { isStrip, withPointer, view, absOf, theme, clamp, TAU, flashes } from './lib/util.js'
 import { tap, line, arc } from './lib/demo.js'
@@ -146,6 +147,22 @@ export default {
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
+				// erasing takes one pulse off each ring the rubber crosses
+				if (e.alt) {
+					if (e.type === 'up') return void (drag = null)
+					if (e.type === 'down' || !drag?.rubbed) drag = { rubbed: new Set() }
+					if (!rubbing(e)) return
+					let i
+					if (isStrip(e.w, e.h, e.shape)) i = clamp(Math.floor(e.y * 3), 0, 2)
+					else {
+						const { R, r } = geom(e)
+						i = RADII.reduce((b, f, j) => (Math.abs(r - f * R) < Math.abs(r - RADII[b] * R) ? j : b), 0)
+					}
+					if (drag.rubbed.has(i)) return
+					drag.rubbed.add(i)
+					state.rings[i].k = Math.max(0, state.rings[i].k - 1)
+					return
+				}
 				if (isStrip(e.w, e.h, e.shape)) return stripPointer(e)
 				const { R, r, a } = geom(e)
 				if (e.type === 'down') {

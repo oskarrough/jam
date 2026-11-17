@@ -1,5 +1,6 @@
 // 05 Drift: place up to five stones in a pond, each a drone voice.
 // x is pitch, y is colour (low dark and still, high bright and beating).
+import { rub } from './lib/erase.js'
 import { kit } from './lib/kit.js'
 import { withPointer, view, absOf, theme, clamp, dist, TAU, tint } from './lib/util.js'
 import { tap, line } from './lib/demo.js'
@@ -96,6 +97,11 @@ export default {
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
+				if (e.alt) {
+					drag = null
+					if (rub(e, state.stones, (s) => dist(s.x * e.w, s.y * e.h, e.px, e.py))) sync()
+					return
+				}
 				if (e.type === 'down') {
 					let k = near(e)
 					let fresh = false

@@ -1,5 +1,6 @@
 // 08 Swarm: fireflies fly fixed looping paths (same on every screen, from a seed).
 // Draw wires across their paths; a firefly crossing one plays a note set by its height.
+import { rub } from './lib/erase.js'
 import { kit, mtof } from './lib/kit.js'
 import { SEAT_COLORS } from '../palette.js'
 import {
@@ -105,6 +106,11 @@ export default {
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
+				if (e.alt) {
+					draft = null
+					rub(e, state.wires, ([a, b, c, d]) => segDist(e.px, e.py, a * e.w, b * e.h, c * e.w, d * e.h))
+					return
+				}
 				if (e.type === 'down') draft = { x1: e.x, y1: e.y, x2: e.x, y2: e.y, px: e.px, py: e.py }
 				else if (e.type === 'move' && draft) {
 					draft.x2 = clamp(e.x, 0, 1)

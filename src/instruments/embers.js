@@ -1,6 +1,7 @@
 // 10 Embers: tap the dark to throw a spark; it pops on the next step as a tuned crackle.
 // Sparks keep popping each loop until they burn out. Blow on the fire (a fast upward drag)
 // and the sparks near your stroke flare up and live again.
+import { rub } from './lib/erase.js'
 import { kit, mtof } from './lib/kit.js'
 import {
 	withPointer,
@@ -123,6 +124,11 @@ export default {
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
+				if (e.alt) {
+					lastThrow = lastMove = null
+					rub(e, state.sparks, (sp) => dist(sp.x * e.w, sp.y * e.h, e.px, e.py))
+					return
+				}
 				const t = performance.now()
 				if (e.type === 'down') {
 					throwAt(e.x, e.y)

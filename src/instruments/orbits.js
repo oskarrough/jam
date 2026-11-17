@@ -1,5 +1,6 @@
 // 09 Orbits: a solar system as a sequencer. A planet sounds each time it passes 12 o'clock.
 // Inner orbits are faster (8, 6, 4, 3, 2, 1 laps per loop); big planets are low.
+import { rub } from './lib/erase.js'
 import { kit, mtof } from './lib/kit.js'
 import {
 	isStrip,
@@ -153,6 +154,16 @@ export default {
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
+				if (e.alt) {
+					drag = null
+					const strip = isStrip(e.w, e.h, e.shape), ph = phaseNow()
+					rub(e, state.planets, (p) =>
+						strip
+							? Math.min(...crossings(p).map((c) => dist(c * e.w, yOfR(p.r) * e.h, e.px, e.py)))
+							: dist(...where(p, ph, e.w, e.h), e.px, e.py) - p.m * R(e.w, e.h) * 0.07,
+					)
+					return
+				}
 				if (isStrip(e.w, e.h, e.shape)) return stripPointer(e)
 				const ph = phaseNow()
 				if (e.type === 'down') {

@@ -138,6 +138,33 @@ function sit(i) {
 	transport.setMe({ seat: seats[i].id, name: me.name })
 }
 
+// every stroke on a ring or sheet comes through here. Erasing (token, shift, right button, two fingers)
+// arrives as e.alt; instruments rub out with it and never draw.
+let lastPt = null
+function pointerTo(i, e) {
+	const L = seats[i]
+	if (e.type === 'down') ghost?.stop()
+	if (me.erase || e.button === 2) e.alt = true
+	e.shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
+	if (e.type === 'down') undo.remember(i)
+	L.instance.pointer(e)
+	engine.pushSoon(L)
+	lastPt = e.type === 'up' ? null : { seat: i, x: e.x, y: e.y, id: e.id }
+	view.showCursor('me', i, e.x, e.y, '', !!e.alt)
+	heart.glance?.(i, 1400)
+	transport.cursor(e.x, e.y, e.type !== 'up', L.id)
+}
+// a second finger joined a stroke and both moved: what the first finger drew goes back, and it erases from here
+function rubFromHere(mark) {
+	const p = lastPt,
+		i = view.rubDrag()
+	if (i < 0 || !p || p.seat !== i) return false
+	const shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
+	seats[i].instance.pointer({ type: 'up', x: p.x, y: p.y, id: p.id, alt: false, shape })
+	if (mark?.i === i) undo.rewind(mark)
+	pointerTo(i, { type: 'down', x: p.x, y: p.y, id: p.id, alt: true })
+	return true
+}
 view = createView(document.getElementById('c'), engine, {
 	occupant,
 	canDraw,
@@ -150,18 +177,7 @@ view = createView(document.getElementById('c'), engine, {
 	onWipe: () => wipe(),
 	onMute: (i) => !replay && engine.setMute(seats[i], !seats[i].mix.mute),
 	onSolo: (i) => engine.setSolo(i),
-	onPointer(i, e) {
-		const L = seats[i]
-		if (e.type === 'down') ghost?.stop()
-		if (me.erase) e.alt = true
-		e.shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
-		if (e.type === 'down') undo.remember(i)
-		L.instance.pointer(e)
-		engine.pushSoon(L)
-		view.showCursor('me', i, e.x, e.y, '')
-		heart.glance?.(i, 1400)
-		transport.cursor(e.x, e.y, e.type !== 'up', L.id)
-	},
+	onPointer: pointerTo,
 })
 const ghost = createGhost({ engine, view, me })
 const heart = createHeart({
@@ -364,7 +380,8 @@ if (replay) {
 		if (on) transport.restart()
 	})
 }
-// two-finger tap undoes, three redoes. The first finger has already drawn, so the tap first puts that back.
+// two-finger tap undoes, three redoes; two-finger drag erases. The first finger has already drawn, so either
+// first puts that back.
 {
 	const c = $('c'),
 		touches = new Map()
@@ -377,8 +394,10 @@ if (replay) {
 			const now = e.timeStamp // event time: a busy frame mustn't spoil a quick tap
 			if (touches.size === 1)
 				tap = { t: now, n: 1, moved: false, mark: me.seat >= 0 ? undo.mark(me.seat) : null }
-			else if (tap && now - tap.t < 300) tap.n = Math.max(tap.n, touches.size)
-			else tap = null
+			else if (tap) {
+				tap.n = Math.max(tap.n, touches.size)
+				if (now - tap.t >= 300) tap.late = true // too slow for a tap, still fine for a two-finger drag
+			}
 		},
 		{ capture: true },
 	)
@@ -387,6 +406,8 @@ if (replay) {
 		(e) => {
 			const p = touches.get(e.pointerId)
 			if (p && tap && Math.hypot(e.clientX - p[0], e.clientY - p[1]) > 14) tap.moved = true
+			// two fingers dragging: the stroke becomes an eraser
+			if (tap?.moved && touches.size >= 2 && !tap.rub) tap.rub = rubFromHere(tap.mark) || 'no'
 		},
 		{ capture: true },
 	)
@@ -394,7 +415,7 @@ if (replay) {
 		if (!touches.delete(e.pointerId) || touches.size || !tap) return
 		const t = tap
 		tap = null
-		if (t.n < 2 || t.moved || e.timeStamp - t.t > 500 || !t.mark) return
+		if (t.n < 2 || t.moved || t.late || e.timeStamp - t.t > 500 || !t.mark) return
 		undo.rewind(t.mark)
 		;(t.n === 2 ? undo.undo : undo.redo)(t.mark.i)
 	}

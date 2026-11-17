@@ -383,6 +383,8 @@ export function createView(
 		y: Math.max(0, Math.min(1, (y - sheet.y) / sheet.h)),
 	})
 	canvas.addEventListener('pointerdown', (e) => {
+		// a second finger never draws: two-finger gestures (tap undoes, drag erases) belong to the host
+		if (e.pointerType === 'touch' && (drag || handing)) return
 		if (inSheet(e.clientX, e.clientY) && canDraw(focus.seat)) {
 			canvas.setPointerCapture(e.pointerId)
 			drag = { seat: focus.seat, id: e.pointerId, alt: e.shiftKey, button: e.button, sheet: true }
@@ -599,15 +601,19 @@ export function createView(
 	canvas.addEventListener('pointercancel', up)
 	canvas.addEventListener('pointerleave', () => (hover = null))
 
-	function showCursor(key, seat, x, y, name) {
+	const RUB_MS = 700
+	// on screen, about the reach of lib/erase.js on the sheet
+	const rubR = (onSheet) =>
+		onSheet && sheet ? Math.max(14, Math.min(sheet.w, sheet.h) * 0.045) : Math.max(8, (S || 600) * 0.018)
+	function showCursor(key, seat, x, y, name, rub = false) {
 		const now = performance.now()
-		cursors.set(key, { seat, x, y, name, until: now + 700 })
+		cursors.set(key, { seat, x, y, name, rub, until: now + 700 })
 		let segs = trails.get(key)
 		if (!segs) trails.set(key, (segs = []))
 		let seg = segs[segs.length - 1]
 		const last = seg?.pts[seg.pts.length - 1]
-		if (!seg || seg.seat !== seat || now - last.t > 250 || Math.abs(x - last.x) > 0.5)
-			segs.push((seg = { seat, pts: [] }))
+		if (!seg || seg.seat !== seat || seg.rub !== rub || now - last.t > 250 || Math.abs(x - last.x) > 0.5)
+			segs.push((seg = { seat, rub, pts: [] }))
 		if (!last || seg.pts.length === 0 || Math.hypot(x - last.x, y - last.y) > 0.002)
 			seg.pts.push({ x, y, t: now })
 		if (seg.pts.length > 800) seg.pts.splice(0, 200)
@@ -620,13 +626,13 @@ export function createView(
 		return [R.x + x * R.w, R.y + y * R.h]
 	}
 	function drawTrails() {
-		const now = performance.now(),
-			life = loopMs
+		const now = performance.now()
 		g.lineCap = 'round'
 		g.lineJoin = 'round'
 		for (const [key, segs] of trails) {
 			for (let k = segs.length - 1; k >= 0; k--) {
-				const seg = segs[k]
+				const seg = segs[k],
+					life = seg.rub ? RUB_MS : loopMs
 				while (seg.pts.length && now - seg.pts[0].t > life) seg.pts.shift()
 				if (seg.pts.length < 2) {
 					if (!seg.pts.length || now - seg.pts[0].t > life) segs.splice(k, 1)
@@ -637,12 +643,17 @@ export function createView(
 				const onSheet = opts.mode === 'dial' && focus.on && seg.seat === focus.seat && eSheet() >= 1
 				g.strokeStyle = onSheet ? rgba('#efe6f4', 1) : L.color
 				g.lineWidth = onSheet ? 1.6 : 1.1
+				// an erasing stroke is a broad pale smudge that clears quickly: a rubber, not ink
+				if (seg.rub) {
+					g.strokeStyle = onSheet ? rgba('#efe6f4', 0.5) : rgba(PAPER, 0.85)
+					g.lineWidth = rubR(onSheet) * 2
+				}
 				// draw in short runs so each run can fade by its own age
 				for (let i = 1; i < seg.pts.length; i++) {
 					const a = seg.pts[i - 1],
 						b = seg.pts[i],
 						age = (now - b.t) / life
-					g.globalAlpha = 0.55 * (1 - age) ** 1.5
+					g.globalAlpha = (seg.rub ? 0.6 : 0.55) * (1 - age) ** 1.5
 					const n = onSheet ? 1 : Math.max(1, Math.ceil(Math.abs(b.x - a.x) / 0.008))
 					g.beginPath()
 					g.moveTo(...seatPoint(seg.seat, a.x, a.y))
@@ -1644,6 +1655,17 @@ export function createView(
 				g.globalAlpha = 1
 				continue
 			}
+			if (c.rub) {
+				// the rubber: a dashed ring the size of what it clears
+				g.strokeStyle = pale ? PALE : INK
+				g.lineWidth = 1.4
+				g.setLineDash([4, 3])
+				g.beginPath()
+				g.arc(x, y, rubR(opts.mode === 'dial' && focus.on && c.seat === focus.seat), 0, TAU)
+				g.stroke()
+				g.setLineDash([])
+				continue
+			}
 			g.fillStyle = L.color
 			g.beginPath()
 			g.arc(x, y, 3, 0, TAU)
@@ -1675,8 +1697,16 @@ export function createView(
 
 	return {
 		opts,
+<<<<<<< Updated upstream
 		get dpr() {
 			return DPR
+=======
+		// turn the stroke in progress into an erasing one (a second finger joined it); returns its seat or -1
+		rubDrag() {
+			if (!drag || drag.pending || drag.alt) return -1
+			drag.alt = true
+			return drag.seat
+>>>>>>> Stashed changes
 		},
 		showCursor,
 		setMode(m) {
