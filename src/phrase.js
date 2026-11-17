@@ -21,7 +21,7 @@ export function fitRange(notes, lo, hi) {
 	})
 }
 
-export function asDrums(ph) {
+function asDrums(ph) {
 	if (ph.drums) return ph
 	const ps = ph.notes.map((x) => x.p).sort((a, b) => a - b)
 	const lo = ps[Math.floor(ps.length / 3)] ?? 0,
@@ -32,12 +32,12 @@ export function asDrums(ph) {
 		notes: ph.notes.map((x) => ({ ...x, p: x.p <= lo ? 0 : x.p >= hi && hi > lo ? 2 : 1 })),
 	}
 }
-export function asMelody(ph) {
+function asMelody(ph) {
 	if (!ph.drums) return ph
 	return { n: ph.n, drums: false, notes: ph.notes.map((x) => ({ ...x, p: [0, 2, 4][x.p] ?? 0 })) }
 }
 
-export function retime(ph, n) {
+function retime(ph, n) {
 	if (ph.n === n) return ph
 	const k = n / ph.n
 	return { ...ph, n, notes: ph.notes.map((x) => ({ ...x, s: x.s * k })) }
@@ -118,7 +118,7 @@ const onBeat = (ph, s) => Math.abs(s / beat(ph) - Math.round(s / beat(ph))) < 1e
 const firstP = (ph) => ph.notes[0]?.p ?? 0
 const keep = (ph, notes) => ({ ...ph, notes: sortNotes(notes) })
 
-export const MOVES = {
+const MOVES = {
 	theme: { label: 'echoes', fn: (ph) => ph },
 	lift: {
 		label: 'lifts',
