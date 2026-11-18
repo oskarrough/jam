@@ -673,7 +673,8 @@ export function createView(
 	}
 	canvas.addEventListener('pointerup', up)
 	canvas.addEventListener('pointercancel', (e) => {
-		if ((handing && e.pointerId === handing.id) || (mixer.drag && e.pointerId === mixer.drag.id)) up(e)
+		if ((handing && e.pointerId === handing.id) || (mixer.drag && e.pointerId === mixer.drag.id))
+			up(e)
 	})
 
 	function setFocus(i) {
@@ -1274,7 +1275,9 @@ export function createView(
 		const px = Math.max(10, S * 0.016),
 			R = r + px * 0.95,
 			col = G.dark ? G.paper : INK
-		const text = empty ? L.module.name + tag : L.module.name + ' ✦ ' + st.name + tag
+		// a bare ring (a blank jam) names nobody's instrument: only who sits there, or nothing
+		const inst = L.module.hidden ? '' : L.module.name
+		const text = (empty ? inst : inst ? inst + ' ✦ ' + st.name : st.name) + tag
 		const halo = rgba(G.sky[G.dark ? 0 : 2], 0.85)
 		const key = [text, st.me, empty, px, R, a, halo, col, DPR].join('|')
 		let legend = legends[i]
@@ -1741,7 +1744,7 @@ export function createView(
 			const rd = Math.max(6, F.s * 0.03)
 			const dots = []
 			seats.forEach((L, i) => {
-				if (!L.module) return
+				if (!L.module || L.module.hidden) return
 				const lv = engine.seatLevel(i)
 				mixer.pulse[i] = Math.max(mixer.pulse[i] * Math.pow(0.02, dt), Math.min(1, lv * 5))
 				const [x, y] = mixXY(F, L.mix)

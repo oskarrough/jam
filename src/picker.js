@@ -59,6 +59,7 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	}
 	const buttons = []
 	for (const [id, mod] of registry) {
+		if (mod.hidden) continue
 		const b = document.createElement('button')
 		b.className = groupStarts.has(id) ? 'glyph token role' : 'glyph token'
 		b.dataset.id = id
@@ -124,7 +125,7 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		for (const b of voices.children)
 			b.setAttribute('aria-pressed', b.textContent === L?.params.voice)
 	}
-	const ids = [...registry.keys()]
+	const ids = [...registry.keys()].filter((id) => !registry.get(id).hidden)
 	function cycle(d) {
 		const L = seat()
 		if (!L) return null

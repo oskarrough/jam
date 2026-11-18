@@ -21,7 +21,9 @@ export function createHint({ engine, view, me, registry, glyph, choose }) {
 	// other instruments, the strange ones first: the familiar ones come last
 	const FAMILIAR = ['bass', 'tide', 'bell']
 	const others = () => {
-		const ids = [...registry.keys()].filter((id) => id !== seat()?.module.id)
+		const ids = [...registry.keys()].filter(
+			(id) => id !== seat()?.module.id && !registry.get(id).hidden,
+		)
 		return [
 			...ids.filter((id) => !FAMILIAR.includes(id)),
 			...ids.filter((id) => FAMILIAR.includes(id)),

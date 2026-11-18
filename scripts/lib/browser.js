@@ -23,14 +23,19 @@ export function serve() {
 		let p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname))
 		if (p.endsWith('/')) p += 'index.html'
 		try {
+			const body = await readFile(join(ROOT, p))
 			res
 				.writeHead(200, { 'content-type': TYPES[extname(p)] || 'application/octet-stream' })
-				.end(await readFile(join(ROOT, p)))
+				.end(body)
 		} catch {
 			if (/^\/[jr]\//.test(p))
-				return res
-					.writeHead(200, { 'content-type': 'text/html' })
-					.end(await readFile(join(ROOT, 'index.html')))
+				return res.writeHead(200, { 'content-type': 'text/html' }).end(
+					// as the relay does: the page's relative paths resolve from the root
+					(await readFile(join(ROOT, 'index.html'), 'utf8')).replace(
+						'<head>',
+						'<head>\n<base href="/">',
+					),
+				)
 			res.writeHead(404).end()
 		}
 	})
@@ -55,7 +60,11 @@ export function playwright() {
 
 // A page that records every uncaught error and console.error. Relay 404s are expected with ?ws=off.
 // ready: wait for window.jam (the jam page); pass false for pages without it, like the lab.
-export async function open(browser, url, { phone = false, ready = true, small = false, at = 0 } = {}) {
+export async function open(
+	browser,
+	url,
+	{ phone = false, ready = true, small = false, at = 0 } = {},
+) {
 	const ctx = await browser.newContext(
 		phone
 			? { ...playwright().devices['iPhone 13'] }

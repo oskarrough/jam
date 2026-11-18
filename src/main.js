@@ -45,6 +45,9 @@ const START = (() => {
 	const deal = () => pile.splice(Math.floor(r() * pile.length), 1)[0]
 	return ['bass', deal(), deal(), 'drums']
 })()
+// your own jam (/j/<name>) starts as a blank page: no seat has an instrument until someone sits there and picks one
+const blankJam = room !== 'open' && !replayId
+const blank = (L) => L.module.id === 'empty'
 // Someone who has never switched instruments is dealt one that's fun in five seconds without reading.
 // Steps and contour still turn up for robots and in the picker.
 const FIRST = ['strum', 'swarm', 'orbits', 'embers', 'scribble']
@@ -102,7 +105,10 @@ const transport = rec
 	: await makeTransport()
 const replay = transport.kind === 'replay'
 if (replay) document.body.classList.add('replay')
-const engine = createEngine(transport, { seatIds: SEAT_IDS, instruments: START })
+const engine = createEngine(transport, {
+	seatIds: SEAT_IDS,
+	instruments: blankJam ? SEAT_IDS.map(() => 'empty') : START,
+})
 const { seats } = engine
 const me = { name, seat: -1, erase: false }
 const undo = createUndo(engine)
@@ -186,7 +192,8 @@ function rubFromHere(mark) {
 view = createView(document.getElementById('c'), engine, {
 	occupant,
 	canDraw,
-	onSit: (i) => (i === me.seat ? toggleFocus() : sit(i)),
+	// sitting down at a bare ring opens it, so the glyphs are right there to pick from
+	onSit: (i) => (i === me.seat ? toggleFocus() : (sit(i), blank(seats[i]) && view.setFocus(i))),
 	onHand(from, to) {
 		if (from !== me.seat || !occupant(to).bot) return false
 		return bots.hand(from, to)
@@ -244,9 +251,15 @@ transport.on('welcome', () => {
 				sit(i)
 				break
 			}
+	// the jam's seats as they stand land a moment after the welcome; deal after them, or they'd undo the deal here
+	setTimeout(deal)
+})
+function deal() {
 	let want = registry.get(q.get('instrument'))
-	// a newcomer's first seat: one of the five-second instruments, and the ghost plays it once on their ring
-	if (!want && me.seat >= 0 && newcomer() && !FIRST.includes(seats[me.seat].module.id))
+	if (want?.hidden) want = null
+	const bare = me.seat >= 0 && blank(seats[me.seat])
+	// a newcomer's first seat, or a bare one: one of the five-second instruments, and the ghost plays it once on their ring
+	if (!want && me.seat >= 0 && (bare || (newcomer() && !FIRST.includes(seats[me.seat].module.id))))
 		want = registry.get(
 			FIRST.map((_, k) => FIRST[(k + new Date().getDate()) % FIRST.length]).find(
 				(id) => !seats.some((L) => L.module.id === id),
@@ -256,13 +269,14 @@ transport.on('welcome', () => {
 	if (want && me.seat >= 0) {
 		const L = seats[me.seat]
 		if (L.module !== want) {
-			engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps(L)) })
+			// dealt into a blank jam it starts blank too
+			engine.setInstrument(L, want.id, bare ? {} : { state: want.sample?.(engine.steps(L)) })
 			engine.push(L)
 		}
 		if (q.get('instrument')) view.setFocus?.(me.seat)
 		ghost.play()
 	}
-})
+}
 
 const $ = (id) => document.getElementById(id)
 
@@ -341,8 +355,7 @@ else if (transport.kind === 'ws') {
 		)
 		jellify(chip, { amount: 0.12 })
 		jamline.append(chip)
-	}
-	else {
+	} else {
 		const b = word(room, async () => {
 			try {
 				await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room))

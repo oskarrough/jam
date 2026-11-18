@@ -3,6 +3,7 @@
 // Riffs: drag your badge onto a robot's to hand it your motif (src/phrase.js); it rides in seat data as `riff`.
 
 import { toPhrase, fromPhrase, vary, canPhrase } from './phrase.js'
+import { instruments } from './instruments/index.js'
 
 export const botName = (i) => `Robot ${String.fromCharCode(65 + i)}`
 
@@ -29,6 +30,16 @@ export function createBots(engine, { seated, view }) {
 		const now = performance.now()
 		const lead = opts.on && leader()
 		seats.forEach((L, i) => {
+			// a robot sitting down at a bare ring (a blank jam) picks itself an instrument first
+			if (lead && !seated(i) && L.module.hidden) {
+				const pool = instruments.filter((m) => m.generate && !seats.some((S) => S.module === m))
+				const mod = pool[Math.floor(Math.random() * pool.length)]
+				if (mod) {
+					engine.setInstrument(L, mod.id)
+					L.instance.setState(mod.generate(engine.steps(L), L.params))
+					engine.push(L)
+				}
+			}
 			const riffing = canRiff(L)
 			const active = lead && !seated(i) && (L.module.generate || riffing)
 			let b = bots.get(i)

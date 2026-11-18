@@ -135,7 +135,50 @@ try {
 		k && mix.level > 0.9 && mix.tone < 1 && mixed,
 		`ben hears ana's mix (${JSON.stringify(mix)})`,
 	)
-	const errs = [...a.errors, ...b.errors]
+	// a jam of your own starts blank: cat gets an instrument, the rest are bare; dan sits at a bare ring and picks
+	const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+	const join = async (name) => {
+		const p = await ctx2.newPage()
+		p.errors = []
+		p.on('pageerror', (e) => p.errors.push(e.message))
+		await p.goto(`${srv.url}/j/two-tabs-blank?ws=off&name=${name}`)
+		await p.waitForFunction(() => window.jam)
+		await p.waitForTimeout(800)
+		return p
+	}
+	const c2 = await join('cat'),
+		d = await join('dan')
+	const lineup = await d.evaluate(() =>
+		window.jam.engine.seats.map((L) => L.module.id + (L.instance.state ? '' : '·')),
+	)
+	const cs = await c2.evaluate(() => window.jam.me.seat)
+	check(
+		lineup.filter((x) => x.startsWith('empty')).length === 2 && !lineup[cs].startsWith('empty'),
+		`a blank jam: two bare rings, cat dealt one (${lineup})`,
+	)
+	const bare = await d.evaluate(() => {
+		const { engine, transport } = window.jam
+		return engine.seats.findIndex(
+			(L) => L.module.hidden && !transport.peers.some((p) => p.seat === L.id),
+		)
+	})
+	const at = await d.evaluate((i) => window.jam.view.seatAt(i), bare)
+	await d.mouse.click(at.x, at.y)
+	await d.waitForFunction(() => window.jam.view.focus.on && !window.jam.view.moving)
+	await d.click('.glyph[data-id="bell"]')
+	const picked = await c2
+		.waitForFunction((i) => window.jam.engine.seats[i].module.id === 'bell', bare, {
+			timeout: 8000,
+		})
+		.then(
+			() => true,
+			() => false,
+		)
+	check(
+		picked && (await d.evaluate(() => window.jam.me.seat)) === bare,
+		`dan sits at bare seat ${bare}, picks bell, cat hears it`,
+	)
+	const errs = [...a.errors, ...b.errors, ...c2.errors, ...d.errors]
 	check(!errs.length, 'no page errors' + errs.map((e) => '\n  ' + e).join(''))
 } finally {
 	await browser.close()

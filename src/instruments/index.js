@@ -16,6 +16,7 @@ import scribble from './scribble.js'
 import swarm from './swarm.js'
 import orbits from './orbits.js'
 import contour from './contour.js'
+import empty from './empty.js'
 // new instruments: imported above this line by `pnpm new-instrument`
 
 // grouped by role: beat, low, chords, tune; the picker leaves a little room before each group's first
@@ -72,3 +73,5 @@ export function register(mod) {
 }
 
 instruments.forEach(register)
+// an empty seat in a blank jam: in the registry so it syncs and replays, never in the picker
+register(empty)
