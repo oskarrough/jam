@@ -10,4 +10,5 @@
 - New instrument: `pnpm new-instrument <name>`; contract in `src/instruments/README.md`; `/?instrument=<id>` opens it.
 - Poking around by hand: `npm i -g agent-browser` (1 s). `python3 -m http.server 8000 &`, then `agent-browser set viewport 390 844`, `agent-browser open 'http://localhost:8000/?ws=off&instrument=bell'` (`?instrument=x` seats you and zooms in), `agent-browser wait 1500`, `agent-browser screenshot /tmp/x.png`, read the png, `agent-browser close`. Skip `set device` (layout comes out wrong). Its snapshot can't see the canvas sheet, so screenshot, and prefer `pnpm shots`.
 - Deploy: every push to `main` lints and deploys (.github/workflows/deploy.yml). Red lint = nothing ships.
+- Robots are off by default, on purpose: humans make the music, robots are opt-in help (the robot token). A playtest finding empty seats silent is not a bug.
 - Before shipping: fun in 5 seconds without reading? strange over safe? one gesture?
