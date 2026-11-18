@@ -2056,6 +2056,10 @@ export function createView(
 		offerSweep: (list, ms) =>
 			(offer = list.length ? { seats: list, t0: performance.now(), ms } : null),
 		// how far the sheet is still off to the right, in px (0 when it has arrived); DOM chrome on the sheet rides with it
+		// how far the machine is into its zoom, eased: 0 on the overview, 1 zoomed in; top-left chrome fades with it
+		get machineShift() {
+			return eMachine()
+		},
 		get sheetShift() {
 			return sheetSeat < 0 ? Infinity : (1 - eBar()) * slideDist()
 		},

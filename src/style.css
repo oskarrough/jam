@@ -372,8 +372,7 @@ output.pending {
 	--widget-height: 22px;
 }
 /* zoomed, the sheet and its instrument strip need the room */
-body.zoomed .lil-gui.root,
-body.zoomed #jamline {
+body.zoomed .lil-gui.root {
 	display: none;
 }
 .lil-gui.root {

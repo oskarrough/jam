@@ -720,6 +720,12 @@ function rideSheet() {
 		const x = view.sheetShift
 		sheetbar.hidden = !Number.isFinite(x) || x > innerWidth
 		if (!sheetbar.hidden) sheetbar.style.transform = `translateX(${x}px)`
+		// the top-left chips leave as the machine moves in, and come back as it moves out
+		const m = view.machineShift
+		jamline.style.opacity = m ? 1 - m : ''
+		jamline.style.transform = m ? `translateY(${-14 * m}px)` : ''
+		jamline.style.pointerEvents = m ? 'none' : ''
+		jamline.style.visibility = m >= 1 ? 'hidden' : ''
 		riding = view.moving || (view.focus.on && x > 0) ? requestAnimationFrame(go) : 0
 	}
 	riding = requestAnimationFrame(go)
