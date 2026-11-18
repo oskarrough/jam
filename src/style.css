@@ -825,17 +825,33 @@ body.replay canvas {
 	transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
 }
 
-/* inks: small round brushes just under the sheet's bottom-left corner */
+/* inks: small round brushes just under the sheet's bottom-left corner; mode words under its bottom-right,
+   clear of the bottom bar and the small dial */
 .inks {
 	position: absolute;
 	left: 10px;
+	right: 10px;
 	top: var(--inks-top, 400px);
 	margin: 0;
 	display: flex;
-	gap: 10px;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 22px;
+	pointer-events: none;
+}
+.inks > * {
+	pointer-events: auto;
+}
+.inks .modes:only-child {
+	margin-left: auto;
 }
 .inks[hidden] {
 	display: none;
+}
+.inks .brushes,
+.inks .modes {
+	display: flex;
+	gap: 10px;
 }
 .inks button {
 	width: 40px;
@@ -873,16 +889,34 @@ body.replay canvas {
 	fill: currentColor;
 	stroke: none;
 }
-/* on a phone the small dial sits under the sheet's middle, so four brushes fold into a square beside it */
+.inks .modes button {
+	width: auto;
+	padding: 0 14px;
+	border-radius: 20px;
+	font: inherit;
+	font-size: 15px;
+	font-weight: 600;
+}
+/* on a phone the small dial sits under the sheet's middle, so four brushes fold into a square beside it,
+   and the words stack beside that */
 @media (max-width: 639px) {
-	.inks {
+	.inks .brushes {
 		display: grid;
 		grid-template-columns: repeat(2, 36px);
+		gap: 6px;
+	}
+	.inks .modes {
+		flex-direction: column;
 		gap: 6px;
 	}
 	.inks button {
 		width: 36px;
 		height: 36px;
 		padding: 4px;
+	}
+	.inks .modes button {
+		height: 24px;
+		padding: 0 10px;
+		font-size: 13px;
 	}
 }

@@ -1,6 +1,6 @@
 // 02 Steps: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
 // Each note has a tail, piano-roll style: pull its knob sideways to hold the note for more steps.
-// Words along the bottom pick pitch, loud or chance; drag the bracket to shorten the pattern (polymeter).
+// Chips under the sheet pick what a drag draws: pitch, loud or chance; drag the bracket to shorten the pattern (polymeter).
 //
 // state: { v: 2, len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9]
 // Mono: a note that sounds cuts the tail it lands on. Parts without v (length 0..9) are migrated on load.
@@ -73,9 +73,10 @@ export default {
 	glyph:
 		'<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
 	name: 'Steps',
-	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick along the bottom); drag the bracket to shorten the pattern.',
+	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one under the sheet); drag the bracket to shorten the pattern.',
 	optional: ['v'],
 	inks: INKS,
+	modes: PARAMS,
 	demo: () => [tap(0.03, 0.45), line(0.06, 0.47, 0.3, 0.47, 10), tap(0.34, 0.45), tap(0.47, 0.45)],
 	params: {
 		wave: { value: 'square', options: ['square', 'triangle', 'sawtooth', 'bell'] },
@@ -233,9 +234,8 @@ export default {
 			st[IDX[ui.param]] = clamp(Math.round((1 - y) * max), ui.param === 'chance' ? 1 : 0, max)
 		}
 
-		const BAND = 0.84
+		const BAND = 0.9 // under it, the bottom edge belongs to the bracket alone
 		const colOf = (x) => clamp(Math.floor(x * N), 0, N - 1)
-		const tokenAt = (x) => PARAMS[clamp(Math.floor(x * PARAMS.length), 0, PARAMS.length - 1)]
 		const noteY = (p, top) => (1 - p / PMAX) * top * 0.86 + top * 0.07
 		// where a tail ends, in columns: past the pattern's end it wraps to the start
 		const tailEnd = (k, L) => (k + L > state.len ? k + L - state.len : k + L)
@@ -268,12 +268,12 @@ export default {
 			const cw = e.w / N
 			if (e.type === 'down') {
 				const knob = e.alt || e.y > BAND ? null : knobAt(e.px, e.py, e.w, e.h)
-				if (knob == null && Math.abs(e.x * N - state.len) < 0.6) {
+				const reach = e.y > BAND ? 1 : 0.6
+				if (knob == null && Math.abs(e.x * N - state.len) < reach) {
 					press = { kind: 'len' }
 					return
 				}
 				if (e.y > BAND) {
-					ui.param = tokenAt(e.x)
 					press = null
 					return
 				}
@@ -550,33 +550,13 @@ export default {
 			g.lineTo(bx, top - 3)
 			g.lineTo(bx - 6, top - 3)
 			g.stroke()
-			g.font = `600 ${Math.max(11, Math.min(16, h * 0.05))}px ${SANS}`
-			g.textAlign = 'center'
+			// the pattern's length sits under its bracket
+			g.font = `600 ${Math.max(11, Math.min(15, h * 0.045))}px ${SANS}`
 			g.textBaseline = 'middle'
-			// the words share the row with the pattern length at the right edge, so they leave it room
-			const lw = w - g.measureText(`${state.len}`).width - 12
-			PARAMS.forEach((name, i) => {
-				const x = ((i + 0.5) / PARAMS.length) * lw,
-					y = top + (h - top) / 2
-				const on = name === ui.param
-				g.fillStyle = tint(ink, on ? 1 : 0.45)
-				g.fillText(name, x, y)
-				if (on) {
-					const tw = g.measureText(name).width
-					g.strokeStyle = col
-					g.lineWidth = 2
-					g.beginPath()
-					for (let u = 0; u <= 1.001; u += 0.1) {
-						const px = x - tw / 2 + u * tw,
-							py = y + 10 + Math.sin(u * 14) * 1.6
-						u ? g.lineTo(px, py) : g.moveTo(px, py)
-					}
-					g.stroke()
-				}
-			})
-			g.fillStyle = tint(ink, 0.45)
-			g.textAlign = 'right'
-			g.fillText(`${state.len}`, w - 4, top + (h - top) / 2)
+			g.textAlign = 'center'
+			const lw = g.measureText(`${state.len}`).width
+			g.fillStyle = tint(ink, 0.6)
+			g.fillText(`${state.len}`, clamp(bx, lw / 2 + 4, w - lw / 2 - 4), top + (h - top) * 0.62)
 		}
 
 		// ring: a note is a dot, a held note an arc round the dial as long as it sounds
@@ -630,6 +610,13 @@ export default {
 		return {
 			get state() {
 				return state
+			},
+			// what a drag draws: a tool from the row under the sheet, not a place on it
+			get mode() {
+				return ui.param
+			},
+			set mode(v) {
+				if (PARAMS.includes(v)) ui.param = v
 			},
 			get ink() {
 				return INKS[ink][0]

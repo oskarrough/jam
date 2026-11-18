@@ -34,6 +34,7 @@ export default {
 	sample(steps) {}, // optional: the state an empty jam starts with
 	optional: ['vel'], // optional: state keys an older saved part may lack; setState fills them in
 	inks: [['soft', '<circle …/>'], ['hard', '…']], // optional: brushes under the sheet, [name, 32×32 svg]; the first is the default. The instance keeps `ink` (get/set), and each stroke records its ink in state, so others hear it
+	modes: ['pitch', 'loud'], // optional: what a drag draws, as word chips beside the inks; the first is the default. The instance keeps `mode` (get/set); local to the player, never in state
 	create(ctx) {
 		return instance
 	},

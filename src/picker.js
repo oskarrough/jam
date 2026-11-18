@@ -109,14 +109,18 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		engine.push(L, { now: true })
 		paintVoices()
 	}
+	// then, after a gap, its modes (mod.modes): word chips for what a drag draws, tools rather than places
 	let inksShown = null
 	function paintInks() {
 		const L = seat(),
-			list = L?.module.inks || []
-		const key = list.map((i) => i[0]).join('|')
+			list = L?.module.inks || [],
+			modes = L?.module.modes || []
+		const key = list.map((i) => i[0]).join('|') + '/' + modes.join('|')
 		if (key !== inksShown) {
 			inksShown = key
-			inks.replaceChildren(
+			const brushes = document.createElement('span')
+			brushes.className = 'brushes'
+			brushes.append(
 				...list.map(([n, svg]) => {
 					const b = document.createElement('button')
 					b.title = n
@@ -130,10 +134,31 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 					return b
 				}),
 			)
+			const words = document.createElement('span')
+			words.className = 'modes'
+			words.append(
+				...modes.map((n) => {
+					const b = document.createElement('button')
+					b.textContent = n
+					b.title = `drag draws ${n}`
+					b.dataset.mode = n
+					b.onclick = () => {
+						const S = seat()
+						if (S?.instance) S.instance.mode = n
+						paintInks()
+					}
+					return b
+				}),
+			)
+			inks.replaceChildren(...(list.length ? [brushes] : []), ...(modes.length ? [words] : []))
 		}
-		inks.hidden = !list.length
-		const cur = L?.instance?.ink
-		for (const b of inks.children) b.setAttribute('aria-pressed', b.dataset.ink === cur)
+		inks.hidden = !list.length && !modes.length
+		const cur = L?.instance?.ink,
+			mode = L?.instance?.mode
+		for (const b of inks.querySelectorAll('[data-ink]'))
+			b.setAttribute('aria-pressed', b.dataset.ink === cur)
+		for (const b of inks.querySelectorAll('[data-mode]'))
+			b.setAttribute('aria-pressed', b.dataset.mode === mode)
 	}
 	let shown = null
 	function paintVoices() {
