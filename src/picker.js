@@ -41,7 +41,11 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	}
 	const odd = document.createElement('i')
 	loops.append(odd)
-	el.append(row, caption, voices, loops)
+	// an instrument's inks (mod.inks), like a painter's brushes, under the sheet's bottom-left corner; one per stroke
+	const inks = document.createElement('p')
+	inks.className = 'inks'
+	inks.setAttribute('aria-label', 'Inks')
+	el.append(row, caption, voices, loops, inks)
 	function paintLoops() {
 		const L = seat()
 		if (!L) return
@@ -105,8 +109,35 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		engine.push(L, { now: true })
 		paintVoices()
 	}
+	let inksShown = null
+	function paintInks() {
+		const L = seat(),
+			list = L?.module.inks || []
+		const key = list.map((i) => i[0]).join('|')
+		if (key !== inksShown) {
+			inksShown = key
+			inks.replaceChildren(
+				...list.map(([n, svg]) => {
+					const b = document.createElement('button')
+					b.title = n
+					b.dataset.ink = n
+					b.innerHTML = `<svg viewBox="0 0 32 32" aria-hidden="true">${svg}</svg>`
+					b.onclick = () => {
+						const S = seat()
+						if (S?.instance) S.instance.ink = n
+						paintInks()
+					}
+					return b
+				}),
+			)
+		}
+		inks.hidden = !list.length
+		const cur = L?.instance?.ink
+		for (const b of inks.children) b.setAttribute('aria-pressed', b.dataset.ink === cur)
+	}
 	let shown = null
 	function paintVoices() {
+		paintInks()
 		const L = seat(),
 			names = L?.module.voices || []
 		const key = names.join('|')

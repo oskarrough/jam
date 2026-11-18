@@ -9,6 +9,19 @@ import { kit } from './lib/kit.js'
 import { withPointer, absNow, absOf, clamp, flashes, tint, mtof, isStrip, TAU } from './lib/util.js'
 import { INK, SANS } from '../palette.js'
 import { tap, line } from './lib/demo.js'
+import { voice as jukebox } from './lib/voices.js'
+
+// Inks, one per note, picked under the sheet. pluck is today's sound (the wave knob); keys a Rhodes,
+// organ holds flat for the whole tail, reed breathes in and wavers. A note's ink is step[4], absent = pluck.
+const INKS = [
+	['pluck', '<path d="M6 24c3-14 5-16 7-16s3 10 15 14" stroke-width="1.6"/>'],
+	['keys', '<circle cx="16" cy="16" r="6"/><circle cx="16" cy="16" r="11" opacity=".45"/>'],
+	['organ', '<rect class="f" x="5" y="11" width="22" height="10" rx="2"/>'],
+	['reed', '<path d="M4 16c3-5 5 5 8 0s5 5 8 0 5 5 8 0" stroke-width="1.8"/>'],
+]
+const inkOf = (st) => (st && st[4]) | 0
+const rhodes = jukebox('rhodes', -8),
+	organ = jukebox('organ', -7)
 
 const N = 16
 const PMAX = 14
@@ -62,6 +75,7 @@ export default {
 	name: 'Steps',
 	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick along the bottom); drag the bracket to shorten the pattern.',
 	optional: ['v'],
+	inks: INKS,
 	demo: () => [tap(0.03, 0.45), line(0.06, 0.47, 0.3, 0.47, 10), tap(0.34, 0.45), tap(0.47, 0.45)],
 	params: {
 		wave: { value: 'square', options: ['square', 'triangle', 'sawtooth', 'bell'] },
@@ -70,7 +84,13 @@ export default {
 		swing: { value: 0, min: 0, max: 0.5, step: 0.01 },
 	},
 	generate: () => gen(),
-	sample: () => gen(),
+	// a sample with every ink in it, so the difference shows at once
+	sample: () => {
+		const g = gen()
+		let n = 0
+		g.s.forEach((st) => st && (st[4] = n++ % INKS.length))
+		return g
+	},
 	create(ctx) {
 		const { params, out, audio, clock } = ctx
 		const engine = kit(audio)
@@ -81,6 +101,7 @@ export default {
 		const ui = { param: 'pitch', pull: -1 } // what a drag draws, and the tail being pulled; local to this player
 		let press = null
 		let held = null // the note still sounding, so the next one can cut it
+		let ink = 0 // the brush in your hand; local, but every note keeps its own
 
 		// steps until the next note in the pattern, round the loop
 		function gap(k) {
@@ -96,20 +117,75 @@ export default {
 			const { g, o } = held
 			g.gain.cancelScheduledValues(at)
 			g.gain.setTargetAtTime(0, at, 0.008)
-			try {
-				o.stop(at + 0.08)
-			} catch {}
+			for (const x of [].concat(o))
+				try {
+					x.stop(at + 0.08)
+				} catch {}
 			held = null
 		}
 
-		function voice(st, time, dur) {
+		function voice(st, time, dur, k) {
 			const [p, , v] = st
 			const steps = lenOf(st)
-			const f = mtof(engine.degree(p, params.octave + 1))
+			const midi = engine.degree(p, params.octave + 1)
+			const f = mtof(midi)
 			// a held note: full steps, a short release; a one-step note stays a snappy blip
 			const hold = steps === 1 ? dur * 0.55 : steps * dur - 0.03
 			const gain = 0.03 + (v / 9) * 0.16
 			cut(time)
+			const kind = INKS[inkOf(st)]?.[0]
+			// keys and organ come from the jukebox; mono still holds, so they stop where the next note starts
+			if (kind === 'keys' || kind === 'organ') {
+				const d = Math.min(steps, k == null ? steps : gap(k)) * dur - 0.02
+				return (kind === 'keys' ? rhodes : organ)(
+					ctx,
+					midi,
+					time,
+					Math.max(0.08, d),
+					0.35 + (v / 9) * 0.6,
+				)
+			}
+			if (kind === 'reed') {
+				const off = time + Math.max(dur * 0.8, steps * dur - 0.03)
+				const g = audio.createGain(),
+					bp = audio.createBiquadFilter(),
+					lp = audio.createBiquadFilter()
+				bp.type = 'bandpass'
+				bp.frequency.value = Math.min(f * 3, 3000)
+				bp.Q.value = 0.9
+				lp.type = 'lowpass'
+				lp.frequency.value = 1800 + params.tone * 2500
+				const a = audio.createOscillator(),
+					b = audio.createOscillator(),
+					lfo = audio.createOscillator(),
+					lg = audio.createGain()
+				a.type = 'sawtooth'
+				b.type = 'square'
+				a.frequency.value = f
+				b.frequency.value = f * 1.003
+				lfo.frequency.value = 5.2
+				lg.gain.value = 9 // cents of waver, after it has breathed in
+				lg.gain.setValueAtTime(0, time)
+				lg.gain.linearRampToValueAtTime(9, time + 0.25)
+				lfo.connect(lg)
+				lg.connect(a.detune)
+				lg.connect(b.detune)
+				const mix = audio.createGain()
+				mix.gain.value = 0.5
+				a.connect(mix)
+				b.connect(mix)
+				mix.connect(bp).connect(lp).connect(g).connect(out)
+				g.gain.setValueAtTime(0.0001, time)
+				g.gain.linearRampToValueAtTime(gain * 2.4, time + 0.045)
+				g.gain.setTargetAtTime(gain * 2, time + 0.045, 0.2)
+				g.gain.setTargetAtTime(0, off, 0.03)
+				for (const o of [a, b, lfo]) {
+					o.start(time)
+					o.stop(off + 0.25)
+				}
+				held = { g, o: [a, b, lfo], off }
+				return
+			}
 			if (params.wave === 'bell')
 				return engine.voices.bell(out, {
 					freq: f,
@@ -141,13 +217,18 @@ export default {
 		}
 
 		const loopStart = () => Math.floor(absNow(clock) / clock.steps) * clock.steps
+		const inked = (st) => {
+			if (ink) st[4] = ink
+			else st.length = Math.min(st.length, 4)
+			return st
+		}
 		const ensure = (k) => (state.s[k] ||= fresh())
 		function paint(k, y, erase) {
 			if (erase) {
 				state.s[k] = 0
 				return
 			}
-			const st = ensure(k)
+			const st = inked(ensure(k))
 			const max = MAXOF[ui.param]
 			st[IDX[ui.param]] = clamp(Math.round((1 - y) * max), ui.param === 'chance' ? 1 : 0, max)
 		}
@@ -241,7 +322,7 @@ export default {
 						? 0
 						: state.s[press.k]
 							? 0
-							: fresh(ui.param === 'pitch' ? Math.round((1 - yy) * PMAX) : 7)
+							: inked(fresh(ui.param === 'pitch' ? Math.round((1 - yy) * PMAX) : 7))
 				press = null
 				ui.pull = -1
 			}
@@ -261,7 +342,7 @@ export default {
 			} else if (e.type === 'up' && press) {
 				if (!press.moved)
 					state.s[press.k] =
-						press.erase || state.s[press.k] ? 0 : fresh(Math.round((1 - e.y) * PMAX))
+						press.erase || state.s[press.k] ? 0 : inked(fresh(Math.round((1 - e.y) * PMAX)))
 				press = null
 			}
 		}
@@ -345,8 +426,32 @@ export default {
 					// a..b in columns from k's centre; wraps past the pattern's end
 					const x0 = k + a,
 						x1 = k + b
+					const kind = INKS[inkOf(st)][0]
 					const seg = (u0, u1) => {
-						if (solid) {
+						if (solid && kind === 'reed') {
+							// reed: a breathing wave along the tail
+							g.strokeStyle = tint(col, 0.9)
+							g.lineWidth = 2.5
+							g.beginPath()
+							for (let x = u0 * cw; x <= u1 * cw - 4; x += 3) {
+								const yy = y + Math.sin(x / 5) * th * 0.35
+								x === u0 * cw ? g.moveTo(x, yy) : g.lineTo(x, yy)
+							}
+							g.stroke()
+						} else if (solid && kind === 'organ') {
+							// organ: flat and full, no fade, square-ended
+							g.lineCap = 'butt'
+							g.strokeStyle = tint(col, 0.95)
+							bar(g, u0 * cw, u1 * cw - 4, y, th * 1.1)
+							g.lineCap = 'round'
+						} else if (solid && kind === 'keys') {
+							// keys: a thinner tail that fades the way a Rhodes does
+							const gr = g.createLinearGradient(u0 * cw, 0, u1 * cw, 0)
+							gr.addColorStop(0, tint(col, 0.7))
+							gr.addColorStop(1, tint(col, 0.08))
+							g.strokeStyle = gr
+							bar(g, u0 * cw, u1 * cw - th / 2, y, th * 0.55)
+						} else if (solid) {
 							g.strokeStyle = tint(col, 0.55)
 							bar(g, u0 * cw, u1 * cw - th / 2, y, th) // the round cap ends at the knob
 						} else {
@@ -374,7 +479,26 @@ export default {
 				const y = noteY(p, top)
 				const r = rOf(v)
 				const glow = fx.glow(k, t.now, 0.3)
-				blob(g, x, y, r * (1 + glow * 0.35), r * (1 + glow * 0.35), k + 3)
+				const kind = INKS[inkOf(st)][0],
+					rr = r * (1 + glow * 0.35)
+				if (kind === 'keys') {
+					g.strokeStyle = tint(col, inPat ? 0.6 : 0.2)
+					g.lineWidth = 1.5
+					g.beginPath()
+					g.arc(x, y, rr * 1.7, 0, TAU)
+					g.stroke()
+				}
+				if (kind === 'organ') {
+					g.beginPath()
+					g.roundRect(x - rr, y - rr * 0.8, rr * 2, rr * 1.6, 2)
+				} else if (kind === 'reed') {
+					g.beginPath()
+					g.moveTo(x, y - rr * 1.25)
+					g.lineTo(x + rr * 1.1, y)
+					g.lineTo(x, y + rr * 1.25)
+					g.lineTo(x - rr * 1.1, y)
+					g.closePath()
+				} else blob(g, x, y, rr, rr, k + 3)
 				g.fillStyle = glow ? ink : tint(col, inPat ? 1 : 0.35)
 				g.fill()
 				g.strokeStyle = tint(ink, inPat ? 0.9 : 0.3)
@@ -482,8 +606,17 @@ export default {
 				}
 				if (s < 0) continue
 				const glow = fx.glow(`a${(base + s) % 256}`, t.now, 0.3)
+				const kind = INKS[inkOf(st)][0],
+					rr = r * (1 + glow * 0.4)
 				g.beginPath()
-				g.arc(x, y, r * (1 + glow * 0.4), 0, TAU)
+				if (kind === 'organ') g.rect(x - rr, y - rr * 0.8, rr * 2, rr * 1.6)
+				else if (kind === 'reed') {
+					g.moveTo(x, y - rr * 1.3)
+					g.lineTo(x + rr, y)
+					g.lineTo(x, y + rr * 1.3)
+					g.lineTo(x - rr, y)
+					g.closePath()
+				} else g.arc(x, y, kind === 'keys' ? rr * 0.75 : rr, 0, TAU)
 				g.fillStyle = glow ? INK : col
 				g.fill()
 				g.strokeStyle = INK
@@ -498,6 +631,15 @@ export default {
 			get state() {
 				return state
 			},
+			get ink() {
+				return INKS[ink][0]
+			},
+			set ink(v) {
+				ink = Math.max(
+					0,
+					INKS.findIndex((i) => i[0] === v),
+				)
+			},
 			pointer: withPointer(size, (e) => {
 				shape = e.shape || (isStrip(e.w, e.h) ? 'ring' : 'sheet')
 				return shape === 'sheet' ? sheetPointer(e) : ringPointer(e)
@@ -509,7 +651,7 @@ export default {
 				if (!st) return
 				if (st[3] < 9 && roll(abs, k) > (st[3] + 1) / 10) return
 				const t = time + (abs % 2 ? params.swing * dur : 0)
-				voice(st, t, dur)
+				voice(st, t, dur, k)
 				fx.hit(k, t)
 				fx.hit(`a${abs % 256}`, t)
 			},
@@ -525,7 +667,8 @@ export default {
 				state.len = clamp(s.len | 0 || N, 1, N)
 				state.s = Array.from({ length: N }, (_, k) => {
 					if (!Array.isArray(s.s[k])) return 0
-					const st = s.s[k].slice(0, 4).map((v) => v | 0)
+					const st = s.s[k].slice(0, 5).map((v) => v | 0)
+					if (st.length > 4 && !(st[4] > 0 && st[4] < INKS.length)) st.length = 4
 					st[1] = clamp(old ? oldLen(st[1]) : st[1], 1, N)
 					return st
 				})

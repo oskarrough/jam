@@ -1,19 +1,41 @@
 // 07 Strum: six strings lying across the sheet, time running left to right. Swipe down or up across them
 // and the strum lands where you swiped; it replays on the current chord, so a rhythm becomes a progression.
 import { kit, mtof } from './lib/kit.js'
-import { withPointer, view, absNow, absOf, theme, tint, flashes, subSlots, SLOTS, clamp } from './lib/util.js'
+import {
+	withPointer,
+	view,
+	absNow,
+	absOf,
+	theme,
+	tint,
+	flashes,
+	subSlots,
+	SLOTS,
+	clamp,
+} from './lib/util.js'
 import { line } from './lib/demo.js'
 
 const STRINGS = 6
 const MAX_HITS = 96
+// two inks, picked under the sheet per strum: nylon is today's pluck, steel rings bright and long
+const INKS = [
+	['nylon', '<path d="M6 26C10 16 22 16 26 6" stroke-width="5"/>'],
+	[
+		'steel',
+		'<path d="M6 26L26 6" stroke-width="1"/><path d="M6 20L20 6M12 26L26 12" stroke-width=".6"/>',
+	],
+]
 
 function gen() {
 	const hits = []
 	;[0, 6, 12, 20, 24, 28, 36, 44, 48, 54, 60].forEach((s) => {
 		if (Math.random() < 0.3) return
-		const down = Math.random() < 0.6
-		for (let k = 0; k < STRINGS; k++)
-			hits.push([s, down ? k : STRINGS - 1 - k, +(0.5 + Math.random() * 0.4).toFixed(2)])
+		const down = Math.random() < 0.6,
+			steel = s >= 32
+		for (let k = 0; k < STRINGS; k++) {
+			const h = [s, down ? k : STRINGS - 1 - k, +(0.5 + Math.random() * 0.4).toFixed(2)]
+			hits.push(steel ? [...h, 1] : h)
+		}
 	})
 	return { hits }
 }
@@ -32,6 +54,7 @@ export default {
 		octave: { value: 0, min: -1, max: 1, step: 1 },
 		level: { value: 0.5, min: 0, max: 1, step: 0.01 },
 	},
+	inks: INKS,
 	generate: (steps, params) => gen(steps, params),
 	sample: (steps) => gen(steps),
 	create(ctx) {
@@ -39,7 +62,8 @@ export default {
 		const engine = kit(audio)
 		const th = theme(ctx)
 		const size = [1, 1]
-		const state = { hits: [] } // [slot, string, velocity]
+		const state = { hits: [] } // [slot, string, velocity, 1 if steel]
+		let ink = 'nylon'
 		const ring = Array.from({ length: STRINGS }, () => ({ t: -1, v: 0 }))
 		let lastY = null,
 			lastT = 0,
@@ -55,27 +79,41 @@ export default {
 			const [r, third, fifth] = c.notes.map((n) => n + 12 * params.octave)
 			return [r - 12, fifth - 12, r, third, fifth, r + 12]
 		}
-		function pluck(j, vel, time, abs) {
-			engine.voices.pluck(out, {
-				freq: mtof(notes(abs)[j]),
-				time,
-				gain: params.level * vel,
-				damp: params.decay,
-				bright: params.bright,
-				pan: (j - 2.5) * 0.12,
-			})
+		function pluck(j, vel, time, abs, steel) {
+			const freq = mtof(notes(abs)[j])
+			if (!steel)
+				engine.voices.pluck(out, {
+					freq,
+					time,
+					gain: params.level * vel,
+					damp: params.decay,
+					bright: params.bright,
+					pan: (j - 2.5) * 0.12,
+				})
+			// steel: bright, long, and doubled a hair sharp so it shimmers
+			else
+				for (const c of [1, 1.004])
+					engine.voices.pluck(out, {
+						freq: freq * c,
+						time: time + (c > 1 ? 0.004 : 0),
+						gain: params.level * vel * 0.6,
+						damp: 0.9985,
+						bright: 0.97,
+						pan: (j - 2.5) * 0.12 * (c > 1 ? -1 : 1),
+					})
 			ring[j] = { t: time, v: vel }
 		}
 		// you hear every string as you cross it; the strum is written at the x of the swipe, not at the playhead
 		function liveHit(j, vel) {
 			const now = audio.currentTime
-			pluck(j, vel, now, Math.floor(absNow(clock)))
+			const steel = ink === 'steel'
+			pluck(j, vel, now, Math.floor(absNow(clock)), steel)
 			if (!params.record || !cur) return
 			if (cur.fresh) {
 				state.hits = state.hits.filter((h) => h[0] !== cur.s) // a new strum replaces the one at its spot
 				cur.fresh = false
 			}
-			state.hits.push([cur.s, j, +vel.toFixed(2)])
+			state.hits.push(steel ? [cur.s, j, +vel.toFixed(2), 1] : [cur.s, j, +vel.toFixed(2)])
 			lit.hit(cur.s * 8 + j, now)
 			if (state.hits.length > MAX_HITS) state.hits.shift()
 		}
@@ -83,12 +121,14 @@ export default {
 		// hits that share a slot are one strum, in the order they were played
 		function strums() {
 			const by = new Map()
-			for (const [s, j, v] of state.hits) {
-				if (!by.has(s)) by.set(s, [])
-				by.get(s).push([j, v])
+			for (const [s, j, v, k] of state.hits) {
+				const key = s + (k ? 0.5 : 0) // a nylon and a steel strum on one slot stay two strums
+				if (!by.has(key)) by.set(key, [])
+				by.get(key).push([j, v])
 			}
-			return [...by].map(([s, hs]) => ({
-				s,
+			return [...by].map(([key, hs]) => ({
+				s: Math.floor(key),
+				steel: key % 1 > 0,
 				hs,
 				v: Math.max(...hs.map((h) => h[1])),
 				dir: hs.length > 1 && hs.at(-1)[0] < hs[0][0] ? -1 : 1,
@@ -104,8 +144,8 @@ export default {
 				const x = (st.s / SLOTS) * w,
 					f = lit.glow(st.s, t.now, 0.6),
 					js = st.hs.map((p) => p[0])
-				g.strokeStyle = th.accent
-				g.lineWidth = 3 + 2 * st.v + 3 * f
+				g.strokeStyle = st.steel ? th.fg : th.accent
+				g.lineWidth = st.steel ? 1 + f * 2 : 3 + 2 * st.v + 3 * f
 				g.beginPath()
 				g.moveTo(x, lane(Math.min(...js)))
 				g.lineTo(x + 0.01, lane(Math.max(...js)))
@@ -126,6 +166,12 @@ export default {
 
 		return {
 			state,
+			get ink() {
+				return ink
+			},
+			set ink(v) {
+				ink = v
+			},
 			pointer: withPointer(size, (e) => {
 				if (e.alt) {
 					if (e.type === 'down' || (e.type === 'move' && e.pressed)) rub(e)
@@ -166,9 +212,9 @@ export default {
 				const abs = absOf(clock, time)
 				subSlots(i, time, dur, clock.steps, (s, t) => {
 					let k = 0
-					for (const [hs, j, v] of state.hits)
+					for (const [hs, j, v, steel] of state.hits)
 						if (hs === s) {
-							pluck(j, v, t + 0.011 * k, abs)
+							pluck(j, v, t + 0.011 * k, abs, steel)
 							lit.hit(s * 8 + j, t + 0.011 * k++)
 						}
 					if (k) lit.hit(s, t)
@@ -196,7 +242,8 @@ export default {
 				for (const st of all) {
 					st.x = (st.s / SLOTS) * w
 					st.k = held(st.s)
-					for (const [j, v] of st.hs) bumps[j].push([st.x, pull * st.dir * st.k * (0.45 + 0.55 * v)])
+					for (const [j, v] of st.hs)
+						bumps[j].push([st.x, pull * st.dir * st.k * (0.45 + 0.55 * v)])
 				}
 				const off = (j, x) => {
 					let d = 0
@@ -224,8 +271,35 @@ export default {
 				const knot = Math.min(Math.max(gap * 0.06, 4), 8)
 				g.lineCap = g.lineJoin = 'round'
 				for (const st of all) {
-					const pts = st.hs.map(([j, v]) => [st.x, yOf(j) * h + off(j, st.x), v, lit.glow(st.s * 8 + j, t.now, 0.5)])
+					const pts = st.hs.map(([j, v]) => [
+						st.x,
+						yOf(j) * h + off(j, st.x),
+						v,
+						lit.glow(st.s * 8 + j, t.now, 0.5),
+					])
 					const f = lit.glow(st.s, t.now, 0.6)
+					if (st.steel) {
+						// steel: one taut bright wire through its strings, small hard knots, a flare when it rings
+						if (pts.length > 1) {
+							g.lineCap = g.lineJoin = 'miter'
+							g.strokeStyle = th.fg
+							g.lineWidth = 1 + f
+							g.shadowColor = th.fg
+							g.shadowBlur = 4 + 14 * f
+							g.beginPath()
+							pts.forEach(([x, y], n) => (n ? g.lineTo(x, y) : g.moveTo(x, y)))
+							g.stroke()
+							g.shadowBlur = 0
+							g.lineCap = g.lineJoin = 'round'
+						}
+						for (const [x, y, , k] of pts) {
+							const r = 2 + 3 * k
+							g.fillStyle = th.fg
+							g.fillRect(x - r, y - 0.75, r * 2, 1.5)
+							g.fillRect(x - 0.75, y - r, 1.5, r * 2)
+						}
+						continue
+					}
 					// the stroke itself: thick where the swipe began, thinning the way it went
 					if (pts.length > 1) {
 						if (f > 0) {

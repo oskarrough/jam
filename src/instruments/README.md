@@ -33,6 +33,7 @@ export default {
 	generate(steps, params) {}, // optional: a fresh state; robots play your instrument with it
 	sample(steps) {}, // optional: the state an empty jam starts with
 	optional: ['vel'], // optional: state keys an older saved part may lack; setState fills them in
+	inks: [['soft', '<circle …/>'], ['hard', '…']], // optional: brushes under the sheet, [name, 32×32 svg]; the first is the default. The instance keeps `ink` (get/set), and each stroke records its ink in state, so others hear it
 	create(ctx) {
 		return instance
 	},

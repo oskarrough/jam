@@ -69,7 +69,7 @@ const punchBus = (ac, out, lv) => {
 	if (lv < 8) return out
 	if (!clip || clip.ac !== ac) {
 		const c = new Float32Array(1024)
-		for (let i = 0; i < 1024; i++) c[i] = Math.tanh(((i / 511.5 - 1) * 2.2)) / Math.tanh(2.2)
+		for (let i = 0; i < 1024; i++) c[i] = Math.tanh((i / 511.5 - 1) * 2.2) / Math.tanh(2.2)
 		clip = { ac, c }
 	}
 	const sh = ac.createWaveShaper(),
@@ -93,6 +93,61 @@ const snap = (ac, out, t, lv, hz, peak, dur) => {
 	g.connect(out)
 	noiseSrc(ac, t, dur + 0.01, hp)
 }
+// the 808 ink: a boomy sub kick, a clicky snare, a tight hat
+const hit808 = {
+	1({ audio: ac, out: dry }, t, lv) {
+		const out = punchBus(ac, dry, lv)
+		const g = ac.createGain()
+		env(g, t, 0.001, 0.95 * gainOf(lv), 0.7 + lv * 0.06)
+		g.connect(out)
+		const o = osc(ac, 'sine', 150, t, 1.4, g)
+		o.frequency.setValueAtTime(150, t)
+		o.frequency.exponentialRampToValueAtTime(46, t + 0.07)
+		o.frequency.exponentialRampToValueAtTime(40, t + 0.9)
+		const c = ac.createGain()
+		env(c, t, 0.0005, 0.25 * gainOf(lv), 0.006)
+		c.connect(out)
+		osc(ac, 'square', 1800, t, 0.02, c)
+	},
+	2({ audio: ac, out: dry }, t, lv) {
+		const out = punchBus(ac, dry, lv)
+		for (const [f, a] of [
+			[238, 0.28],
+			[476, 0.14],
+		]) {
+			const g = ac.createGain()
+			env(g, t, 0.001, a * gainOf(lv), 0.06)
+			g.connect(out)
+			osc(ac, 'triangle', f, t, 0.12, g)
+		}
+		const g = ac.createGain(),
+			hp = ac.createBiquadFilter()
+		hp.type = 'highpass'
+		hp.frequency.value = 2500
+		env(g, t, 0.0005, 0.55 * gainOf(lv), 0.045 + lv * 0.004)
+		hp.connect(g)
+		g.connect(out)
+		noiseSrc(ac, t, 0.15, hp)
+	},
+	4({ audio: ac, out: dry }, t, lv) {
+		const out = punchBus(ac, dry, lv)
+		const g = ac.createGain(),
+			hp = ac.createBiquadFilter()
+		hp.type = 'highpass'
+		hp.frequency.value = 9000
+		env(g, t, 0.0005, 0.26 * gainOf(lv), 0.018 + lv * 0.002)
+		hp.connect(g)
+		g.connect(out)
+		noiseSrc(ac, t, 0.06, hp)
+	},
+}
+const INKS = [
+	['kit', '<circle cx="12" cy="18" r="7"/><path d="M20 10h8v8h-8z"/>'],
+	[
+		'808',
+		'<circle cx="16" cy="16" r="11" stroke-width="3"/><circle class="f" cx="16" cy="16" r="3"/>',
+	],
+]
 const hitVoice = {
 	1({ audio: ac, out: dry }, t, lv) {
 		const out = punchBus(ac, dry, lv)
@@ -154,7 +209,8 @@ export default {
 		line(0.32, 0.9, 0.32, 0.8, 6),
 		line(0.07, 0.17, 0.6, 0.17, 16),
 	],
-	optional: ['vel'],
+	optional: ['vel', 'k'],
+	inks: INKS,
 	params: { decay: { value: 0.045, min: 0.01, max: 0.3, step: 0.005 } },
 	generate: (steps) => {
 		const { d, v } = drumGen()
@@ -162,38 +218,53 @@ export default {
 	},
 	sample: (steps) => {
 		const { d, v } = drumSample()
-		return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]) }
+		const k = d.map((m, i) => (i >= 32 ? m : 0))
+		return { hits: fit(d, steps, 0), vel: fit(v, steps, [LV, LV, LV]), k: fit(k, steps, 0) }
 	},
 	create(ctx) {
 		const { clock } = ctx
 		let hits = new Array(clock.steps).fill(0)
 		let vel = blankVel(clock.steps)
+		let k8 = new Array(clock.steps).fill(0) // bitmask like hits: which of them are 808 ink
+		let ink = 'kit'
 		let g = null
 		const ensure = () => {
 			if (hits.length !== clock.steps) hits = fit(hits, clock.steps, 0)
+			if (k8.length !== hits.length) k8 = fit(k8, hits.length, 0)
 			if (vel.length !== hits.length)
 				vel = fit(vel, hits.length, [LV, LV, LV]).map((x) => x.slice())
 		}
 		const has = (s, row) => !!(hits[s] & (1 << row))
-		const put = (s, row, on, lv) => {
+		const put = (s, row, on, lv, inked = true) => {
 			const b = 1 << row
 			hits[s] = on ? hits[s] | b : hits[s] & ~b
 			if (on && lv) vel[s][row] = lv
+			if (on && inked) k8[s] = ink === '808' ? k8[s] | b : k8[s] & ~b
 		}
+		const is808 = (s, row) => !!(k8[s] & (1 << row))
 		const lvOf = (s, row) => vel[s]?.[row] || LV
 		// the pen sits where the stem's top would (see frame)
 		const lvAt = (y, row) => clamp(Math.round((((1 - y) * ROWS - row - 0.1) / 0.68) * 9), 1, 9)
 		// play the hit you're placing, just for you, once per change of level
 		const hear = (row, lv) => {
 			if (g.heard === lv || ctx.audio.state !== 'running') return
-			g.heard = lv
-			hitVoice[1 << row](ctx, ctx.audio.currentTime + 0.005, lv)
+			g.heard = lv(is808(g.s, row) ? hit808 : hitVoice)[1 << row](
+				ctx,
+				ctx.audio.currentTime + 0.005,
+				lv,
+			)
 		}
 		// "soft" and "hard" at the bottom and top of the row you're pressing in, fading after you let go
 		let scale = null
 		return {
 			get state() {
-				return { hits, vel }
+				return { hits, vel, k: k8 }
+			},
+			get ink() {
+				return ink
+			},
+			set ink(v) {
+				ink = v
 			},
 			setState(s) {
 				hits = s?.hits ? s.hits.slice() : new Array(clock.steps).fill(0)
@@ -201,10 +272,15 @@ export default {
 					Array.isArray(s?.vel) && s.vel.length === hits.length
 						? s.vel.map((x) => [0, 1, 2].map((r) => clamp(Math.round(x?.[r] || LV), 1, 9)))
 						: blankVel(hits.length)
+				k8 =
+					Array.isArray(s?.k) && s.k.length === hits.length
+						? s.k.map((x) => x | 0)
+						: new Array(hits.length).fill(0)
 			},
 			clear() {
 				hits = new Array(clock.steps).fill(0)
 				vel = blankVel(clock.steps)
+				k8 = new Array(clock.steps).fill(0)
 			},
 			pointer(e) {
 				ensure()
@@ -233,7 +309,7 @@ export default {
 					if (g.mode === 'level') {
 						// the dot follows the finger: same scale as lvAt
 						const lv = clamp(Math.round(g.lv - ((e.y - g.y0) * ROWS * 9) / 0.68), 1, 9)
-						put(g.s, g.row, true, lv)
+						put(g.s, g.row, true, lv, false)
 						g.shown = lv
 						hear(g.row, lv)
 						return
@@ -265,7 +341,8 @@ export default {
 			step(i, time) {
 				const k = i % hits.length,
 					m = hits[k]
-				for (let r = 0; r < ROWS; r++) if (m & (1 << r)) hitVoice[1 << r](ctx, time, lvOf(k, r))
+				for (let r = 0; r < ROWS; r++)
+					if (m & (1 << r)) (is808(k, r) ? hit808 : hitVoice)[1 << r](ctx, time, lvOf(k, r))
 			},
 			frame(gx, w, h, clock, shape) {
 				ensure()
@@ -336,7 +413,9 @@ export default {
 							gx.lineTo(x, y)
 							gx.stroke()
 						}
-						gx.fillStyle = f > 0.3 ? INK : lv >= 9 ? INK : color
+						const eight = is808(s, r)
+						if (eight) size *= 1.5
+						gx.fillStyle = eight ? 'rgba(0,0,0,0.55)' : f > 0.3 ? INK : lv >= 9 ? INK : color
 						gx.beginPath()
 						if (r === 1) gx.rect(x - size, y - size, size * 2, size * 2)
 						else if (r === 2) {
@@ -347,9 +426,15 @@ export default {
 							gx.closePath()
 						} else gx.arc(x, y, size, 0, 6.283)
 						gx.fill()
-						gx.strokeStyle = INK
-						gx.lineWidth = 1
+						gx.strokeStyle = eight ? (f > 0.3 ? '#fff' : color) : INK
+						gx.lineWidth = eight ? 3 + f * 3 : 1
 						gx.stroke()
+						if (eight) {
+							gx.fillStyle = color
+							gx.beginPath()
+							gx.arc(x, y, size * 0.3, 0, 6.283)
+							gx.fill()
+						}
 						if (lv >= 9) {
 							gx.beginPath()
 							gx.arc(x, y, size + 3.5, 0, 6.283)

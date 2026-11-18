@@ -15,10 +15,21 @@ const VOICES = [
 	[2, 2, 'sine', 0.72],
 ]
 const cutoffOf = (o) => 160 * Math.pow(2, o * 5.6)
+// the filter ink: sweep's cutoff, y = 0 bright
+const sweepOf = (y) => 60 * Math.pow(2, (1 - y) * 7.5)
+// two inks, like brushes: glow is today's bloom, filter is a hand on sweep's cutoff over the same chord
+// [name, 32×32 svg for its brush under the sheet]; the first is the default
+const INKS = [
+	[
+		'glow',
+		'<circle class="f" cx="16" cy="16" r="12" opacity=".15"/><circle class="f" cx="16" cy="16" r="9" opacity=".25"/><circle class="f" cx="16" cy="16" r="6" opacity=".45"/><circle class="f" cx="16" cy="16" r="3"/>',
+	],
+	['filter', '<path d="M3 13h15c3 0 4-5 5-5s2 16 6 16" stroke-width="1.2"/>'],
+]
 // how far voice v has flowered at openness o
 const bloomOf = (o, at) => (at === 0 ? 1 : clamp((o - at) / 0.18, 0, 1))
 
-function gen() {
+function gen(withFilter) {
 	// one slow breath or two over the loop, sometimes a rest
 	const turns = 1 + Math.floor(Math.random() * 2),
 		ph = Math.random() * 6,
@@ -32,7 +43,19 @@ function gen() {
 		const a = Math.floor(Math.random() * SLOTS)
 		for (let k = 0; k < 10; k++) ys[(a + k) % SLOTS] = null
 	}
-	return { ys }
+	// and sometimes a filter line over part of it, a quicker wobble
+	const fs = Array(SLOTS).fill(null)
+	if (withFilter || Math.random() < 0.5) {
+		const a = Math.floor(Math.random() * SLOTS),
+			n = Math.floor(SLOTS * 0.4)
+		for (let k = 0; k < n; k++)
+			fs[(a + k) % SLOTS] = +clamp(
+				0.5 - 0.35 * Math.sin((k / n) * Math.PI * 3),
+				0.05,
+				0.95,
+			).toFixed(2)
+	}
+	return { ys, fs }
 }
 
 export default {
@@ -44,18 +67,24 @@ export default {
 	demo: () => [line(0.06, 0.85, 0.94, 0.12, 22)],
 	params: {
 		level: { value: 0.09, min: 0, max: 0.25, step: 0.005 },
+		res: { value: 7, min: 0.5, max: 18, step: 0.5 },
+		pump: { value: 0.35, min: 0, max: 1, step: 0.01 },
 		rest: { value: 0.25, min: 0, max: 0.6, step: 0.01 },
 		detune: { value: 7, min: 0, max: 30, step: 1 },
 		octave: { value: -1, min: -2, max: 1, step: 1 },
 	},
-	generate: (steps, params) => gen(steps, params),
-	sample: (steps) => gen(steps),
+	generate: () => gen(),
+	sample: () => gen(true),
+	optional: ['fs'],
+	inks: INKS,
 	create(ctx) {
 		const { audio, out, params, clock } = ctx
 		const engine = kit(audio)
 		const th = theme(ctx)
 		const size = [1, 1]
-		const state = { ys: Array(SLOTS).fill(null) }
+		const state = { ys: Array(SLOTS).fill(null), fs: Array(SLOTS).fill(null) }
+		let ink = 'glow'
+		let live = null // the filter ink under your hand, heard at once
 
 		const filt = audio.createBiquadFilter()
 		filt.type = 'lowpass'
@@ -87,6 +116,26 @@ export default {
 			}
 		})
 
+		// the filter ink's pad: the triad in doubled saws through a resonant lowpass, pumped on the beat
+		const fFilt = audio.createBiquadFilter()
+		fFilt.type = 'lowpass'
+		fFilt.frequency.value = 400
+		fFilt.Q.value = params.res
+		const fPump = audio.createGain()
+		const fAmp = audio.createGain()
+		fAmp.gain.value = 0
+		fFilt.connect(fPump).connect(fAmp).connect(out)
+		const fOscs = []
+		for (let n = 0; n < 3; n++)
+			for (const d of [-1, 1]) {
+				const o = audio.createOscillator()
+				o.type = 'sawtooth'
+				o.connect(fFilt)
+				o.start()
+				fOscs.push({ o, n, d })
+			}
+		const fLevel = () => params.level * 1.2
+
 		let chordKey = ''
 		let changedAt = -1
 		let open = params.rest // what the ear hears now, for drawing
@@ -105,6 +154,12 @@ export default {
 					else o.frequency.setValueAtTime(f, time)
 					o.detune.setTargetAtTime(d * params.detune, time, 0.2)
 				}
+			}
+			for (const { o, n, d } of fOscs) {
+				const f = 440 * Math.pow(2, (ch.tones[n] + 12 * params.octave - 69) / 12)
+				if (glide) o.frequency.setTargetAtTime(f, time, 0.04)
+				else o.frequency.setValueAtTime(f, time)
+				o.detune.setTargetAtTime(d * (params.detune + 2), time, 0.1)
 			}
 			// a new chord takes a breath: dip, then swell back in, so a scrub on the eye is heard at once
 			if (fresh && drawnAt(abs)) {
@@ -128,13 +183,24 @@ export default {
 			for (const v of voices) v.g.gain.setTargetAtTime(bloomOf(o, v.at) * v.trim, t, tc * 2)
 		}
 
+		// a stroke paints in the ink you picked; the eraser rubs out both
 		function paint(x, y, erase) {
 			const s = clamp(Math.floor(x * SLOTS), 0, SLOTS - 1)
 			const from = lastSlot ?? s
 			const a = Math.min(from, s),
 				b = Math.max(from, s)
-			for (let i = a; i <= b; i++) state.ys[i] = erase ? null : +clamp(y, 0, 1).toFixed(2)
+			const v = +clamp(y, 0, 1).toFixed(2)
+			for (let i = a; i <= b; i++) {
+				if (erase) state.ys[i] = state.fs[i] = null
+				else (ink === 'glow' ? state.ys : state.fs)[i] = v
+			}
 			lastSlot = s
+			if (ink === 'filter' && !erase) {
+				live = y
+				const now = audio.currentTime
+				fAmp.gain.setTargetAtTime(fLevel(), now, 0.03)
+				fFilt.frequency.setTargetAtTime(sweepOf(y), now, 0.015)
+			}
 		}
 
 		retune(0, audio.currentTime, false)
@@ -142,12 +208,21 @@ export default {
 
 		return {
 			state,
+			get ink() {
+				return ink
+			},
+			set ink(v) {
+				ink = v
+			},
 			pointer: withPointer(size, (e) => {
 				if (e.type === 'down') {
 					lastSlot = null
 					paint(e.x, e.y, e.alt)
 				} else if (e.type === 'move' && e.pressed) paint(e.x, e.y, e.alt)
-				else if (e.type === 'up') lastSlot = null
+				else if (e.type === 'up' || e.type === 'cancel') {
+					lastSlot = null
+					live = null
+				}
 			}),
 			step(i, time, dur) {
 				const abs = absOf(clock, time)
@@ -160,6 +235,18 @@ export default {
 						return
 					}
 					shape(o, t, dur * 0.8, y != null)
+				})
+				// the filter ink, unless your hand is on it right now
+				fFilt.Q.setTargetAtTime(params.res, time, 0.05)
+				if (i % 4 === 0 && params.pump > 0) {
+					fPump.gain.setValueAtTime(1 - params.pump, time)
+					fPump.gain.setTargetAtTime(1, time + 0.01, dur * 0.9)
+				}
+				if (live != null) return
+				subSlots(i, time, dur, clock.steps, (s, t) => {
+					const y = state.fs[s]
+					fAmp.gain.setTargetAtTime(y == null ? 0 : fLevel(), t, 0.03)
+					if (y != null) fFilt.frequency.setTargetAtTime(sweepOf(y), t, 0.02)
 				})
 			},
 			frame(g, w, h, clk, shp) {
@@ -188,17 +275,52 @@ export default {
 					g.fillStyle = rgba(th.accent, (y == null ? 0.05 : 0.1) + (sheet ? 0.35 : 0.6) * o * o)
 					g.fillRect(s * sw, top, sw + 0.5, h - top)
 				}
+				const trace = (ys) => {
+					g.beginPath()
+					let pen = false
+					ys.forEach((y, s) => {
+						if (y == null) return (pen = false)
+						const x = (s + 0.5) * sw
+						pen ? g.lineTo(x, y * h) : g.moveTo(x, y * h)
+						pen = true
+					})
+				}
+				const base = Math.max(1, Math.min(w, h * 4) / 300)
+				g.lineCap = g.lineJoin = 'round'
+				// glow: soft and wide, a few translucent passes from broad to narrow
+				trace(state.ys)
+				for (const [k, a] of [
+					[3.6, 0.06],
+					[2.2, 0.12],
+					[1.3, 0.24],
+					[0.6, 0.6],
+				]) {
+					g.strokeStyle = rgba(th.accent, sheet ? a : Math.min(1, a * 1.8))
+					g.lineWidth = Math.max(1, base * k * (sheet ? 1.6 : 1.8))
+					g.stroke()
+				}
+				// filter: one hairline, crisp, with a tick under every slot like a resonant edge
+				trace(state.fs)
 				g.strokeStyle = th.fg
-				g.lineWidth = Math.max(1, Math.min(w, h * 4) / 300)
-				g.beginPath()
-				let pen = false
-				state.ys.forEach((y, s) => {
-					if (y == null) return (pen = false)
-					const x = (s + 0.5) * sw
-					pen ? g.lineTo(x, y * h) : g.moveTo(x, y * h)
-					pen = true
-				})
+				g.lineWidth = sheet ? 1.5 : 1
+				g.lineCap = g.lineJoin = 'miter'
 				g.stroke()
+				if (sheet) {
+					g.fillStyle = th.fg
+					state.fs.forEach((y, s) => {
+						if (y != null) g.fillRect((s + 0.5) * sw - 0.5, y * h + 3, 1, 5)
+					})
+					// the filter's cutoff where the ear is, a thin level line while it sounds
+					const fy = clamp(1 - Math.log2(fFilt.frequency.value / 60) / 7.5, 0, 1) * h
+					if (fAmp.gain.value > 0.002) {
+						g.strokeStyle = rgba(th.fg, 0.35)
+						g.lineWidth = 1
+						g.beginPath()
+						g.moveTo(0, fy)
+						g.lineTo(w, fy)
+						g.stroke()
+					}
+				}
 				// a glow at the playhead, as wide as the chord is open; it gasps when the chord changes
 				const gasp = Math.max(0, 1 - (t.now - changedAt) / 0.6)
 				if (t.playing) {
@@ -210,20 +332,26 @@ export default {
 				}
 			},
 			setState(s) {
-				state.ys = s.ys.map((y) => (y == null ? null : clamp(+y, 0, 1)))
+				const norm = (ys) => (ys || []).map((y) => (y == null ? null : clamp(+y, 0, 1)))
+				state.ys = norm(s.ys)
+				state.fs = s.fs ? norm(s.fs) : Array(state.ys.length).fill(null)
 			},
 			clear() {
 				state.ys.fill(null)
+				state.fs.fill(null)
+				fAmp.gain.setTargetAtTime(0, audio.currentTime, 0.05)
 				amp.gain.cancelScheduledValues(audio.currentTime)
 				amp.gain.setTargetAtTime(0, audio.currentTime, 0.05)
 			},
 			randomize() {
-				this.setState(gen(clock.steps, params))
+				this.setState(gen())
 			},
 			dispose() {
 				amp.gain.cancelScheduledValues(audio.currentTime)
 				amp.gain.setTargetAtTime(0, audio.currentTime, 0.08)
+				fAmp.gain.setTargetAtTime(0, audio.currentTime, 0.05)
 				for (const v of voices) for (const { o } of v.oscs) o.stop(audio.currentTime + 0.6)
+				for (const { o } of fOscs) o.stop(audio.currentTime + 0.6)
 			},
 		}
 	},
