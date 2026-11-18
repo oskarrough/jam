@@ -3,7 +3,7 @@
 import { SLOTS, clamp, intersect } from './util.js'
 import { hit } from '../gears.js'
 import { REVS, lapsOf } from '../orbits.js'
-import { makeFlies, flyPos } from '../swarm.js'
+import { fliesOf, flyPos } from '../swarm.js'
 
 const OCT = 5
 const mod = (a, n) => ((a % n) + n) % n
@@ -255,7 +255,7 @@ export const adapters = {
 	// read: replay the flight, log wire crossings. write: string a wire across the nearest firefly per note.
 	swarm: {
 		to(st, n, params, m) {
-			const flies = makeFlies(P(m, params, 'seed'), P(m, params, 'count'))
+			const flies = fliesOf(st, P(m, params, 'seed'), P(m, params, 'count'))
 			const r = P(m, params, 'range')
 			const notes = []
 			for (let s = 0; s < SLOTS; s++) {
@@ -274,7 +274,7 @@ export const adapters = {
 			return { n, drums: false, notes }
 		},
 		from(ph, n, params, m) {
-			const flies = makeFlies(P(m, params, 'seed'), P(m, params, 'count'))
+			const flies = fliesOf(null, P(m, params, 'seed'), P(m, params, 'count'))
 			const r = P(m, params, 'range')
 			const beat = ph.n / 4
 			const notes = [...fit(melody(ph), 1, r - 1)]

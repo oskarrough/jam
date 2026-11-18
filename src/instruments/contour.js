@@ -1,8 +1,24 @@
 // 01 Contour: draw a melody line across the loop. x is time, y is pitch.
-// One gliding voice follows it; gaps are rests.
+// One gliding voice follows it; gaps are rests. Each stroke is inked in a wave (sine, triangle, saw, square)
+// and drawn as that wave, so a line can go from a hum to a buzz mid-phrase.
 import { kit } from './lib/kit.js'
 import { withPointer, view, theme, SLOTS, clamp, subSlots } from './lib/util.js'
 import { wave } from './lib/demo.js'
+
+const WAVES = ['sine', 'triangle', 'sawtooth', 'square']
+const INKS = [
+	['sine', '<path d="M3 16C7 4 11 4 16 16S25 28 29 16"/>'],
+	['triangle', '<path d="M3 16L9.5 6L22.5 26L29 16"/>'],
+	['sawtooth', '<path d="M3 24L15 8V24L27 8V24"/>'],
+	['square', '<path d="M3 24V8H16V24H29V8"/>'],
+]
+// the wave's shape over one period, -1..1, for drawing the line as that wave
+const SHAPE = {
+	sine: (u) => Math.sin(u * Math.PI * 2),
+	triangle: (u) => 1 - 4 * Math.abs(((u + 0.25) % 1) - 0.5),
+	sawtooth: (u) => 1 - 2 * (u % 1),
+	square: (u) => (u % 1 < 0.5 ? 1 : -1),
+}
 
 function gen() {
 	const ys = []
@@ -18,7 +34,7 @@ export default {
 	id: 'contour',
 	glyph: '<path d="M3 22l5-7 4 3 6-11 5 7 6-4"/>',
 	name: 'Contour',
-	how: 'Draw a line left to right; height is pitch. Shift-drag erases.',
+	how: 'Draw a line left to right; height is pitch. Each ink under the sheet is a wave, from a soft sine to a buzzing square. Shift-drag erases.',
 	demo: () => [wave(0.08, 0.62, 0.5, 0.22, 1.2, 26)],
 	params: {
 		range: { value: 12, min: 5, max: 20, step: 1 },
@@ -28,6 +44,8 @@ export default {
 		cutoff: { value: 2400, min: 200, max: 9000, step: 10 },
 		articulate: { value: true },
 	},
+	inks: INKS,
+	optional: ['w'], // older parts have no per-slot wave; they play params.wave
 	generate: (steps, params) => gen(steps, params),
 	sample: (steps) => gen(steps),
 	create(ctx) {
@@ -35,15 +53,31 @@ export default {
 		const engine = kit(audio)
 		const th = theme(ctx)
 		const size = [1, 1]
-		const state = { ys: Array(SLOTS).fill(null) }
+		const state = { ys: Array(SLOTS).fill(null), w: Array(SLOTS).fill(null) } // w: wave index per slot, null = params.wave
+		let ink = WAVES.includes(params.wave) ? params.wave : 'triangle'
 
-		const osc = audio.createOscillator()
+		// one oscillator per wave, all on one pitch; the slot's wave gets the gain, so a switch lands on time
 		const filt = audio.createBiquadFilter()
 		const amp = audio.createGain()
 		filt.type = 'lowpass'
 		amp.gain.value = 0
-		osc.connect(filt).connect(amp).connect(out)
-		osc.start()
+		filt.connect(amp).connect(out)
+		const oscs = WAVES.map((type) => {
+			const o = audio.createOscillator()
+			const g = audio.createGain()
+			o.type = type
+			g.gain.value = 0
+			o.connect(g).connect(filt)
+			o.start()
+			return { o, g }
+		})
+		// square and saw are loud next to sine; even them out
+		const TRIM = [1, 0.9, 0.55, 0.5]
+		const waveAt = (s) => {
+			const k = state.w[s]
+			return k == null ? Math.max(0, WAVES.indexOf(params.wave)) : k
+		}
+		let lastWave = -1
 
 		const toDeg = (y) => Math.round((1 - y) * params.range)
 		const toMidi = (y) => engine.degree(toDeg(y), params.octave)
@@ -55,7 +89,10 @@ export default {
 			const from = lastSlot ?? s
 			const a = Math.min(from, s),
 				b = Math.max(from, s)
-			for (let i = a; i <= b; i++) state.ys[i] = erase ? null : clamp(y, 0, 1)
+			for (let i = a; i <= b; i++) {
+				state.ys[i] = erase ? null : clamp(y, 0, 1)
+				state.w[i] = erase ? null : WAVES.indexOf(ink)
+			}
 			lastSlot = s
 		}
 
@@ -69,7 +106,6 @@ export default {
 				else if (e.type === 'up') lastSlot = null
 			}),
 			step(i, time, dur) {
-				osc.type = params.wave
 				filt.frequency.setTargetAtTime(params.cutoff, time, 0.05)
 				subSlots(i, time, dur, clock.steps, (s, t) => {
 					const y = state.ys[s]
@@ -80,12 +116,19 @@ export default {
 					}
 					const m = toMidi(y)
 					const f = 440 * Math.pow(2, (m - 69) / 12)
+					const wv = waveAt(s)
+					if (wv !== lastWave)
+						oscs.forEach(({ g }, k) => g.gain.setTargetAtTime(k === wv ? TRIM[k] : 0, t, 0.006))
+					lastWave = wv
 					if (last === null) {
-						osc.frequency.setValueAtTime(f, t)
+						oscs.forEach(({ o }) => o.frequency.setValueAtTime(f, t))
 						amp.gain.setTargetAtTime(0.28, t, 0.01)
 					} else if (m !== last) {
-						if (params.glide > 0) osc.frequency.setTargetAtTime(f, t, params.glide / 3)
-						else osc.frequency.setValueAtTime(f, t)
+						oscs.forEach(({ o }) =>
+							params.glide > 0
+								? o.frequency.setTargetAtTime(f, t, params.glide / 3)
+								: o.frequency.setValueAtTime(f, t),
+						)
 						if (params.articulate) {
 							amp.gain.setTargetAtTime(0.08, t, 0.005)
 							amp.gain.setTargetAtTime(0.28, t + 0.02, 0.015)
@@ -114,19 +157,33 @@ export default {
 					const qy = (1 - toDeg(y) / params.range) * h
 					g.fillRect(s * sw, qy - 1.5, sw + 0.5, 3)
 				})
+				// the line is drawn as its wave: a ripple riding the contour, one period every few slots
 				g.strokeStyle = th.fg
 				g.lineWidth = Math.max(1, w / 400)
+				g.lineJoin = 'round'
+				const amp_ = Math.min(h * 0.025, sw * 0.9, 9)
+				const period = sw * 3
 				g.beginPath()
 				let pen = false
-				state.ys.forEach((y, s) => {
+				for (let s = 0; s < SLOTS; s++) {
+					const y = state.ys[s]
 					if (y === null) {
 						pen = false
-						return
+						continue
 					}
-					const x = (s + 0.5) * sw
-					pen ? g.lineTo(x, y * h) : g.moveTo(x, y * h)
+					const next = state.ys[s + 1]
+					const x0 = (s + 0.5) * sw
+					const shape = SHAPE[WAVES[waveAt(s)]]
+					if (!pen) g.moveTo(x0, y * h - shape(x0 / period) * amp_)
 					pen = true
-				})
+					if (next == null) continue
+					const n = Math.max(2, Math.ceil(sw / 2))
+					for (let j = 1; j <= n; j++) {
+						const x = x0 + (j / n) * sw
+						const yy = y + ((next - y) * j) / n
+						g.lineTo(x, yy * h - shape(x / period) * amp_)
+					}
+				}
 				g.stroke()
 				const px = t.phase * w // host draws the playhead; we mark the note under it
 				const y = state.ys[Math.floor(t.phase * SLOTS)]
@@ -137,11 +194,19 @@ export default {
 					g.fill()
 				}
 			},
+			get ink() {
+				return ink
+			},
+			set ink(v) {
+				ink = v
+			},
 			setState(s) {
 				state.ys = s.ys.slice()
+				state.w = Array.from({ length: SLOTS }, (_, i) => s.w?.[i] ?? null)
 			},
 			clear() {
 				state.ys.fill(null)
+				state.w.fill(null)
 				amp.gain.cancelScheduledValues(audio.currentTime)
 				amp.gain.setTargetAtTime(0, audio.currentTime, 0.02)
 			},
@@ -150,7 +215,7 @@ export default {
 			},
 			dispose() {
 				amp.gain.setTargetAtTime(0, audio.currentTime, 0.02)
-				osc.stop(audio.currentTime + 0.2)
+				oscs.forEach(({ o }) => o.stop(audio.currentTime + 0.2))
 			},
 		}
 	},
