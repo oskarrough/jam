@@ -1,4 +1,4 @@
-// Drums: kick, snare, hat in three rows. Tap a step to toggle it, drag up or down for loudness,
+// Drums: kick, snare, hat in three rows. Tap a step for a hit, higher in the row for harder; drag up or down to change it,
 // drag sideways to paint a dynamics curve. Shift or right-drag erases.
 //
 // state = { hits, vel }
@@ -80,16 +80,31 @@ const punchBus = (ac, out, lv) => {
 	sh.connect(out)
 	return pre
 }
+// the stick's attack: a short burst of bright noise that only a hard hit really has
+const snap = (ac, out, t, lv, hz, peak, dur) => {
+	const k = Math.pow(lv / 9, 3)
+	if (k < 0.02) return
+	const g = ac.createGain(),
+		hp = ac.createBiquadFilter()
+	hp.type = 'highpass'
+	hp.frequency.value = hz
+	env(g, t, 0.0005, peak * k, dur)
+	hp.connect(g)
+	g.connect(out)
+	noiseSrc(ac, t, dur + 0.01, hp)
+}
 const hitVoice = {
 	1({ audio: ac, out: dry }, t, lv) {
 		const out = punchBus(ac, dry, lv)
 		const g = ac.createGain()
 		env(g, t, 0.002, 0.7 * gainOf(lv), 0.3 + lv * 0.01)
 		g.connect(out)
-		const f0 = 120 + lv * 7
+		// harder hits start higher and drop faster: more thump, less boom
+		const f0 = 90 + lv * 18
 		const o = osc(ac, 'sine', f0, t, 0.5, g)
 		o.frequency.setValueAtTime(f0, t)
-		o.frequency.exponentialRampToValueAtTime(42, t + 0.12)
+		o.frequency.exponentialRampToValueAtTime(42, t + 0.15 - lv * 0.007)
+		snap(ac, out, t, lv, 2500, 0.18, 0.012)
 	},
 	2({ audio: ac, out: dry }, t, lv) {
 		const out = punchBus(ac, dry, lv)
@@ -106,6 +121,7 @@ const hitVoice = {
 		env(g2, t, 0.002, 0.3 * gainOf(lv), 0.07)
 		g2.connect(out)
 		osc(ac, 'triangle', 190, t, 0.12, g2)
+		snap(ac, out, t, lv, 4000, 0.35, 0.03)
 	},
 	4({ audio: ac, out: dry, params }, t, lv) {
 		const out = punchBus(ac, dry, lv)
@@ -113,8 +129,13 @@ const hitVoice = {
 			hp = ac.createBiquadFilter()
 		hp.type = 'highpass'
 		hp.frequency.value = 6000 + lv * 200
+		// a soft hat is a dull tick, a hard one sizzles
+		const lp = ac.createBiquadFilter()
+		lp.type = 'lowpass'
+		lp.frequency.value = 5000 + lv * 1700
 		env(g, t, 0.001, 0.2 * gainOf(lv), val(params.decay) * (0.6 + lv / 15))
-		hp.connect(g)
+		hp.connect(lp)
+		lp.connect(g)
 		g.connect(out)
 		noiseSrc(ac, t, 0.3, hp)
 	},
@@ -125,7 +146,7 @@ export default {
 	glyph:
 		'<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
-	how: 'Kick, snare and hat in three rows. Tap a step for a hit: higher in the row hits louder. Drag up or down to adjust, sideways to paint. Shift-drag erases.',
+	how: 'Kick, snare and hat in three rows. Tap a step for a hit: higher in the row hits harder. Drag up or down to adjust, sideways to paint. Shift-drag erases.',
 	demo: () => [
 		tap(0.07, 0.76),
 		tap(0.32, 0.9),
@@ -162,6 +183,14 @@ export default {
 		const lvOf = (s, row) => vel[s]?.[row] || LV
 		// the pen sits where the stem's top would (see frame)
 		const lvAt = (y, row) => clamp(Math.round((((1 - y) * ROWS - row - 0.1) / 0.68) * 9), 1, 9)
+		// play the hit you're placing, just for you, once per change of level
+		const hear = (row, lv) => {
+			if (g.heard === lv || ctx.audio.state !== 'running') return
+			g.heard = lv
+			hitVoice[1 << row](ctx, ctx.audio.currentTime + 0.005, lv)
+		}
+		// "soft" and "hard" at the bottom and top of the row you're pressing in, fading after you let go
+		let scale = null
 		return {
 			get state() {
 				return { hits, vel }
@@ -192,6 +221,9 @@ export default {
 					const had = has(s, row)
 					if (!had) put(s, row, true, lvAt(e.y, row))
 					g = { s, row, had, lv: lvOf(s, row), x0: e.x, y0: e.y, mode: null }
+					scale = { row, off: 0 }
+					// tapping an old hit again rubs it out, so only a new one sounds straight away
+					if (!had) hear(row, g.lv)
 				} else if (e.type === 'move' && g) {
 					if (!g.mode) {
 						if (Math.abs(e.x - g.x0) * n >= 0.7) g.mode = 'paint'
@@ -199,10 +231,11 @@ export default {
 						else return
 					}
 					if (g.mode === 'level') {
-						// a third of the height covers the whole range
-						const lv = clamp(Math.round(g.lv - (e.y - g.y0) * 24), 1, 9)
+						// the dot follows the finger: same scale as lvAt
+						const lv = clamp(Math.round(g.lv - ((e.y - g.y0) * ROWS * 9) / 0.68), 1, 9)
 						put(g.s, g.row, true, lv)
 						g.shown = lv
+						hear(g.row, lv)
 						return
 					}
 					let d = s - g.s
@@ -218,11 +251,15 @@ export default {
 							g.mode !== 'erase',
 							Math.round(from + ((lv - from) * j) / Math.abs(d)),
 						)
-					if (g.mode === 'paint') g.paintLv = lv
+					if (g.mode === 'paint') {
+						g.paintLv = lv
+						hear(g.row, lv)
+					}
 					g.s = s
 				} else if (e.type === 'up' && g) {
 					if (!g.mode && g.had) put(g.s, g.row, false)
 					g = null
+					if (scale) scale.off = performance.now()
 				}
 			},
 			step(i, time) {
@@ -257,6 +294,20 @@ export default {
 							const beat = s % 4 === 0
 							gx.fillRect((s + 0.5) * cw - 0.5, base - (beat ? 5 : 2), 1, beat ? 5 : 2)
 						}
+					}
+				}
+				if (scale && !strip) {
+					const a = scale.off ? 1 - (performance.now() - scale.off) / 900 : 1
+					if (a <= 0) scale = null
+					else {
+						const base = h - scale.row * band - band * 0.1
+						gx.font = `italic 400 ${Math.max(10, Math.min(15, band * 0.12))}px ${SERIF}`
+						gx.textAlign = 'right'
+						gx.fillStyle = rgba(INK, 0.6 * a)
+						gx.textBaseline = 'bottom'
+						gx.fillText('soft', w - 8, base - 3)
+						gx.textBaseline = 'middle'
+						gx.fillText('hard', w - 8, base - band * 0.68)
 					}
 				}
 				for (let s = 0; s < n; s++) {
