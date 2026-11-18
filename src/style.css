@@ -129,7 +129,7 @@ h1 {
 	outline: 1.5px solid currentColor;
 	outline-offset: 2px;
 }
-/* "start your own jam" is the one way out of the open jam, so it's a deck chip, not a word: easier to notice */
+/* "New jam" is the one way out of the open jam, so it's a deck chip, not a word: easier to notice */
 .jamline:has(> .chip) {
 	opacity: 1;
 }
@@ -142,6 +142,9 @@ h1 {
 	font: italic 400 17px/1 var(--serif);
 	font-variation-settings: 'WONK' 1;
 	white-space: nowrap;
+}
+.chip:not(:has(svg)) {
+	padding: 0 16px;
 }
 .chip svg {
 	width: 16px;

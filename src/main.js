@@ -76,7 +76,7 @@ async function relayUrl() {
 	} catch {}
 	return null
 }
-// a jam's name for "start your own" and for a fork of a shared song
+// a jam's name for "New jam" and for a fork of a shared song
 const JAM_A = [
 	'dusk',
 	'amber',
@@ -405,7 +405,7 @@ else if (transport.kind === 'ws') {
 			{ title: 'a new jam with its own link, for you and whoever you send it to' },
 		)
 	if (isOpenJam) {
-		const chip = fresh('start your own jam')
+		const chip = fresh('New jam')
 		chip.className = 'chip'
 		chip.insertAdjacentHTML(
 			'afterbegin',
@@ -430,21 +430,16 @@ else if (transport.kind === 'ws') {
 	}
 }
 // share: a link that carries the song itself, so it works with no relay and offline; opening it forks the song
-// into a new jam. Without a relay here it points at jam.0sk.ar, the one place a friend can open it.
+// into a new jam.
 if (!replay && !replayId) {
-	const chip = word('share this song', share)
+	const chip = word('Share', share)
 	chip.className = 'chip'
 	chip.title = 'copy a link that holds this song: whoever opens it gets their own copy to play'
-	chip.insertAdjacentHTML(
-		'afterbegin',
-		'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1.3-1.3a2.5 2.5 0 0 1 3.5 3.5L10.5 8M9 11.5l-1.3 1.3a2.5 2.5 0 0 1-3.5-3.5L5.5 8"/></svg>',
-	)
 	jellify(chip, { amount: 0.12 })
 	jamline.append(jamline.childNodes.length ? ' ' : '', chip)
 }
 async function songLink() {
-	const base = transport.kind === 'ws' ? location.origin : 'https://jam.0sk.ar'
-	return base + '/#song=' + (await encodeSong(songOf(engine, transport)))
+	return location.origin + '/#song=' + (await encodeSong(songOf(engine, transport)))
 }
 async function share() {
 	const chip = this
