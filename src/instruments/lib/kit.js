@@ -62,33 +62,28 @@ export function kit(audio) {
 	// key is the fallback (the lab sets it); in the jam, follow() points the kit at the shared loop
 	const key = { root: 'A', scale: 'minor pent' }
 	let source = () => null
-	const cur = () => {
-		const l = source() || {}
-		return {
-			root: l.root ?? key.root,
-			scale: l.scale ?? key.scale,
-			chords: l.chords?.length ? l.chords : CHORDS,
-			barSteps: (l.beatsPerBar ?? 4) * 4,
-		}
-	}
-	const rootMidi = () => ROOTS[cur().root] ?? 57
+	const barSteps = (loop) => (loop?.beatsPerBar ?? 4) * 4
+	const rootMidi = (loop) => ROOTS[loop?.root ?? key.root] ?? 57
 
 	function degree(deg, oct = 0) {
-		const s = SCALES[cur().scale] || SCALES['minor pent']
+		const loop = source()
+		const s = SCALES[loop?.scale ?? key.scale] || SCALES['minor pent']
 		const n = s.length
 		const o = Math.floor(deg / n)
 		const d = ((deg % n) + n) % n
-		return rootMidi() + s[d] + 12 * (o + oct)
+		return rootMidi(loop) + s[d] + 12 * (o + oct)
 	}
 	// triad (midi) for the bar that contains absStep (steps from the loop's origin)
 	function chord(absStep) {
-		const h = cur()
-		const bar = Math.floor(absStep / h.barSteps)
-		const r = h.chords[((bar % h.chords.length) + h.chords.length) % h.chords.length]
-		const parent = PARENT[h.scale] || PARENT.minor
-		const tone = (i) => rootMidi() + parent[(r + i) % 7] + 12 * Math.floor((r + i) / 7)
+		const loop = source()
+		const scale = loop?.scale ?? key.scale
+		const bar = Math.floor(absStep / barSteps(loop))
+		const { deg, name } = chordOf({ scale, chords: loop?.chords }, bar)
+		const parent = PARENT[scale] || PARENT.minor
+		const root = rootMidi(loop)
+		const tone = (i) => root + parent[(deg + i) % 7] + 12 * Math.floor((deg + i) / 7)
 		const notes = [tone(0), tone(2), tone(4)]
-		return { root: notes[0], notes, name: nameOf(h.scale, r) }
+		return { root: notes[0], notes, name }
 	}
 
 	k = {
@@ -97,7 +92,7 @@ export function kit(audio) {
 		degree,
 		chord,
 		follow: (fn) => (source = fn),
-		barSteps: () => cur().barSteps,
+		barSteps: () => barSteps(source()),
 		voices: makeVoices(audio, noise),
 	}
 	kits.set(audio, k)

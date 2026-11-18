@@ -2,6 +2,7 @@
 // phrase = { n steps, drums, notes: [{ s onset in steps (fractional ok), p degree (5/octave) or drum row 0 kick 1 snare 2 hat, v 0..1 }] }
 
 import { adapters as labAdapters } from './instruments/lib/phrases.js'
+import { riffOf } from './instruments/bass.js'
 import { parseTide, tideOf, through, W } from './instruments/keys.js'
 import { parseMarbles, marblesOf, strikes } from './instruments/bell.js'
 
@@ -45,34 +46,6 @@ function retime(ph, n) {
 	return { ...ph, n, notes: ph.notes.map((x) => ({ ...x, s: x.s * k })) }
 }
 
-// stepline: one note per step, value 0..7 or -1; stack[s] holds a chord's other notes, hold[s] how long it rings
-const stepline = {
-	to(state, n) {
-		const a = state?.notes || [],
-			st = state?.stack || []
-		return {
-			n,
-			drums: false,
-			notes: a.flatMap((v, i) =>
-				v >= 0 ? [v, ...(st[i] || [])].map((p) => ({ s: (i * n) / a.length, p, v: 0.8 })) : [],
-			),
-		}
-	},
-	from(ph, n, params, mod_) {
-		const notes = new Array(n).fill(-1),
-			hold = new Array(n).fill(1),
-			stack = Array.from({ length: n }, () => [])
-		const max = (mod_?.chords || 1) - 1
-		for (const x of fitRange(asMelody(retime(ph, n)).notes, 0, 7)) {
-			const s = mod(Math.round(x.s), n)
-			if (notes[s] < 0) notes[s] = x.p
-			else if (stack[s].length < max && x.p !== notes[s] && !stack[s].includes(x.p))
-				stack[s].push(x.p)
-		}
-		return { notes, hold, stack }
-	},
-}
-
 // bass: an elastic riff, { riff: '0..3.' one cell per char, len? the steps it stretches over }; copies tile the loop
 const bass = {
 	to(state, n) {
@@ -87,8 +60,12 @@ const bass = {
 		return { n, drums: false, notes }
 	},
 	from(ph, n) {
-		const { notes } = stepline.from(ph, n, {}, null)
-		return { riff: notes.map((v) => (v >= 0 ? String(v) : '.')).join('') }
+		const cells = new Array(n).fill(-1)
+		for (const x of fitRange(asMelody(retime(ph, n)).notes, 0, 7)) {
+			const s = mod(Math.round(x.s), n)
+			if (cells[s] < 0) cells[s] = x.p
+		}
+		return { riff: riffOf(cells) }
 	},
 }
 
