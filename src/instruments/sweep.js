@@ -178,6 +178,7 @@ export default {
 			},
 			clear() {
 				state.auto.fill(null)
+				if (!live) amp.gain.setTargetAtTime(0, audio.currentTime, 0.05)
 			},
 			randomize() {
 				this.setState(gen(clock.steps, params))

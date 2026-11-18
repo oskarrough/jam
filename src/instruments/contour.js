@@ -142,6 +142,8 @@ export default {
 			},
 			clear() {
 				state.ys.fill(null)
+				amp.gain.cancelScheduledValues(audio.currentTime)
+				amp.gain.setTargetAtTime(0, audio.currentTime, 0.02)
 			},
 			randomize() {
 				this.setState(gen(clock.steps, params))

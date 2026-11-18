@@ -1,5 +1,5 @@
 // Bloom: the room's chord, held. Draw how open it is across the loop: low is a dark hum of the triad,
-// high opens the filter, swells, and flowers the 7th, the 9th and a shimmer on top. Gaps rest at the hum.
+// high opens the filter, swells, and flowers the 7th, the 9th and a shimmer on top. Gaps are silent.
 import { kit } from './lib/kit.js'
 import { withPointer, absOf, view, theme, rgba, SLOTS, clamp, subSlots } from './lib/util.js'
 import { line } from './lib/demo.js'
@@ -38,7 +38,7 @@ function gen() {
 export default {
 	id: 'bloom',
 	name: 'Bloom',
-	how: "Holds the room's chord. Draw across the loop: higher opens it up and lets the 7th and 9th flower. Shift-drag erases back to the hum.",
+	how: "Holds the room's chord. Draw across the loop: higher opens it up and lets the 7th and 9th flower. Shift-drag erases to silence.",
 	glyph:
 		'<path d="M16 27V15"/><path d="M16 15c-6 0-8-5-8-9 4 0 8 3 8 9zM16 15c6 0 8-5 8-9-4 0-8 3-8 9z"/><path d="M5 27h22" stroke-dasharray="1 2"/>',
 	demo: () => [line(0.06, 0.85, 0.94, 0.12, 22)],
@@ -107,24 +107,24 @@ export default {
 				}
 			}
 			// a new chord takes a breath: dip, then swell back in, so a scrub on the eye is heard at once
-			if (fresh) {
+			if (fresh && drawnAt(abs)) {
+				const lv = levelOf(openAt(abs))
 				amp.gain.cancelScheduledValues(time)
-				amp.gain.setTargetAtTime(levelOf(openAt(abs)) * 0.35, time, 0.03)
-				amp.gain.setTargetAtTime(levelOf(openAt(abs)) * 1.15, time + 0.08, 0.12)
+				amp.gain.setTargetAtTime(lv * 0.35, time, 0.03)
+				amp.gain.setTargetAtTime(lv * 1.15, time + 0.08, 0.12)
 				changedAt = time
 			}
 		}
-		const openAt = (abs) => {
-			const s = Math.floor(
-				(((abs % clock.steps) + clock.steps) % clock.steps) * (SLOTS / clock.steps),
-			)
-			return state.ys[s] == null ? params.rest : 1 - state.ys[s]
-		}
+		const slotAt = (abs) =>
+			Math.floor((((abs % clock.steps) + clock.steps) % clock.steps) * (SLOTS / clock.steps))
+		const drawnAt = (abs) => state.ys[slotAt(abs)] != null
+		const openAt = (abs) => (drawnAt(abs) ? 1 - state.ys[slotAt(abs)] : params.rest)
 		const levelOf = (o) => params.level * (0.45 + 0.75 * o)
 
-		function shape(o, t, tc) {
+		// an undrawn slot is silent, like every other empty ring
+		function shape(o, t, tc, drawn) {
 			filt.frequency.setTargetAtTime(cutoffOf(o), t, tc)
-			amp.gain.setTargetAtTime(levelOf(o), t, tc * 1.5)
+			amp.gain.setTargetAtTime(drawn ? levelOf(o) : 0, t, tc * 1.5)
 			for (const v of voices) v.g.gain.setTargetAtTime(bloomOf(o, v.at) * v.trim, t, tc * 2)
 		}
 
@@ -159,7 +159,7 @@ export default {
 						filt.frequency.setTargetAtTime(cutoffOf(o), t, dur * 0.8)
 						return
 					}
-					shape(o, t, dur * 0.8)
+					shape(o, t, dur * 0.8, y != null)
 				})
 			},
 			frame(g, w, h, clk, shp) {
@@ -214,6 +214,8 @@ export default {
 			},
 			clear() {
 				state.ys.fill(null)
+				amp.gain.cancelScheduledValues(audio.currentTime)
+				amp.gain.setTargetAtTime(0, audio.currentTime, 0.05)
 			},
 			randomize() {
 				this.setState(gen(clock.steps, params))
