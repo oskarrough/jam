@@ -334,6 +334,15 @@ export function createView(
 			? null
 			: { i, xy: rimFrom(i, 1.75), r: seatR() * 0.72 }
 	}
+	// drawn, the broom and mixer don't vanish on zoom: they slide along the rim into your badge and fade, on the
+	// machine's own easing, and come back out the same way. Tap targets stay wipeAt/mixAt (overview only).
+	const besideAt = (side) => {
+		const i = seats.findIndex((_, j) => canDraw(j)),
+			t = 1 - eMachine()
+		return i < 0 || t <= 0 || opts.mode !== 'dial'
+			? null
+			: { i, t, xy: rimFrom(i, side * 1.75 * t), r: seatR() * 0.72 * (0.4 + 0.6 * t) }
+	}
 	const wipeJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
 	// the mixer: a button on your badge's other side opens a square over the dial where every seat is a dot,
 	// up louder, right brighter. You drag your own; the others move as their players drag theirs.
@@ -1559,17 +1568,20 @@ export function createView(
 			const [x, y] = seatPos(i)
 			g.save()
 			g.globalAlpha = Math.min(1, sp * 3)
-			around(x, y, EASES['out back'](sp), () => drawSeat(i, x, y, true))
+			// broom and mixer first, so on zoom they tuck in under the badge
 			if (canDraw(i)) around(x, y, EASES['out back'](sp), drawWipe)
 			if (canDraw(i)) around(x, y, EASES['out back'](sp), drawMixButton)
+			around(x, y, EASES['out back'](sp), () => drawSeat(i, x, y, true))
 			g.restore()
 		})
 	}
 	function drawWipe() {
-		const w = wipeAt()
+		const w = besideAt(1)
 		if (!w) return
 		const [x, y] = w.xy,
 			r = w.r
+		g.save()
+		g.globalAlpha *= w.t
 		g.fillStyle = 'rgba(40,25,60,.4)'
 		g.beginPath()
 		g.arc(x + 2, y + 3, r, 0, TAU)
@@ -1589,14 +1601,17 @@ export function createView(
 		}))
 		if (img.complete && img.naturalWidth)
 			g.drawImage(img, x - r * 0.72, y - r * 0.72, r * 1.44, r * 1.44)
+		g.restore()
 	}
 	let broom = null
 	// the mixer's button: a little square with three dots in it, like the field it opens
 	function drawMixButton() {
-		const m = mixAt()
+		const m = onMix && besideAt(-1)
 		if (!m) return
 		const [x, y] = m.xy,
 			r = m.r
+		g.save()
+		g.globalAlpha *= m.t
 		g.fillStyle = 'rgba(40,25,60,.4)'
 		g.beginPath()
 		g.arc(x + 2, y + 3, r, 0, TAU)
@@ -1620,6 +1635,7 @@ export function createView(
 			g.arc(x + dx * h, y + dy * h, Math.max(1.6, r * 0.13), 0, TAU)
 			g.fill()
 		}
+		g.restore()
 	}
 	// a hand-drawn square: each side bows a little, the same way every frame
 	const squares = new Map()
