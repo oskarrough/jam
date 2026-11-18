@@ -55,6 +55,15 @@ The instance does five things:
 
 If someone sends a state your instrument doesn't understand, the registry ignores it and keeps your current one, so a mismatch can't break a seat.
 
+## Controls
+
+The controls should vanish into the instrument. A knob gets built in only when it matters enough to play with, and then in one of two places:
+
+1. The drawing is the control. Height, length, speed and shape of the stroke carry the parameter: bass's knot stretches the riff, gears' outward drag adds pulses, steps' bracket sets the length. Prefer this; if a knob can become part of the gesture, make it so.
+2. The tool row. Anything that changes what your next stroke does (inks, modes like steps' pitch/loud/chance) is a round chip in the one row under the sheet, in the brush style. Nowhere else.
+
+Everything else stays off the sheet. `d` always holds every param, as the whole machine opened up, so it's never where a control gets moved to; the only question is whether to build a knob in. No clickable words on the sheet, nothing outside its frame but the tool row. Legends and readouts that take no taps (drums' row names, the chord) are fine.
+
 ## Helpers
 
 `lib/util.js` has small timing, pointer and drawing helpers (`withPointer`, `subSlots`, `flashes`, `view`, `isStrip`) plus synth parts (`env`, `osc`, `noiseSrc`, `mtof`). `lib/kit.js` holds the jam's harmony and some voices: `kit(audio).degree(d, octave)` is a scale degree in the jam's key, `kit(audio).chord(absStep)` the triad for that bar. The key and chords travel with the loop, so use these rather than fixed notes and your instrument follows when someone changes them. `lib/voiced.js` turns `[[name, fn], …]` into a choice of voice: a `voice` param that syncs, listed in the sheet's corner (bass, tide and bell use it). `lib/voices.js` is a trimmed copy of the jukebox synth's voices (synbass, 808, rhodes, glock…); `voice('rhodes', -9)` plays one, trimmed in dB.
