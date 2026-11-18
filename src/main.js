@@ -207,7 +207,14 @@ const heart = createHeart({
 		return c
 	},
 })
-createHarmony({ canvas: document.getElementById('c'), view, transport, heart, readOnly: replay })
+createHarmony({
+	canvas: document.getElementById('c'),
+	view,
+	transport,
+	heart,
+	engine,
+	readOnly: replay,
+})
 bots = createBots(engine, { seated: (i) => !!humanAt(i), view })
 
 transport.on('cursor', (c) => {

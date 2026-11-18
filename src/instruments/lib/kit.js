@@ -54,6 +54,16 @@ export function letterOf(l, r) {
 	return LETTERS[(root + p[r]) % 12] + quality
 }
 
+// the triad a degree plays in the loop's key, as midi notes from the root's octave
+export function triadOf(l, r) {
+	const p = PARENT[l?.scale] || PARENT['minor pent']
+	const root = ROOTS[l?.root ?? 'A'] ?? 57
+	return [0, 2, 4].map((i) => root + p[(r + i) % 7] + 12 * Math.floor((r + i) / 7))
+}
+// what a key is called: its parent scale, since that's where the chords come from ('A minor' for minor pent)
+const KEYNAME = { 'minor pent': 'minor', 'major pent': 'major', 'hira joshi': 'minor' }
+export const keyOf = (l) => `${l?.root ?? 'A'} ${KEYNAME[l?.scale] ?? l?.scale ?? 'minor'}`
+
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 

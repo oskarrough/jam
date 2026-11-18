@@ -240,6 +240,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 
 	return {
 		audio,
+		master,
 		seats,
 		cfg,
 		stats,
