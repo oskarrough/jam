@@ -163,9 +163,11 @@ export function createLocalTransport({
 
 	function edit(seat, data, opts = {}) {
 		const now = clock.now()
+		// an edit "now" still lands no earlier than one already on its way for this seat, or that older edit,
+		// landing on its bar later, would undo it (a mute right after a mix drag came back unmuted)
 		const at =
 			opts.now || fake.quantize === 'off'
-				? now
+				? Math.max(now, history.snapshot()[seat]?.at ?? 0)
 				: clock.nextBar(now + Math.max(80, fake.latency * 1.5 + fake.jitter + 40) + LOOKAHEAD)
 		const r = ++rev
 		record(seat, { at, data, rev: r, from: id })

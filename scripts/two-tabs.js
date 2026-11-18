@@ -163,6 +163,18 @@ try {
 		own && muted && (await a.evaluate((seat) => window.jam.engine.seats[seat].mix.mute, seat)),
 		"ben hears ana's mute",
 	)
+	// unmute straight after a level change: the level's edit lands on the next bar, and must not bring the mute back
+	await a.evaluate((seat) => {
+		const { engine } = window.jam
+		engine.setMix(engine.seats[seat], { level: 0.8 })
+		engine.setMute(engine.seats[seat], false)
+	}, seat)
+	await a.waitForTimeout(6000)
+	const kept = await b.evaluate((seat) => window.jam.engine.seats[seat].mix, seat)
+	check(
+		!kept.mute && kept.level === 0.8,
+		`an unmute right after a level change sticks (${JSON.stringify(kept)})`,
+	)
 	// a jam of your own starts blank: cat gets an instrument, the rest are bare; dan sits at a bare ring and picks
 	const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 860 } })
 	const join = async (name) => {
