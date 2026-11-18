@@ -332,7 +332,16 @@ else if (transport.kind === 'ws') {
 			word(text, () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))),
 			{ title: 'a new jam with its own link, for you and whoever you send it to' },
 		)
-	if (isOpenJam) jamline.append(fresh('start your own jam'))
+	if (isOpenJam) {
+		const chip = fresh('start your own jam')
+		chip.className = 'chip'
+		chip.insertAdjacentHTML(
+			'afterbegin',
+			'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>',
+		)
+		jellify(chip, { amount: 0.12 })
+		jamline.append(chip)
+	}
 	else {
 		const b = word(room, async () => {
 			try {

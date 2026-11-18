@@ -99,19 +99,19 @@ h1 {
 .jamline b {
 	font-weight: 600;
 }
-.jamline button {
+.jamline button:not(.chip) {
 	all: unset;
 	cursor: pointer;
 	text-decoration: underline wavy color-mix(in srgb, currentColor 45%, transparent) 1px;
 	text-underline-offset: 3px;
 }
 @media (hover: hover) and (pointer: fine) {
-	.jamline button:hover {
+	.jamline button:not(.chip):hover {
 		text-decoration-color: currentColor;
 	}
 }
-.jamline button:focus-visible,
-.jamline button:active {
+.jamline button:not(.chip):focus-visible,
+.jamline button:not(.chip):active {
 	text-decoration-color: currentColor;
 }
 .jamline .dl::before {
@@ -125,9 +125,28 @@ h1 {
 	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11'/%3E%3C/svg%3E")
 		center / contain no-repeat;
 }
-.jamline button:focus-visible {
+.jamline button:not(.chip):focus-visible {
 	outline: 1.5px solid currentColor;
 	outline-offset: 2px;
+}
+/* "start your own jam" is the one way out of the open jam, so it's a deck chip, not a word: easier to notice */
+.jamline:has(> .chip) {
+	opacity: 1;
+}
+.chip {
+	height: 40px;
+	padding: 0 16px 0 12px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font: italic 400 17px/1 var(--serif);
+	font-variation-settings: 'WONK' 1;
+	white-space: nowrap;
+}
+.chip svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 1.8;
 }
 
 /* the opening (view.js INTRO): the chrome waits off-stage until the dial has built, then rises token by token.
@@ -185,6 +204,18 @@ button {
 	color: var(--ink);
 	-webkit-tap-highlight-color: transparent;
 }
+/* the deck's surface: paper, ink rim, hard shadow. Tokens and chips press into their shadow; the tempo chip has nibs instead. */
+.token,
+.tempo,
+.chip {
+	background: var(--paper);
+	border: 1.4px solid var(--ink);
+	box-shadow: 3px 4px 0 var(--shadow);
+}
+.tempo,
+.chip {
+	border-radius: 26px 22px 24px 20px;
+}
 .token {
 	width: 48px;
 	height: 48px;
@@ -192,23 +223,25 @@ button {
 	padding: 0;
 	display: grid;
 	place-items: center;
-	cursor: pointer;
-	background: var(--paper);
-	border: 1.4px solid var(--ink);
 	border-radius: 50% 46% 52% 48% / 48% 52% 46% 50%;
-	box-shadow: 3px 4px 0 var(--shadow);
+}
+.token,
+.chip {
+	cursor: pointer;
 	transition:
 		transform 0.08s,
 		box-shadow 0.08s,
 		background-color 0.15s;
 }
 @media (hover: hover) and (pointer: fine) {
-	.token:hover {
+	.token:hover,
+	.chip:hover {
 		transform: translate(-1px, -1px);
 		box-shadow: 4px 5px 0 var(--shadow);
 	}
 }
-.token:active {
+.token:active,
+.chip:active {
 	transform: translate(2px, 3px);
 	box-shadow: 1px 1px 0 var(--shadow);
 }
@@ -217,6 +250,7 @@ button {
 	box-shadow: 1px 1px 0 var(--shadow);
 }
 .token:focus-visible,
+.chip:focus-visible,
 .nib:focus-visible {
 	outline: 1.5px dashed var(--ink);
 	outline-offset: 4px;
@@ -264,11 +298,7 @@ svg .fill {
 	position: relative;
 	width: 132px;
 	justify-content: center;
-	background: var(--paper);
-	border: 1.4px solid var(--ink);
-	border-radius: 26px 22px 24px 20px;
 	height: 48px;
-	box-shadow: 3px 4px 0 var(--shadow);
 	overflow: hidden;
 }
 .nib {
@@ -339,7 +369,8 @@ output.pending {
 	--widget-height: 22px;
 }
 /* zoomed, the sheet and its instrument strip need the room */
-body.zoomed .lil-gui.root {
+body.zoomed .lil-gui.root,
+body.zoomed #jamline {
 	display: none;
 }
 .lil-gui.root {
