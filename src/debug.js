@@ -5,7 +5,9 @@ import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/
 
 export function createDebug(options) {
 	const gui = new GUI({
-		title: matchMedia('(pointer: coarse), (max-width: 640px)').matches ? 'controls' : 'controls  (d)',
+		title: matchMedia('(pointer: coarse), (max-width: 640px)').matches
+			? 'controls'
+			: 'controls  (d)',
 		width: 280,
 	})
 	gui.close()
@@ -21,7 +23,7 @@ export function createDebug(options) {
 	return { gui, toggle: () => (gui._closed ? gui.open() : gui.close()) }
 }
 
-function buildPanel(gui, { engine, transport, view, bots, me, sit, registry, heart }) {
+function buildPanel(gui, { engine, transport, view, bots, me, sit, presence, registry, heart }) {
 	const { clock } = transport
 
 	const meF = gui.addFolder('me')
@@ -47,6 +49,14 @@ function buildPanel(gui, { engine, transport, view, bots, me, sit, registry, hea
 		'seat',
 		engine.seats.map((L) => L.id),
 	)
+	// fake listeners, here only: above three they take seats, draw, go idle and hand off
+	if (presence) {
+		const crowd = { n: presence.crowd }
+		meF
+			.add(crowd, 'n', 0, 12, 1)
+			.name('crowd')
+			.onChange((v) => presence.setCrowd(v))
+	}
 
 	const loopF = gui.addFolder('loop')
 	const cur = () => clock.loopAt()
@@ -92,10 +102,18 @@ function buildPanel(gui, { engine, transport, view, bots, me, sit, registry, hea
 			},
 		}
 		f.add(sel, 'instrument', ids)
-		f.add(L.mix, 'level', 0, 1.5, 0.01).listen().onChange((v) => engine.setMix(L, { level: v }))
-		f.add(L.mix, 'tone', 0, 1, 0.01).listen().onChange((v) => engine.setMix(L, { tone: v }))
-		f.add(L.mix, 'space', 0, 1, 0.01).listen().onChange((v) => engine.setMix(L, { space: v }))
-		f.add(L.mix, 'mute').listen().onChange((v) => engine.setMute(L, v))
+		f.add(L.mix, 'level', 0, 1.5, 0.01)
+			.listen()
+			.onChange((v) => engine.setMix(L, { level: v }))
+		f.add(L.mix, 'tone', 0, 1, 0.01)
+			.listen()
+			.onChange((v) => engine.setMix(L, { tone: v }))
+		f.add(L.mix, 'space', 0, 1, 0.01)
+			.listen()
+			.onChange((v) => engine.setMix(L, { space: v }))
+		f.add(L.mix, 'mute')
+			.listen()
+			.onChange((v) => engine.setMute(L, v))
 		f.add(
 			{
 				clear: () => {

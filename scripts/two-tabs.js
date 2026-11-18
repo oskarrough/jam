@@ -220,22 +220,32 @@ try {
 	}
 	await five[4].waitForTimeout(600)
 	const sat = await Promise.all(five.map((p) => p.evaluate(() => window.jam.me.seat)))
-	const line5 = await five[4].textContent('#seatline')
 	check(
 		new Set(sat.slice(0, 4)).size === 4 && !sat.slice(0, 4).includes(-1) && sat[4] === -1,
-		`four seated, the fifth listens (${sat}): "${line5}"`,
+		`four seated, the fifth listens (${sat})`,
 	)
-	check(/5 here/.test(line5) && /next free seat/.test(line5), 'the fifth sees 5 here and waits')
-	await five[1].click('#seatline button')
+	const dots = await five[4].evaluate(() => window.jam.presence.audience().length)
+	check(dots === 5, `five dots round the rim (${dots})`)
+	// a fast loop so the candles burn in seconds: nobody draws, a seat burns out, the fifth takes it
+	await five[0].evaluate(() => window.jam.transport.setLoop({ bpm: 300, beatsPerBar: 4, bars: 1 }))
 	const took = await five[4]
-		.waitForFunction((s) => window.jam.me.seat === s, sat[1], { timeout: 8000 })
+		.waitForFunction(() => window.jam.me.seat >= 0, null, { timeout: 15000 })
 		.then(
 			() => true,
 			() => false,
 		)
-	const p2 = await five[1].evaluate(() => [window.jam.me.seat, document.getElementById('seatline').textContent])
-	check(took && p2[0] === -1, `p2 stands up, p5 takes seat ${sat[1]}; p2: "${p2[1]}"`)
-	const errs = [...a.errors, ...b.errors, ...c2.errors, ...d.errors, ...five.flatMap((p) => p.errors)]
+	const after = await Promise.all(five.map((p) => p.evaluate(() => window.jam.me.seat)))
+	check(
+		took && after.filter((x) => x < 0).length === 1,
+		`an idle seat burns out and the fifth sits (${after})`,
+	)
+	const errs = [
+		...a.errors,
+		...b.errors,
+		...c2.errors,
+		...d.errors,
+		...five.flatMap((p) => p.errors),
+	]
 	check(!errs.length, 'no page errors' + errs.map((e) => '\n  ' + e).join(''))
 } finally {
 	await browser.close()

@@ -33,7 +33,20 @@ function rng(seed) {
 export function createView(
 	canvas,
 	engine,
-	{ occupant, canDraw, onSit, onPointer, onHand, canHand, onWipe, onMute, onSolo, onMix, onBars },
+	{
+		occupant,
+		audience = () => [],
+		canDraw,
+		onSit,
+		onPointer,
+		onHand,
+		canHand,
+		onWipe,
+		onMute,
+		onSolo,
+		onMix,
+		onBars,
+	},
 ) {
 	const g = canvas.getContext('2d')
 	const { seats, transport } = engine
@@ -397,7 +410,7 @@ export function createView(
 			bd = Infinity
 		for (const d of mixer.dots) {
 			const dd = Math.hypot(x - d.x, y - d.y)
-			if (dd < d.r + 10 && dd < bd) (best = d.i), (bd = dd)
+			if (dd < d.r + 10 && dd < bd) ((best = d.i), (bd = dd))
 		}
 		return best
 	}
@@ -453,7 +466,8 @@ export function createView(
 	const BARS = [1, 2, 4, 8]
 	let lenDrag = null
 	const barsOf = (L) => L.instance?.bars ?? engine.steps(L) / (engine.loop().beatsPerBar * 4)
-	const snapBars = (b) => BARS.reduce((a, c) => (Math.abs(Math.log2(c / b)) < Math.abs(Math.log2(a / b)) ? c : a))
+	const snapBars = (b) =>
+		BARS.reduce((a, c) => (Math.abs(Math.log2(c / b)) < Math.abs(Math.log2(a / b)) ? c : a))
 	const hasBracket = () =>
 		focus.on && sheet && onBars && canDraw(focus.seat) && !seats[focus.seat]?.module.ownLength
 	const onBracket = (x, y) =>
@@ -472,7 +486,14 @@ export function createView(
 		if (!drag && !lenDrag && !mixer.on && onBracket(e.clientX, e.clientY)) {
 			canvas.setPointerCapture(e.pointerId)
 			const from = snapBars(barsOf(seats[focus.seat]))
-			lenDrag = { id: e.pointerId, seat: focus.seat, x0: e.clientX, from, bars: from, was: barsOf(seats[focus.seat]) }
+			lenDrag = {
+				id: e.pointerId,
+				seat: focus.seat,
+				x0: e.clientX,
+				from,
+				bars: from,
+				was: barsOf(seats[focus.seat]),
+			}
 			return
 		}
 		if (lenDrag) return
@@ -580,6 +601,7 @@ export function createView(
 	})
 	canvas.addEventListener('pointermove', (e) => {
 		hover = focus.on ? null : hit(e.clientX, e.clientY)
+		dotHover = e.pointerType === 'mouse' ? [e.clientX, e.clientY] : null
 		const onSeat = seats.some((_, i) => {
 			const [x, y] = seatPos(i)
 			return Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6
@@ -744,7 +766,7 @@ export function createView(
 		)
 	}
 	canvas.addEventListener('pointercancel', up)
-	canvas.addEventListener('pointerleave', () => (hover = null))
+	canvas.addEventListener('pointerleave', () => ((hover = null), (dotHover = null)))
 
 	const RUB_MS = 700
 	// on screen, about the reach of lib/erase.js on the sheet
@@ -1204,7 +1226,8 @@ export function createView(
 				g.fillRect(w * r, 0, w * (1 - r), h)
 			}
 			if (axis && r === 1) playhead.over(g, w, h, L.clock, ph)
-			if (!L.module.ownLength && canDraw(sheetSeat)) drawBracket(w * Math.min(1, r), h, fg, L.color, held)
+			if (!L.module.ownLength && canDraw(sheetSeat))
+				drawBracket(w * Math.min(1, r), h, fg, L.color, held)
 			g.restore()
 		}
 		g.strokeStyle = INK
@@ -1386,6 +1409,17 @@ export function createView(
 		// every badge wears its instrument's glyph: pale on a taken seat, faint ink on an empty one
 		const img = glyphImg(L.module.id, empty ? rgba(PAPER, 0.45) : PAPER)
 		if (img) g.drawImage(img, x - r * 0.7, y - r * 0.7, r * 1.4, r * 1.4)
+		// a candle burning down while someone waits: the badge greys, and what's left of it is an arc in its colour
+		if (st.dim > 0) {
+			g.fillStyle = rgba('#5f5a66', 0.9 * st.dim)
+			g.fill(disc)
+			g.strokeStyle = L.color
+			g.lineWidth = 3
+			g.lineCap = 'round'
+			g.beginPath()
+			g.arc(x, y, r - 1.5, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - st.dim))
+			g.stroke()
+		}
 		if (L.mix.mute) muteSlash(x, y, r)
 		if (!label || small()) return
 		// the legend runs round the badge like a coin's edge, centred on the side away from the dial:
@@ -1426,6 +1460,97 @@ export function createView(
 		}
 		const { cv, margin } = legend
 		g.drawImage(cv, x - margin, y - margin, cv.width / DPR, cv.height / DPR)
+	}
+
+	// the audience: everyone here is a dot round the rim, in their colour, like people round a campfire. Listeners
+	// sit in two arcs, left and right of the dial; a waiting one drifts beside the seat that's been idle longest;
+	// a seated one slides into its badge and fades, and one who gets up comes back out of it.
+	const dots = new Map()
+	let dotHover = null,
+		dotT = 0
+	function drawAudience() {
+		const t = performance.now(),
+			dt = Math.min(0.05, (t - (dotT || t)) / 1000)
+		dotT = t
+		const show = opts.mode === 'dial' ? 1 - eMachine() : 0
+		const list = audience(),
+			r = seatR(),
+			dr = Math.max(4, r * 0.3),
+			R = S * 0.505 + Math.max(16, r * 1.5)
+		const sides = [[], []]
+		const want = new Map() // id -> {p, ang, rad, a}: dots move round the rim, never across the dial
+		const B = S * 0.505
+		for (const p of list) {
+			if (p.seat >= 0) want.set(p.id, { p, ang: seatAngle(p.seat), rad: B, a: 0 })
+			else if (p.near >= 0)
+				// a queue along the rim beside that badge, a little outside it, first in line nearest
+				want.set(p.id, {
+					p,
+					ang: seatAngle(p.near) - ((1.6 + p.place * 0.75) * r * 2.3) / B,
+					rad: B + r * 1.4,
+					a: 1,
+				})
+			else sides[sides[0].length <= sides[1].length ? 0 : 1].push(p)
+		}
+		sides.forEach((side, s) => {
+			const step = (dr * 3.2) / R
+			side.forEach((p, j) =>
+				want.set(p.id, {
+					p,
+					ang: (s ? Math.PI : 0) + (j - (side.length - 1) / 2) * step,
+					rad: R,
+					a: 1,
+				}),
+			)
+		})
+		const k = 1 - Math.pow(0.02, dt)
+		for (const [id, w] of want) {
+			let d = dots.get(id)
+			if (!d) dots.set(id, (d = { ang: w.ang, rad: w.rad, a: 0 }))
+			const da = Math.atan2(Math.sin(w.ang - d.ang), Math.cos(w.ang - d.ang))
+			d.ang += da * k
+			d.rad += (w.rad - d.rad) * k
+			d.a += (w.a - d.a) * k
+			;[d.x, d.y] = polar(d.ang, d.rad)
+			d.p = w.p
+		}
+		for (const [id, d] of dots) if (!want.has(id)) (d.a -= dt * 3) <= 0 && dots.delete(id)
+		if (show <= 0) return
+		let tip = null
+		g.save()
+		for (const d of dots.values()) {
+			if (d.a < 0.02) continue
+			const bob = d.p.near >= 0 ? Math.sin(t / 380 + d.x) * 1.5 : 0
+			const rr = dr * (0.5 + 0.5 * d.a)
+			g.globalAlpha = Math.min(1, d.a) * show
+			g.fillStyle = d.p.color
+			g.strokeStyle = INK
+			g.lineWidth = 1.1
+			g.beginPath()
+			g.arc(d.x, d.y + bob, rr, 0, TAU)
+			g.fill()
+			g.stroke()
+			if (d.p.me) {
+				g.strokeStyle = PAPER
+				g.lineWidth = 1
+				g.beginPath()
+				g.arc(d.x, d.y + bob, rr * 0.45, 0, TAU)
+				g.stroke()
+			}
+			if (dotHover && Math.hypot(dotHover[0] - d.x, dotHover[1] - d.y) < rr + 5) tip = d
+		}
+		if (tip) {
+			g.globalAlpha = show
+			g.font = serif(13)
+			g.textAlign = 'center'
+			g.textBaseline = 'bottom'
+			g.lineWidth = 3
+			g.strokeStyle = rgba(PAPER, 0.85)
+			g.strokeText(tip.p.name, tip.x, tip.y - dr - 4)
+			g.fillStyle = INK
+			g.fillText(tip.p.name, tip.x, tip.y - dr - 4)
+		}
+		g.restore()
 	}
 
 	// muted: an ink slash through the badge, edged in paper so it reads over the glyph
@@ -1688,6 +1813,7 @@ export function createView(
 
 		g.restore()
 
+		drawAudience()
 		seats.forEach((L, i) => {
 			const sp = seatP(i)
 			if (sp === 0) return
@@ -1913,7 +2039,9 @@ export function createView(
 				}
 				g.beginPath()
 				g.arc(d.x, d.y, r * (1 + 0.15 * pu), 0, TAU)
-				g.fillStyle = L.mix.mute ? PAPER : L.mix.tone < 0.5
+				g.fillStyle = L.mix.mute
+					? PAPER
+					: L.mix.tone < 0.5
 						? mixHex(L.color, INK, (1 - L.mix.tone * 2) * 0.5)
 						: mixHex(L.color, PAPER, (L.mix.tone * 2 - 1) * 0.35)
 				g.fill()

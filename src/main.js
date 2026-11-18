@@ -15,6 +15,7 @@ import { createUndo } from './undo.js'
 import { createGhost } from './ghost.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
 import { songOf, loadSong, encodeSong, decodeSong } from './song.js'
+import { createPresence } from './presence.js'
 
 const SEAT_IDS = ['seat1', 'seat2', 'seat3', 'seat4']
 
@@ -150,17 +151,27 @@ const { seats } = engine
 const me = { name, seat: -1, erase: false }
 const undo = createUndo(engine)
 
-const humanAt = (i) => transport.peers.find((p) => p.seat === seats[i].id)
+// a person in that seat, real or one of the crowd
+const humanAt = (i) =>
+	presence ? presence.at(i) : transport.peers.find((p) => p.seat === seats[i].id)
 const occupant = (i) => {
 	const p = humanAt(i)
 	if (p && p.id === transport.id)
-		return { name: 'you', label: 'you', initial: name ? name[0] : 'Y', me: true, human: true }
+		return {
+			name: 'you',
+			label: 'you',
+			initial: name ? name[0] : 'Y',
+			me: true,
+			human: true,
+			dim: presence?.dim(i) || 0,
+		}
 	if (p)
 		return {
 			name: p.name || playerName(i),
 			label: p.name || playerName(i),
 			initial: p.name ? p.name[0] : String(i + 1),
 			human: true,
+			dim: presence?.dim(i) || 0,
 		}
 	if (bots?.opts.on && seats[i].module.generate) {
 		const r = seats[i].riff
@@ -191,65 +202,51 @@ function sit(i) {
 	const p = humanAt(i)
 	if (p && p.id !== transport.id) return
 	me.seat = i
-	me.standing = false
+	me.out = false
 	seats[i].riff = null // a person taking the seat ends a robot riff
 	if (view?.focus.on) view.setFocus(i)
 	transport.setMe({ seat: seats[i].id, name: me.name })
-	seatline()
 }
-// standing up frees the seat for whoever's waiting; you keep listening, and sit again by tapping a free one.
-// Presence says 'up', so the waiting line skips you.
-function stand() {
-	if (replay || me.seat < 0) return
+// your candle burnt out while someone waited: you get up and listen; touching the machine puts you back in line
+function getUp() {
+	if (me.seat < 0) return
 	if (view.focus.on) view.setFocus(-1)
 	ghost.stop()
 	me.seat = -1
-	me.standing = true
-	transport.setMe({ seat: 'up', name: me.name })
-	seatline()
+	me.out = true
+	transport.setMe({ seat: 'out', name: me.name })
 }
-// Four seats, any number listening. Whoever isn't seated and didn't stand up waits in one line, first arrived
-// first; every tab sorts the same peer list the same way, so the k-th in line takes the k-th free seat and nobody
-// races. Two who sat on one seat at the same moment: the later arrival gets up and waits again.
-const seatOf = (p) => seats.findIndex((L) => L.id === p.seat)
-const before = (a, b) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0) || (a.id < b.id ? -1 : 1)
-function settle() {
-	if (replay || !welcomed) return
-	const all = transport.peers
-	const mine = all.find((p) => p.id === transport.id)
-	if (me.seat >= 0 && mine) {
-		const rival = all.find((p) => p.id !== transport.id && p.seat === seats[me.seat].id)
-		if (rival && before(rival, mine) < 0) {
-			me.seat = -1
-			if (view.focus.on) view.setFocus(-1)
-			transport.setMe({ seat: null, name: me.name })
-		}
+function backInLine() {
+	if (replay || !me.out) return
+	me.out = false
+	transport.setMe({ seat: 'wait:' + transport.clock.now(), name: me.name })
+}
+const presence = replay
+	? null
+	: createPresence({
+			transport,
+			seats,
+			sit,
+			getUp,
+			rejoin: () => ((me.out = true), backInLine()),
+			draw: (i, f, x, y) => view.showCursor('crowd' + f.id, i, x, y, f.name),
+		})
+// two who sat on one seat at the same moment: the later arrival gets up and waits again
+transport.on('peers', () => {
+	const all = transport.peers,
+		mine = all.find((p) => p.id === transport.id)
+	const rival =
+		me.seat >= 0 && mine && all.find((p) => p.id !== transport.id && p.seat === seats[me.seat].id)
+	if (
+		rival &&
+		((rival.joinedAt ?? 0) - (mine.joinedAt ?? 0) || (rival.id < mine.id ? -1 : 1)) < 0
+	) {
+		me.seat = -1
+		if (view.focus.on) view.setFocus(-1)
+		transport.setMe({ seat: null, name: me.name })
 	}
-	if (me.seat < 0 && !me.standing) {
-		const free = [1, 2, 0, 3].filter((i) => !humanAt(i))
-		const line = all.filter((p) => seatOf(p) < 0 && p.seat !== 'up').sort(before)
-		const k = line.findIndex((p) => p.id === transport.id)
-		if (k >= 0 && k < free.length) sit(free[k])
-	}
-	seatline()
-}
-let welcomed = false
-transport.on('peers', settle)
-// under the jam's chips: how many are here, and your seat, given up or waited for, in one quiet word
-function seatline() {
-	const el = document.getElementById('seatline')
-	if (!el || replay || !welcomed) return
-	const n = transport.peers.length
-	const here = n > 1 ? `${n} here · ` : 'just you here · '
-	if (me.seat >= 0) el.replaceChildren(here, word('stand up', stand))
-	else if (me.standing) el.replaceChildren(here, 'listening · ', word('sit again', rejoin))
-	else el.replaceChildren(here + 'listening · the next free seat is yours')
-}
-function rejoin() {
-	me.standing = false
-	transport.setMe({ seat: null, name: me.name })
-	settle()
-}
+	presence?.tick()
+})
 
 // every stroke on a ring or sheet comes through here. Erasing (token, shift, right button, two fingers)
 // arrives as e.alt; instruments rub out with it and never draw.
@@ -257,6 +254,7 @@ let lastPt = null
 function pointerTo(i, e) {
 	const L = seats[i]
 	if (e.type === 'down') ghost?.stop()
+	if (i === me.seat) presence?.touch(i)
 	// your first stroke: now the hint can show the other instruments
 	if (e.type === 'up' && i === me.seat) hint?.start()
 	if (me.erase || e.button === 2) e.alt = true
@@ -284,6 +282,7 @@ function rubFromHere(mark) {
 }
 view = createView(document.getElementById('c'), engine, {
 	occupant,
+	audience: () => presence?.audience() || [],
 	canDraw,
 	// sitting down at a bare ring opens it, so the glyphs are right there to pick from
 	onSit: (i) => (i === me.seat ? toggleFocus() : (sit(i), blank(seats[i]) && view.setFocus(i))),
@@ -308,6 +307,8 @@ view = createView(document.getElementById('c'), engine, {
 	},
 })
 const ghost = createGhost({ engine, view, me })
+// got up while away: any touch on the machine puts you back in line
+document.getElementById('c').addEventListener('pointerdown', backInLine)
 const heart = createHeart({
 	engine,
 	geom: () => {
@@ -347,8 +348,7 @@ const freeName = () => {
 }
 transport.on('welcome', ({ seats: snap }) => {
 	if (!me.name) me.name = freeName()
-	welcomed = true
-	settle()
+	presence?.start()
 	// the jam's seats as they stand land a moment after the welcome; deal after them, or they'd undo the deal here.
 	// A song from the link, or the one saved here when the jam comes back empty, takes the place of the deal.
 	if (!replay && !restoring)
@@ -424,7 +424,6 @@ const $ = (id) => document.getElementById(id)
 
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
-const seatEl = $('seatline')
 const word = (text, fn) => {
 	const b = document.createElement('button')
 	b.textContent = text
@@ -728,6 +727,7 @@ import('./debug.js')
 				bots,
 				me,
 				sit,
+				presence,
 				registry,
 				heart,
 			})),
@@ -788,8 +788,6 @@ function rideSheet() {
 		jamline.style.transform = m ? `translateY(${-14 * m}px)` : ''
 		jamline.style.pointerEvents = m ? 'none' : ''
 		jamline.style.visibility = m >= 1 ? 'hidden' : ''
-		seatEl.style.opacity = jamline.style.opacity
-		seatEl.style.visibility = jamline.style.visibility
 		riding = view.moving || (view.focus.on && x > 0) ? requestAnimationFrame(go) : 0
 	}
 	riding = requestAnimationFrame(go)
@@ -836,6 +834,7 @@ Object.assign(window, {
 		me,
 		heart,
 		undo,
+		presence,
 		// the escape hatch: jam.export() is the song as data, jam.import() takes that, its JSON or a share link
 		export: () => songOf(engine, transport),
 		import: async (song) =>
