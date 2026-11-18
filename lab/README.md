@@ -13,7 +13,7 @@ mostly well under 1 KB.
 | #   | instrument | gesture                                                        | intended feel                                                         |
 | --- | ---------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
 | 01  | contour    | draw a line; x is time, y is pitch                             | singing with a pencil; the glide makes sloppy lines sound deliberate  |
-| 02  | steps      | paint cells                                                    | the control group: precise, familiar, a little office-like            |
+| 02  | steps      | tap cells; pull a note's fat tail by its knob to hold it       | the control group: precise, familiar, a little office-like            |
 | 03  | gears      | rotate and stretch euclidean gears, each with its own length   | turning a lock; uneven gear lengths drift into polymeter on their own |
 | 04  | sweep      | hold and move over a held chord; records at the playhead       | DJ hands: you perform the filter, then it performs you back           |
 | 05  | drift      | drop up to five drone stones in a pond                         | slow and ambient; the chord breathes and rotates without you          |

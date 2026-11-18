@@ -1,7 +1,9 @@
 // 02 Steps: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
-// Words along the bottom pick pitch, length, loud or chance; drag the bracket to shorten the pattern (polymeter).
+// Each note has a tail, piano-roll style: pull its knob sideways to hold the note for more steps.
+// Words along the bottom pick pitch, loud or chance; drag the bracket to shorten the pattern (polymeter).
 //
-// state: { len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 0..9, loud 0..9, chance 0..9]
+// state: { v: 2, len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9]
+// Mono: a note that sounds cuts the tail it lands on. Parts without v (length 0..9) are migrated on load.
 // Chance rolls are seeded by the absolute step, so every peer hears the same notes.
 import { kit } from './lib/kit.js'
 import { withPointer, absNow, absOf, clamp, flashes, tint, mtof, isStrip, TAU } from './lib/util.js'
@@ -10,10 +12,12 @@ import { tap, line } from './lib/demo.js'
 
 const N = 16
 const PMAX = 14
-const PARAMS = ['pitch', 'length', 'loud', 'chance']
-const MAXOF = { pitch: PMAX, length: 9, loud: 9, chance: 9 }
-const IDX = { pitch: 0, length: 1, loud: 2, chance: 3 }
-const fresh = (p = 7) => [p, 4, 7, 9]
+const PARAMS = ['pitch', 'loud', 'chance']
+const MAXOF = { pitch: PMAX, loud: 9, chance: 9 }
+const IDX = { pitch: 0, loud: 2, chance: 3 }
+const fresh = (p = 7) => [p, 1, 7, 9]
+// version 1 kept length as 0..9, a pluck's decay; roughly the steps that pluck was heard for
+const oldLen = (d) => clamp(Math.round(d / 2), 1, 5)
 
 // a stable 0..1 roll per absolute step, the same on every machine
 const roll = (abs, k) =>
@@ -29,12 +33,12 @@ function gen() {
 		p = clamp(p + Math.round((Math.random() - 0.5) * 5), 0, PMAX)
 		s[k] = [
 			p,
-			strong ? 5 : 2 + Math.floor(Math.random() * 3),
+			strong ? 2 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * 1.6),
 			strong ? 8 : 5 + Math.floor(Math.random() * 3),
 			strong || Math.random() < 0.6 ? 9 : 4 + Math.floor(Math.random() * 4),
 		]
 	}
-	return { len, s }
+	return { v: 2, len, s }
 }
 
 function blob(g, x, y, rx, ry, seed) {
@@ -56,8 +60,9 @@ export default {
 	glyph:
 		'<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
 	name: 'Steps',
-	how: 'Tap a step to switch it. Drag to draw pitch, length, loud or chance (pick one along the bottom). Drag the bracket to shorten the pattern.',
-	demo: () => [tap(0.03, 0.45), tap(0.28, 0.45), tap(0.53, 0.45), line(0.03, 0.3, 0.6, 0.6, 14)],
+	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick along the bottom); drag the bracket to shorten the pattern.',
+	optional: ['v'],
+	demo: () => [tap(0.03, 0.45), line(0.06, 0.47, 0.3, 0.47, 10), tap(0.34, 0.45), tap(0.47, 0.45)],
 	params: {
 		wave: { value: 'square', options: ['square', 'triangle', 'sawtooth', 'bell'] },
 		octave: { value: 0, min: -2, max: 1, step: 1 },
@@ -71,22 +76,46 @@ export default {
 		const engine = kit(audio)
 		const size = [1, 1]
 		let shape = 'ring'
-		const state = { len: N, s: Array(N).fill(0) }
+		const state = { v: 2, len: N, s: Array(N).fill(0) }
 		const fx = flashes()
-		const ui = { param: 'pitch' } // what a drag draws; local to this player
+		const ui = { param: 'pitch', pull: -1 } // what a drag draws, and the tail being pulled; local to this player
 		let press = null
+		let held = null // the note still sounding, so the next one can cut it
+
+		// steps until the next note in the pattern, round the loop
+		function gap(k) {
+			for (let j = 1; j < state.len; j++) if (state.s[(k + j) % state.len]) return j
+			return state.len
+		}
+		const lenOf = (st) => clamp(st[1], 1, state.len)
+		// how long it really sounds, cut by the next note (mono)
+		const heard = (k, st) => Math.min(lenOf(st), gap(k))
+
+		function cut(at) {
+			if (!held || at >= held.off + 0.2) return
+			const { g, o } = held
+			g.gain.cancelScheduledValues(at)
+			g.gain.setTargetAtTime(0, at, 0.008)
+			try {
+				o.stop(at + 0.08)
+			} catch {}
+			held = null
+		}
 
 		function voice(st, time, dur) {
-			const [p, d, v] = st
+			const [p, , v] = st
+			const steps = lenOf(st)
 			const f = mtof(engine.degree(p, params.octave + 1))
-			const len = 0.04 + (d / 9) ** 1.6 * 1.4
+			// a held note: full steps, a short release; a one-step note stays a snappy blip
+			const hold = steps === 1 ? dur * 0.55 : steps * dur - 0.03
 			const gain = 0.03 + (v / 9) * 0.16
+			cut(time)
 			if (params.wave === 'bell')
 				return engine.voices.bell(out, {
 					freq: f,
 					time,
 					gain: gain * 0.9,
-					d: len + 0.2,
+					d: hold + 0.2,
 					ratio: 3.5,
 					index: 1.4,
 				})
@@ -99,13 +128,16 @@ export default {
 			lp.Q.value = 3
 			const top = f * (1.5 + params.tone * 14)
 			lp.frequency.setValueAtTime(top, time)
-			lp.frequency.exponentialRampToValueAtTime(Math.max(80, f * 0.9), time + len * 0.9)
+			lp.frequency.setTargetAtTime(Math.max(120, f * (1.2 + params.tone * 4)), time + 0.005, 0.07)
+			const off = time + hold
 			g.gain.setValueAtTime(0.0001, time)
 			g.gain.exponentialRampToValueAtTime(gain, time + 0.004)
-			g.gain.exponentialRampToValueAtTime(0.0001, time + len)
+			g.gain.setTargetAtTime(gain * 0.7, time + 0.004, 0.08)
+			g.gain.setTargetAtTime(0, off, 0.025)
 			o.connect(lp).connect(g).connect(out)
 			o.start(time)
-			o.stop(time + len + 0.05)
+			o.stop(off + 0.2)
+			held = { g, o, off }
 		}
 
 		const loopStart = () => Math.floor(absNow(clock) / clock.steps) * clock.steps
@@ -123,11 +155,39 @@ export default {
 		const BAND = 0.84
 		const colOf = (x) => clamp(Math.floor(x * N), 0, N - 1)
 		const tokenAt = (x) => PARAMS[clamp(Math.floor(x * PARAMS.length), 0, PARAMS.length - 1)]
+		const noteY = (p, top) => (1 - p / PMAX) * top * 0.86 + top * 0.07
+		// where a tail ends, in columns: past the pattern's end it wraps to the start
+		const tailEnd = (k, L) => (k + L > state.len ? k + L - state.len : k + L)
+		const knobX = (k, L, cw) => (tailEnd(k, L) - 0.1) * cw
+
+		// the knob nearest a press, if a thumb could mean it
+		function knobAt(px, py, w, h) {
+			const cw = w / N,
+				top = h * BAND
+			const rx = Math.max(16, cw * 0.45),
+				ry = Math.max(20, top * 0.05)
+			let best = null,
+				bd = 1
+			for (let k = 0; k < state.len; k++) {
+				const st = state.s[k]
+				if (!st) continue
+				const dx = (px - knobX(k, lenOf(st), cw)) / rx,
+					dy = (py - noteY(st[0], top)) / ry
+				const d = dx * dx + dy * dy
+				if (d < bd) {
+					bd = d
+					best = k
+				}
+			}
+			return best
+		}
 
 		function sheetPointer(e) {
 			const yy = clamp(e.y / BAND, 0, 1)
+			const cw = e.w / N
 			if (e.type === 'down') {
-				if (Math.abs(e.x * N - state.len) < 0.6) {
+				const knob = e.alt || e.y > BAND ? null : knobAt(e.px, e.py, e.w, e.h)
+				if (knob == null && Math.abs(e.x * N - state.len) < 0.6) {
 					press = { kind: 'len' }
 					return
 				}
@@ -144,13 +204,28 @@ export default {
 					moved: false,
 					last: colOf(e.x),
 					erase: e.alt,
+					knob,
+					L0: knob == null ? 0 : lenOf(state.s[knob]),
 				}
 			} else if (e.type === 'move' && press) {
 				if (press.kind === 'len') {
 					state.len = clamp(Math.round(e.x * N), 1, N)
 					return
 				}
-				if (!press.moved && Math.hypot(e.px - press.x0, e.py - press.y0) < 6) return
+				const dx = e.px - press.x0,
+					dy = e.py - press.y0
+				if (!press.moved && Math.hypot(dx, dy) < 6) return
+				// sideways off a knob pulls the tail; anything else draws across steps
+				if (!press.moved && press.knob != null && Math.abs(dx) >= Math.abs(dy)) {
+					press.kind = 'tail'
+					ui.pull = press.knob
+				}
+				if (press.kind === 'tail') {
+					press.moved = true
+					const st = state.s[press.knob]
+					if (st) st[1] = clamp(press.L0 + Math.round(dx / cw), 1, state.len)
+					return
+				}
 				if (!press.moved) {
 					press.moved = true
 					paint(press.k, yy, press.erase)
@@ -168,6 +243,7 @@ export default {
 							? 0
 							: fresh(ui.param === 'pitch' ? Math.round((1 - yy) * PMAX) : 7)
 				press = null
+				ui.pull = -1
 			}
 		}
 
@@ -190,12 +266,23 @@ export default {
 			}
 		}
 
+		// a fat rounded bar from x0 to x1 at y
+		function bar(g, x0, x1, y, th) {
+			g.lineWidth = th
+			g.beginPath()
+			g.moveTo(x0, y)
+			g.lineTo(Math.max(x0 + 0.1, x1), y)
+			g.stroke()
+		}
+
 		function drawSheet(g, w, h, t) {
 			const cw = w / N,
 				top = h * BAND
 			const ink = ctx.theme?.sheet?.ink || INK,
 				col = ctx.color || '#c08419'
 			const k0 = Math.floor(t.abs) % state.len
+			const rOf = (v) => Math.max(3, Math.min(cw * 0.32, top * 0.06) * (0.55 + (v / 9) * 0.6))
+			const th = Math.max(6, Math.min(cw * 0.34, top * 0.05))
 			g.lineCap = 'round'
 			g.lineJoin = 'round'
 			if (ui.param !== 'pitch') {
@@ -215,12 +302,11 @@ export default {
 				}
 				g.stroke()
 			}
+			// the grid and the playing step's glow
 			for (let k = 0; k < N; k++) {
 				const x = (k + 0.5) * cw,
-					st = state.s[k],
 					inPat = k < state.len
-				const now = t.playing && k === k0
-				if (now) {
+				if (t.playing && k === k0) {
 					g.fillStyle = tint(col, 0.16)
 					blob(g, x, top / 2, cw * 0.46, top * 0.5, k)
 					g.fill()
@@ -247,17 +333,47 @@ export default {
 					g.lineTo(x, top + 6)
 				}
 				g.stroke()
+			}
+			// tails: solid while the note sounds, a thin dotted run where the next note has cut it
+			for (let k = 0; k < state.len; k++) {
+				const st = state.s[k]
 				if (!st) continue
-				const [p, d, v, c] = st
-				const y = (1 - p / PMAX) * top * 0.86 + top * 0.07
-				const r = Math.max(3, Math.min(cw * 0.36, top * 0.06) * (0.55 + (v / 9) * 0.6))
+				const y = noteY(st[0], top),
+					L = lenOf(st),
+					hl = heard(k, st)
+				const run = (a, b, solid) => {
+					// a..b in columns from k's centre; wraps past the pattern's end
+					const x0 = k + a,
+						x1 = k + b
+					const seg = (u0, u1) => {
+						if (solid) {
+							g.strokeStyle = tint(col, 0.55)
+							bar(g, u0 * cw, u1 * cw - th / 2, y, th) // the round cap ends at the knob
+						} else {
+							g.strokeStyle = tint(col, 0.6)
+							g.setLineDash([2, 5])
+							bar(g, u0 * cw, u1 * cw, y, 2)
+							g.setLineDash([])
+						}
+					}
+					if (x1 <= state.len) seg(x0, x1)
+					else {
+						if (x0 < state.len) seg(x0, state.len - 0.05)
+						seg(Math.max(0.05, x0 - state.len), x1 - state.len)
+					}
+				}
+				run(0.5, hl - 0.1, true)
+				if (L > hl) run(hl - 0.1, L - 0.1, false)
+			}
+			for (let k = 0; k < N; k++) {
+				const st = state.s[k]
+				if (!st) continue
+				const inPat = k < state.len,
+					x = (k + 0.5) * cw
+				const [p, , v, c] = st
+				const y = noteY(p, top)
+				const r = rOf(v)
 				const glow = fx.glow(k, t.now, 0.3)
-				g.strokeStyle = tint(col, inPat ? 0.9 : 0.3)
-				g.lineWidth = Math.max(1.5, r * 0.45)
-				g.beginPath()
-				g.moveTo(x, y)
-				g.lineTo(x + (d / 9) * cw * 0.9 + 1, y)
-				g.stroke()
 				blob(g, x, y, r * (1 + glow * 0.35), r * (1 + glow * 0.35), k + 3)
 				g.fillStyle = glow ? ink : tint(col, inPat ? 1 : 0.35)
 				g.fill()
@@ -272,6 +388,33 @@ export default {
 					g.textAlign = 'center'
 					g.textBaseline = 'top'
 					g.fillText(`${(c + 1) * 10}%`, x, top * 0.94)
+				}
+			}
+			// knobs on top, so they read as the thing to grab
+			const kr = Math.max(7, Math.min(cw * 0.2, 10))
+			for (let k = 0; k < state.len; k++) {
+				const st = state.s[k]
+				if (!st) continue
+				const L = lenOf(st),
+					x = knobX(k, L, cw),
+					y = noteY(st[0], top),
+					pulled = ui.pull === k
+				// an upright capsule, like the trim handle on a clip
+				const kw = kr * (pulled ? 1.3 : 1),
+					kh = Math.max(kr * 2.4, th + 8) * (pulled ? 1.15 : 1)
+				g.beginPath()
+				g.roundRect(x - kw / 2, y - kh / 2, kw, kh, kw / 2)
+				g.fillStyle = pulled ? col : '#fff'
+				g.fill()
+				g.strokeStyle = ink
+				g.lineWidth = 1.6
+				g.stroke()
+				if (pulled) {
+					g.fillStyle = ink
+					g.font = `600 ${Math.max(11, Math.min(15, cw * 0.4))}px ${SANS}`
+					g.textAlign = 'center'
+					g.textBaseline = 'bottom'
+					g.fillText(`${L}`, x, y - kh / 2 - 4)
 				}
 			}
 			const bx = state.len * cw
@@ -312,31 +455,33 @@ export default {
 			g.fillText(`${state.len}`, w - 4, top + (h - top) / 2)
 		}
 
+		// ring: a note is a dot, a held note an arc round the dial as long as it sounds
 		function drawRing(g, w, h, t) {
 			const n = clock.steps,
 				cw = w / n,
 				base = Math.floor(t.abs / n) * n
 			const col = ctx.color || '#c08419'
-			for (let s = 0; s < n; s++) {
-				const k = (base + s) % state.len,
+			g.lineCap = 'round'
+			for (let s = -N; s < n; s++) {
+				const k = (((base + s) % state.len) + state.len) % state.len,
 					st = state.s[k],
 					x = (s + 0.5) * cw
-				if (k === 0 && state.len !== n) {
+				if (s >= 0 && k === 0 && state.len !== n) {
 					g.fillStyle = tint(INK, 0.25)
 					g.fillRect(s * cw, 1, 1, h - 2)
 				} // pattern restarts here
 				if (!st) continue
-				const [p, d, v, c] = st
+				const hl = heard(k, st)
+				if (s < 0 && s + hl <= 0) continue
+				const [p, , v, c] = st
 				const y = (1 - p / PMAX) * h * 0.8 + h * 0.1
 				const r = Math.max(1.8, Math.min(h * 0.09, cw * 0.35) * (0.6 + (v / 9) * 0.5))
+				if (hl > 1) {
+					g.strokeStyle = tint(col, 0.75)
+					bar(g, x, x + (hl - 1.3) * cw, y, Math.max(2, r * 1.3))
+				}
+				if (s < 0) continue
 				const glow = fx.glow(`a${(base + s) % 256}`, t.now, 0.3)
-				g.strokeStyle = tint(col, 0.85)
-				g.lineWidth = Math.max(1, r * 0.5)
-				g.lineCap = 'round'
-				g.beginPath()
-				g.moveTo(x, y)
-				g.lineTo(x + (d / 9) * cw * 0.9, y)
-				g.stroke()
 				g.beginPath()
 				g.arc(x, y, r * (1 + glow * 0.4), 0, TAU)
 				g.fillStyle = glow ? INK : col
@@ -376,10 +521,14 @@ export default {
 				return shape === 'sheet' ? drawSheet(g, w, h, t) : drawRing(g, w, h, t)
 			},
 			setState(s) {
+				const old = !(s.v >= 2)
 				state.len = clamp(s.len | 0 || N, 1, N)
-				state.s = Array.from({ length: N }, (_, k) =>
-					Array.isArray(s.s[k]) ? s.s[k].slice(0, 4).map((v) => v | 0) : 0,
-				)
+				state.s = Array.from({ length: N }, (_, k) => {
+					if (!Array.isArray(s.s[k])) return 0
+					const st = s.s[k].slice(0, 4).map((v) => v | 0)
+					st[1] = clamp(old ? oldLen(st[1]) : st[1], 1, N)
+					return st
+				})
 			},
 			clear() {
 				state.s = Array(N).fill(0)
@@ -388,7 +537,9 @@ export default {
 			randomize() {
 				this.setState(gen())
 			},
-			dispose() {},
+			dispose() {
+				held = null
+			},
 		}
 	},
 }

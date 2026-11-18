@@ -12,7 +12,8 @@ And the instruments are **creative**, in the sense that each one is a different 
 
 - **bass**: an elastic riff; pull the knot to stretch it. **tide**: draw water, notes ring where it crosses the chord's threads. **bell**: tap for a bell, drag up to drop a bouncing marble. **bloom**: holds the room's chord; draw it higher and it opens up, the 7th and 9th flowering on top
 - **drums**: paint kick, snare and hat in three bands
-- **contour, steps, gears, sweep, drift, scribble, strum, swarm, orbits, embers**: ten stranger ones, described in [lab/README.md](lab/README.md)
+- **steps**: a step sequencer where every note grows a fat tail; pull the knob at its end to hold the note across steps, piano-roll style
+- **contour, gears, sweep, drift, scribble, strum, swarm, orbits, embers**: nine stranger ones, described with steps in [lab/README.md](lab/README.md)
 
 ## Words
 

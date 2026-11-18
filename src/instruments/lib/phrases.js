@@ -74,7 +74,7 @@ export const adapters = {
 		},
 	},
 
-	// pattern of up to 16 steps, each [pitch 0..14, length, loud, chance]; read over one loop, repeats and all
+	// pattern of up to 16 steps, each [pitch 0..14, length in steps, loud, chance]; read over one loop, repeats and all
 	steps: {
 		to(st, n) {
 			const notes = []
@@ -88,9 +88,15 @@ export const adapters = {
 			const s = Array(16).fill(0)
 			for (const x of fit(melody(ph), 0, 14)) {
 				const k = Math.round((x.s / ph.n) * 16) % 16
-				if (!s[k]) s[k] = [x.p, 3, clamp(Math.round((x.v ?? 0.8) * 9), 2, 9), 9]
+				if (!s[k]) s[k] = [x.p, 1, clamp(Math.round((x.v ?? 0.8) * 9), 2, 9), 9]
 			}
-			return { len: 16, s }
+			// legato: each note holds up to the next, at most a beat
+			s.forEach((x, k) => {
+				let j = 1
+				while (j < 4 && !s[(k + j) % 16]) j++
+				if (x) x[1] = j
+			})
+			return { v: 2, len: 16, s }
 		},
 	},
 
