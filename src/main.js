@@ -436,7 +436,7 @@ onPress($('erase'), () => setErase(!me.erase))
 // tempo lands on the next bar; `want` shows your ask before the relay echoes it (kept up to 2 s)
 let want = null // { bpm, t }
 const heading = () => {
-	const next = transport.clock.pending?.().at(-1)?.bpm ?? transport.clock.loopAt().bpm
+	const next = transport.clock.latestLoop().bpm
 	if (want && (want.bpm === next || performance.now() - want.t > 2000)) want = null
 	return want ? want.bpm : next
 }

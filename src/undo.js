@@ -1,26 +1,17 @@
 // Undo: your own ring's history. A snapshot is the ring's {instrument, state, params} taken just before a change;
 // undo sends the old one like any edit, so everyone hears it.
 
+import { partOf } from './engine.js'
+
 export function createUndo(engine, { limit = 64 } = {}) {
 	const past = new Map(),
 		future = new Map()
 	const list = (m, i) => (m.has(i) || m.set(i, []), m.get(i))
-	const snap = (L) => ({
-		instrument: L.module.id,
-		state: structuredClone(L.instance.state),
-		params: { ...L.params },
-		len: L.len,
-	})
+	const snap = (L) => structuredClone(partOf(L))
 	const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 	function restore(L, d) {
-		L.len = d.len ?? null
-		if (d.instrument !== L.module.id)
-			engine.setInstrument(L, d.instrument, { state: d.state, params: d.params })
-		else {
-			Object.assign(L.params, d.params)
-			L.instance.setState(d.state)
-		}
+		engine.applyPart(L, d)
 		engine.push(L, { now: true })
 	}
 	function move(from, to, i) {

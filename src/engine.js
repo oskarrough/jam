@@ -8,6 +8,14 @@ import { kit } from './instruments/lib/kit.js'
 import { SEAT_COLORS, INK_THEME } from './palette.js'
 export { SEAT_COLORS }
 
+// The playable part of a seat. Clone it when retaining a take or undo point.
+export const partOf = (L) => ({
+	instrument: L.module.id,
+	state: L.instance.state,
+	params: L.params,
+	...(L.len ? { len: L.len } : {}),
+})
+
 export function createEngine(transport, { seatIds, instruments }) {
 	const { clock } = transport
 	const audio = new (window.AudioContext || window.webkitAudioContext)()
@@ -25,16 +33,19 @@ export function createEngine(transport, { seatIds, instruments }) {
 	kit(audio).follow(loop)
 	// a seat's own loop: `len` steps (set on its sheet like a clip length, any whole number of 16ths), else the jam's.
 	// Shorter loops repeat; mixed lengths drift against each other and meet again.
-	const stepsOf = (L, l = loop()) => L?.len || l.bars * l.beatsPerBar * 4
-	const steps = (L) => stepsOf(L)
+	const steps = (L, l) => {
+		if (L?.len) return L.len
+		l ??= loop()
+		return l.bars * l.beatsPerBar * 4
+	}
 	const stepMs = (l = loop()) => clock.beatMs(l) / 4
 
-	const iclock = {
+	const seatClock = (L) => ({
 		get bpm() {
 			return loop().bpm
 		},
 		get steps() {
-			return steps()
+			return steps(L)
 		},
 		get stepDur() {
 			return stepMs() / 1000
@@ -45,32 +56,9 @@ export function createEngine(transport, { seatIds, instruments }) {
 		now: () => audio.currentTime,
 		pos: () => {
 			const p = clock.pos()
-			return p ? p.loopPhase * steps() : 0
-		},
-		get playing() {
-			return soundOn
-		},
-	}
-
-	// each seat's clock: the jam's, but with the seat's loop length, so `pos` and `steps` are the seat's own
-	const seatClock = (L) => ({
-		get bpm() {
-			return loop().bpm
-		},
-		get steps() {
-			return stepsOf(L)
-		},
-		get stepDur() {
-			return stepMs() / 1000
-		},
-		get startTime() {
-			return clock.toAudio(audio, loop().origin)
-		},
-		now: () => audio.currentTime,
-		pos: () => {
-			const p = clock.pos(),
-				n = stepsOf(L)
-			return p ? (((p.beats * 4) % n) + n) % n : 0
+			if (!p) return 0
+			const n = steps(L, p.loop)
+			return (((p.beats * 4) % n) + n) % n
 		},
 		get playing() {
 			return soundOn
@@ -111,13 +99,13 @@ export function createEngine(transport, { seatIds, instruments }) {
 
 	function setLen(L, n) {
 		n = okLen(n)
-		const from = stepsOf(L)
-		if ((n || stepsOf(null)) === from) {
+		const from = steps(L)
+		if ((n || steps(null)) === from) {
 			L.len = n
 			return
 		}
 		L.len = n
-		L.instance.setState(resize(L.instance.state, from, stepsOf(L)))
+		L.instance.setState(resize(L.instance.state, from, steps(L)))
 		push(L, { now: true })
 		emit('seats')
 	}
@@ -142,6 +130,15 @@ export function createEngine(transport, { seatIds, instruments }) {
 		emit('seats')
 	}
 
+	function applyPart(L, data) {
+		L.len = okLen(data.len)
+		if (data.instrument !== L.module.id) setInstrument(L, data.instrument, data)
+		else {
+			if (data.params) Object.assign(L.params, data.params)
+			L.instance.setState(data.state)
+		}
+	}
+
 	seats.forEach((L, i) => {
 		const id = instruments[i]
 		const mod = registry.get(id)
@@ -151,14 +148,9 @@ export function createEngine(transport, { seatIds, instruments }) {
 	const seatById = (id) => seats.find((L) => L.id === id)
 	const lastSent = new Map()
 	function push(L, { now = false } = {}) {
-		const data = {
-			instrument: L.module.id,
-			state: structuredClone(L.instance.state),
-			params: { ...L.params },
-		}
+		const data = structuredClone(partOf(L))
 		if (L.riff) data.riff = L.riff
 		if (L.mix.mute) data.mute = true
-		if (L.len) data.len = L.len
 		lastSent.set(L.id, performance.now())
 		return transport.edit(L.id, data, { now })
 	}
@@ -177,17 +169,11 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const L = seatById(seat)
 		if (!L || !data || local) return
 		L.riff = data.riff || null
-		L.len = okLen(data.len)
 		if (!!data.mute !== L.mix.mute) {
 			L.mix.mute = !!data.mute
 			applyMix(L)
 		}
-		if (data.instrument !== L.module.id)
-			setInstrument(L, data.instrument, { state: data.state, params: data.params })
-		else {
-			if (data.params) Object.assign(L.params, data.params)
-			L.instance.setState(data.state)
-		}
+		applyPart(L, data)
 		emit('apply', L)
 	})
 	transport.on('welcome', ({ seats: snap }) => {
@@ -216,7 +202,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 			// a few ms late still sounds; much later would land off the beat, so drop it
 			if (late <= 30)
 				for (const L of seats) {
-					const n = stepsOf(L, l)
+					const n = steps(L, l)
 					try {
 						L.instance.step(((abs % n) + n) % n, Math.max(at, audio.currentTime), sm / 1000)
 					} catch (e) {
@@ -253,10 +239,11 @@ export function createEngine(transport, { seatIds, instruments }) {
 		seats,
 		cfg,
 		stats,
-		iclock,
+		iclock: seatClock(null),
 		transport,
 		on,
 		setInstrument,
+		applyPart,
 		push,
 		pushSoon,
 		applyMix,
@@ -288,12 +275,13 @@ export function createEngine(transport, { seatIds, instruments }) {
 		setBars: (L, bars) => setLen(L, bars * loop().beatsPerBar * 4),
 		// where a seat's own loop sits on the dial: at dial phase x the seat is at phase (off + x · rep) mod 1
 		ringMap(L) {
-			const G = steps(),
-				S = stepsOf(L)
+			const l = loop(),
+				G = steps(null, l),
+				S = steps(L, l)
 			if (S === G) return { rep: 1, off: 0 }
-			const p = clock.pos(),
-				g = p ? (((p.beats * 4) % G) + G) % G : 0
-			return { rep: G / S, off: ((((L.clock.pos() - g) / S) % 1) + 1) % 1 }
+			const beatSteps = (clock.pos()?.beats ?? 0) * 4
+			const turn = Math.floor(beatSteps / G)
+			return { rep: G / S, off: ((((turn * G) % S) + S) % S) / S }
 		},
 		setTick(ms) {
 			cfg.tickMs = ms

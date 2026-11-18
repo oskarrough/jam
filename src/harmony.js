@@ -1,7 +1,7 @@
 // Harmony belongs to the room, and the eye holds it. Each bar's chord sits on the eye's rim at that bar's
 // quarter of the loop; tap the eye there to roll it on, or drag up and down to scrub. It travels with the
 // loop, so it lands on the next bar for everyone and replays carry it.
-import { chordOf } from './instruments/lib/kit.js'
+import { chordOf, nameOf } from './instruments/lib/kit.js'
 import { SERIF, INK, PAPER } from './palette.js'
 
 const VERMILION = '#d64a28'
@@ -43,8 +43,6 @@ export function createHarmony({ canvas, view, transport, heart, readOnly = false
 		return s
 	}
 
-	// the newest loop, including one still waiting for its bar
-	const latest = () => clock.pending?.().at(-1) || clock.loopAt()
 	const angOf = (phase) => -Math.PI / 2 + phase * Math.PI * 2
 
 	let held = null
@@ -64,7 +62,7 @@ export function createHarmony({ canvas, view, transport, heart, readOnly = false
 			const h = eye(e)
 			if (!h) return
 			e.stopImmediatePropagation()
-			const l = latest()
+			const l = clock.latestLoop()
 			const bar = Math.floor(h.phase * l.bars)
 			const from = chordOf(l, bar).deg
 			held = { id: e.pointerId, bar, from, deg: from, y0: e.clientY, moved: false }
@@ -87,7 +85,7 @@ export function createHarmony({ canvas, view, transport, heart, readOnly = false
 		if (e.type === 'pointercancel') return
 		const deg = h.moved ? h.deg : (h.from + 1) % 7
 		if (deg === h.from) return
-		const l = latest()
+		const l = clock.latestLoop()
 		const chords = Array.from({ length: l.bars }, (_, b) => chordOf(l, b).deg)
 		chords[h.bar] = deg
 		transport.setLoop({ chords })
@@ -95,55 +93,48 @@ export function createHarmony({ canvas, view, transport, heart, readOnly = false
 	canvas.addEventListener('pointerup', up)
 	canvas.addEventListener('pointercancel', up)
 
-	let shown = ''
+	let shown = null
 	function frame() {
 		requestAnimationFrame(frame)
 		const c = view.center()
 		const p = clock.pos()
 		if (!c || !p || view.focus.on || view.moving || c.r < 30) {
-			if (shown !== 'none') box.style.display = shown = 'none'
+			if (shown) box.style.display = 'none'
+			shown = null
 			return
 		}
 		const l = p.loop,
-			next = latest(),
+			next = clock.latestLoop(),
 			n = l.bars
 		const absBar = Math.floor(p.beats / l.beatsPerBar)
 		const first = absBar - (((absBar % n) + n) % n)
 		const px = Math.max(12, Math.round(c.r * 0.19))
 		const rr = c.r - px * 0.9
-		let key = `${c.x | 0},${c.y | 0},${px},${absBar}`
-		const rows = []
-		for (let k = 0; k < n; k++) {
-			const now = chordOf(l, first + k)
-			const isHeld = held && held.bar === k
-			const name = isHeld
-				? chordOf({ ...next, chords: [held.deg] }, 0).name
-				: chordOf(next, first + k).name
-			const row = {
-				name,
-				cur: first + k === absBar,
-				held: isHeld,
-				pending: !isHeld && name !== now.name,
-			}
-			rows.push(row)
-			key += `|${name}${+row.cur}${+row.held}${+row.pending}`
-		}
-		if (key === shown) return
-		shown = key
+		const key = `${c.x},${c.y},${c.r},${absBar},${held?.bar},${held?.deg}`
+		if (shown?.loop === l && shown.next === next && key === shown.key) return
+		shown = { loop: l, next, key }
 		box.style.display = ''
 		while (labels.length < n) labels.push(label())
 		labels.forEach((s, k) => {
-			const r = rows[k]
-			if (!r) return (s.style.display = 'none')
+			if (k >= n) return (s.style.display = 'none')
+			const current = first + k === absBar
+			const pressed = held?.bar === k
+			const now = chordOf(l, first + k).name
+			const name = pressed
+				? nameOf(next.scale, held.deg)
+				: next === l
+					? now
+					: chordOf(next, first + k).name
+			const pending = !pressed && name !== now
 			const a = angOf((k + 0.5) / n)
 			const x = c.x + Math.cos(a) * rr,
 				y = c.y + Math.sin(a) * rr
-			const scale = r.held ? 1.7 : r.cur ? 1.25 : 1
+			const scale = pressed ? 1.7 : current ? 1.25 : 1
 			s.style.display = ''
-			s.textContent = r.name
+			s.textContent = name
 			s.style.fontSize = px + 'px'
-			s.style.color = r.held || r.cur ? VERMILION : INK
-			s.style.textDecoration = r.pending ? `underline dotted ${VERMILION}` : 'none'
+			s.style.color = pressed || current ? VERMILION : INK
+			s.style.textDecoration = pending ? `underline dotted ${VERMILION}` : 'none'
 			s.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%) rotate(${LEAN[k % LEAN.length]}deg) scale(${scale})`
 		})
 	}

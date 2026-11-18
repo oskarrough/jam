@@ -3,6 +3,7 @@
 //           frames: [{seat: data} ×N],   // seat data per bar; a seat is omitted if unchanged since the bar before
 //           cursors: [[ms, seatIndex, x, y, down, name], …], room, at }
 
+import { partOf } from './engine.js'
 import { createClock } from '../sync/sync.js'
 import { chordOf } from './instruments/lib/kit.js'
 
@@ -13,15 +14,6 @@ export function createRecorder({ engine, transport, seatName }) {
 	const { seats } = engine
 	const clock = transport.clock
 	let cur = null
-
-	const snap = (L) => ({
-		instrument: L.module.id,
-		state: structuredClone(L.instance.state),
-		params: { ...L.params },
-		...(L.mix.mute ? { mute: true } : {}),
-		...(L.len ? { len: L.len } : {}),
-	})
-	const same = (a, b) => a && b && JSON.stringify(a) === JSON.stringify(b)
 
 	const lastCursor = new Map()
 	function logCursor(seat, x, y, down, name) {
@@ -80,7 +72,7 @@ export function createRecorder({ engine, transport, seatName }) {
 		let resolve
 		const promise = new Promise((r) => (resolve = r))
 		cur = { rec, start, running: false, promise }
-		const prev = {}
+		const signatures = new Map()
 		let bar = 0
 		const tick = () => {
 			const now = clock.now()
@@ -92,8 +84,12 @@ export function createRecorder({ engine, transport, seatName }) {
 			while (bar < bars && now >= start + bar * barMs + 30) {
 				const f = {}
 				seats.forEach((L) => {
-					const d = snap(L)
-					if (!same(d, prev[L.id])) f[L.id] = prev[L.id] = d
+					const d = partOf(L)
+					if (L.mix.mute) d.mute = true
+					const signature = JSON.stringify(d)
+					if (signatures.get(L.id) === signature) return
+					signatures.set(L.id, signature)
+					f[L.id] = structuredClone(d)
 				})
 				rec.frames.push(f)
 				// the chord each bar actually played, so chords changed mid-take replay as they happened
@@ -164,21 +160,23 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 	const peers = rec.seats
 		.map((name, i) => name && { id: 'seat' + i, name, seat: seatIds[i] })
 		.filter(Boolean)
-	let bar = -1,
+	let appliedBar = -1,
 		cursorIdx = 0,
 		lastPass = -1
+	function applyBar(absoluteBar) {
+		const b = absoluteBar % rec.bars
+		const frame = b === 0 || absoluteBar !== appliedBar + 1 ? atBar(b) : rec.frames[b]
+		for (const [seat, data] of Object.entries(frame))
+			emit('apply', { seat, data, at: origin + absoluteBar * barMs })
+		appliedBar = absoluteBar
+	}
 	function tick() {
 		const t = clock.now() - origin
 		if (t < -150) return
 		const pass = Math.floor(Math.max(0, t) / totalMs),
 			inPass = Math.max(0, t) - pass * totalMs
-		const b = Math.floor((inPass + 120) / barMs) % rec.bars
-		if (b !== bar) {
-			bar = b
-			const seats = b === 0 ? atBar(0) : rec.frames[b]
-			for (const [seat, data] of Object.entries(seats))
-				emit('apply', { seat, data, at: origin + pass * totalMs + b * barMs })
-		}
+		const absoluteBar = Math.floor((Math.max(0, t) + 120) / barMs)
+		if (absoluteBar !== appliedBar) applyBar(absoluteBar)
 		if (pass !== lastPass) {
 			lastPass = pass
 			cursorIdx = 0
@@ -188,7 +186,7 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 			onCursor?.(i, x, y, !!down, name)
 		}
 	}
-	setInterval(tick, 20)
+	const timer = setInterval(tick, 20)
 	queueMicrotask(() => {
 		emit('welcome', {
 			id: 'replay',
@@ -197,6 +195,7 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 			peers,
 		})
 		emit('peers', peers)
+		applyBar(0)
 		tick()
 	})
 
@@ -209,7 +208,7 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 				i = Math.floor((((x % totalMs) + totalMs) % totalMs) / barMs)
 			return atBar(i)?.[seat]
 		},
-		seats: () => atBar(Math.max(0, bar)),
+		seats: () => atBar(Math.max(0, appliedBar) % rec.bars),
 		cursor() {},
 		setLoop() {},
 		setMe() {},
@@ -220,17 +219,17 @@ export function createReplayTransport(rec, { seatIds, onCursor }) {
 			connected: false,
 			kind: 'replay',
 			bars: rec.bars,
-			bar,
+			bar: appliedBar % rec.bars,
 			peers: peers.length,
 			...clock.stats(),
 		}),
-		close() {},
+		close: () => clearInterval(timer),
 		// back to bar 1, so whoever presses play hears the recording from the top
 		restart() {
 			origin = Math.ceil(clock.now() + 120)
 			loop = { ...rec.loop, origin: origin - lead }
 			clock.setLoop(loop)
-			bar = -1
+			appliedBar = -1
 			lastPass = -1
 			tick()
 		},

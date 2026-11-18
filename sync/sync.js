@@ -8,16 +8,68 @@
 // Every timestamp on the wire is server ms. Local time is performance.timeOrigin + performance.now(),
 // which is monotonic, unlike Date.now().
 
-const LOOKAHEAD = 120 // ms before `at` that 'apply' fires, so audio can schedule exactly on the bar
+export const LOOKAHEAD = 120 // ms before `at` that 'apply' fires, so audio can schedule exactly on the bar
 const SAMPLES = 24
 
 const localNow = () => performance.timeOrigin + performance.now()
+
+export function loopTimeline(now) {
+	const loops = []
+	function setLoop(loop, from = -Infinity) {
+		loops.push({ loop, from })
+		loops.sort((a, b) => a.from - b.from)
+	}
+	function loopAt(t = now()) {
+		while (loops.length > 1 && loops[1].from <= t - 60_000) loops.shift()
+		for (let i = loops.length - 1; i > 0; i--) if (loops[i].from <= t) return loops[i].loop
+		return loops[0]?.loop
+	}
+	const beatMs = (l) => 60000 / l.bpm
+	const barMs = (l) => beatMs(l) * l.beatsPerBar
+	const loopMs = (l) => barMs(l) * l.bars
+
+	function pos(t = now()) {
+		const l = loopAt(t)
+		if (!l) return null
+		const beats = (t - l.origin) / beatMs(l)
+		const total = l.beatsPerBar * l.bars
+		const inLoop = ((beats % total) + total) % total
+		return {
+			beats,
+			bar: Math.floor(inLoop / l.beatsPerBar),
+			beat: Math.floor(inLoop % l.beatsPerBar),
+			loopPhase: inLoop / total,
+			loop: l,
+		}
+	}
+	function next(t, duration) {
+		const l = loopAt(t)
+		const unit = duration(l)
+		return l.origin + Math.ceil((t - l.origin) / unit) * unit
+	}
+
+	return {
+		setLoop,
+		loopAt,
+		pos,
+		beatMs,
+		barMs,
+		loopMs,
+		resetLoop(loop) {
+			loops.length = 0
+			setLoop(loop)
+		},
+		nextBar: (t = now()) => next(t, barMs),
+		nextLoop: (t = now()) => next(t, loopMs),
+		latestLoop: () => loops.at(-1)?.loop,
+		pending: (t = now()) => loops.filter((l) => l.from > t).map((l) => l.loop),
+	}
+}
 
 export function createClock() {
 	const samples = []
 	let offset = 0
 	let locked = false
-	const loops = []
 
 	function addSample(c0, s, c1) {
 		const rtt = c1 - c0
@@ -40,38 +92,6 @@ export function createClock() {
 	const fromLocal = (perfMs) => perfMs + performance.timeOrigin + offset
 	const toAudio = (ctx, serverMs) =>
 		ctx.currentTime + (toLocal(serverMs) - performance.now()) / 1000
-
-	function setLoop(loop, from = -Infinity) {
-		loops.push({ loop, from })
-		loops.sort((a, b) => a.from - b.from)
-	}
-	function loopAt(t = now()) {
-		let cur = loops[0]?.loop
-		for (const l of loops) if (l.from <= t) cur = l.loop
-		while (loops.length > 1 && loops[1].from <= t - 60_000) loops.shift()
-		return cur
-	}
-	const beatMs = (l) => 60000 / l.bpm
-	const barMs = (l) => beatMs(l) * l.beatsPerBar
-	const loopMs = (l) => barMs(l) * l.bars
-
-	function pos(t = now()) {
-		const l = loopAt(t)
-		if (!l) return null
-		const beats = (t - l.origin) / beatMs(l)
-		const total = l.beatsPerBar * l.bars
-		const inLoop = ((beats % total) + total) % total
-		return {
-			beats,
-			bar: Math.floor(inLoop / l.beatsPerBar),
-			beat: Math.floor(inLoop % l.beatsPerBar),
-			loopPhase: inLoop / total,
-			loop: l,
-		}
-	}
-	const ceilTo = (l, t, unit) => l.origin + Math.ceil((t - l.origin) / unit) * unit
-	const nextBar = (t = now()) => ceilTo(loopAt(t), t, barMs(loopAt(t)))
-	const nextLoop = (t = now()) => ceilTo(loopAt(t), t, loopMs(loopAt(t)))
 
 	function stats() {
 		const rtts = samples.map((x) => x.rtt)
@@ -103,6 +123,9 @@ export function createClock() {
 		}
 	}
 
+	const timeline = loopTimeline(now)
+	const { pos, loopAt } = timeline
+
 	function instrumentClock(steps = 16) {
 		return {
 			get bpm() {
@@ -119,66 +142,20 @@ export function createClock() {
 		}
 	}
 
-	const pending = (t = now()) => loops.filter((l) => l.from > t).map((l) => l.loop)
-
-	return {
-		addSample,
-		pending,
-		now,
-		toLocal,
-		fromLocal,
-		toAudio,
-		setLoop,
-		loopAt,
-		pos,
-		nextBar,
-		nextLoop,
-		stats,
-		instrumentClock,
-		beatMs,
-		barMs,
-		loopMs,
-	}
+	return { ...timeline, addSample, now, toLocal, fromLocal, toAudio, stats, instrumentClock }
 }
 
-export function createTransport({
-	url,
-	room = 'open',
-	name = 'anon',
-	seat = null,
-	color = null,
-} = {}) {
-	const clock = createClock()
-	const listeners = {}
-	const seats = {} // seat -> [{at, data, rev, from}] (short history so seatAt() can answer for near-future times)
-	const pending = new Map()
+// Shared by the relay and local tabs. Only the latest edit for a seat on a bar may fire.
+export function seatHistory(clock, isLocal) {
+	const seats = Object.create(null)
 	const timers = new Set()
-	let ws = null,
-		id = null,
-		peers = [],
-		connected = false,
-		retry = 0,
-		pingTimer = null,
-		closed = false
-	let me = { name, seat, color }
-	let sent = 0,
-		recv = 0,
-		lastLateMs = 0
-
+	const listeners = {}
+	let lastLateMs = 0
 	const emit = (ev, d) => (listeners[ev] || []).forEach((fn) => fn(d))
 	const on = (ev, fn) => (
 		(listeners[ev] ||= []).push(fn),
 		() => (listeners[ev] = listeners[ev].filter((f) => f !== fn))
 	)
-	const tx = (m) => {
-		if (ws?.readyState === 1) {
-			ws.send(JSON.stringify(m))
-			sent++
-		}
-	}
-
-	clock.setLoop({ bpm: 96, beatsPerBar: 4, bars: 4, origin: Math.floor(localNow()) })
-
 	function schedule(serverMs, fn) {
 		const delay = clock.toLocal(serverMs) - performance.now()
 		const h = setTimeout(() => (timers.delete(h), fn()), Math.max(0, delay))
@@ -192,14 +169,83 @@ export function createTransport({
 		while (h.length > 4) h.shift()
 		schedule(entry.at - LOOKAHEAD, () => {
 			// timers for edits landing on the same bar can fire out of order; only the newest one for that bar applies
-			const cur = seats[seat] || [],
-				i = cur.indexOf(entry)
-			if (i < 0 || cur[i + 1]?.at === entry.at) return
+			const i = h.indexOf(entry)
+			if (i < 0 || h[i + 1]?.at === entry.at) return
 			const late = clock.now() - (entry.at - LOOKAHEAD)
 			if (late > 20) lastLateMs = late
-			emit('apply', { seat, ...entry, local: entry.from === id || entry.from === 'me' })
+			emit('apply', { seat, ...entry, local: isLocal(entry.from) })
 		})
+		return entry
 	}
+
+	function seatAt(seat, t = clock.now()) {
+		const h = seats[seat]
+		if (!h) return undefined
+		let cur
+		for (const e of h) if (e.at <= t) cur = e
+		return cur?.data
+	}
+
+	return {
+		on,
+		emit,
+		record,
+		seatAt,
+		schedule,
+		seats: () => Object.fromEntries(Object.keys(seats).map((k) => [k, seatAt(k)])),
+		snapshot: () =>
+			Object.fromEntries(
+				Object.entries(seats).map(([seat, entries]) => {
+					const { at, data, rev, from } = entries.at(-1)
+					return [seat, { at, data, rev, owner: from }]
+				}),
+			),
+		forget(seat, entry) {
+			const entries = seats[seat]
+			const i = entries?.indexOf(entry) ?? -1
+			if (i >= 0) entries.splice(i, 1)
+			if (entries && !entries.length) delete seats[seat]
+		},
+		get lateMs() {
+			return lastLateMs
+		},
+		close() {
+			timers.forEach(clearTimeout)
+			timers.clear()
+		},
+	}
+}
+
+export function createTransport({
+	url,
+	room = 'open',
+	name = 'anon',
+	seat = null,
+	color = null,
+} = {}) {
+	const clock = createClock()
+	const pending = new Map()
+	let ws = null,
+		id = null,
+		peers = [],
+		connected = false,
+		retry = 0,
+		pingTimer = null,
+		closed = false
+	let me = { name, seat, color }
+	let sent = 0,
+		recv = 0
+
+	const history = seatHistory(clock, (from) => from === id || from === 'me')
+	const { on, emit, record, schedule, seatAt } = history
+	const tx = (m) => {
+		if (ws?.readyState === 1) {
+			ws.send(JSON.stringify(m))
+			sent++
+		}
+	}
+
+	clock.setLoop({ bpm: 96, beatsPerBar: 4, bars: 4, origin: Math.floor(localNow()) })
 
 	function connect() {
 		if (!url || closed) return
@@ -237,9 +283,10 @@ export function createTransport({
 			} else if (m.t === 'edit') {
 				if (m.nonce && pending.has(m.nonce)) {
 					// Our own edit: already scheduled locally. Server may have pushed `at` later if we were late.
+					const entry = pending.get(m.nonce)
 					pending.delete(m.nonce)
 					if (m.at !== m.proposed) {
-						seats[m.seat] = (seats[m.seat] || []).filter((e) => e.rev !== Infinity)
+						history.forget(m.seat, entry)
 						record(m.seat, { at: m.at, data: m.data, rev: m.rev, from: m.from })
 					}
 					return
@@ -266,26 +313,17 @@ export function createTransport({
 		const margin = Math.max(80, (rtt ?? 100) * 1.5 + 40) + LOOKAHEAD
 		const at = clock.nextBar(clock.now() + margin)
 		const nonce = Math.random().toString(36).slice(2)
-		pending.set(nonce, { seat, data, at })
-		record(seat, { at, data, rev: Infinity, from: id || 'me' })
+		pending.set(nonce, record(seat, { at, data, rev: Infinity, from: id || 'me' }))
 		tx({ t: 'edit', seat, data, at, nonce, proposed: at })
 		emit('pending', { seat, data, at })
 		return at
-	}
-
-	function seatAt(seat, t = clock.now()) {
-		const h = seats[seat]
-		if (!h) return undefined
-		let cur
-		for (const e of h) if (e.at <= t) cur = e
-		return cur?.data
 	}
 
 	return {
 		on,
 		edit,
 		seatAt,
-		seats: () => Object.fromEntries(Object.keys(seats).map((k) => [k, seatAt(k)])),
+		seats: history.seats,
 		cursor: (x, y, down = false, seat = me.seat, name) =>
 			tx({ t: 'cursor', x, y, down, seat, name }),
 		setLoop: (loop) => tx({ t: 'loop', ...loop }),
@@ -309,13 +347,13 @@ export function createTransport({
 			pending: pending.size,
 			sent,
 			recv,
-			lateMs: lastLateMs,
+			lateMs: history.lateMs,
 			pos: clock.pos(),
 		}),
 		close: () => {
 			closed = true
 			ws?.close()
-			timers.forEach(clearTimeout)
+			history.close()
 		},
 	}
 }
