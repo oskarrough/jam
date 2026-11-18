@@ -66,18 +66,18 @@ export function createEngine(transport, { seatIds, instruments }) {
 	})
 
 	const seats = seatIds.map((id, i) => {
-		const { out, send, lp } = seatStrip(audio, master, roomIn)
+		const { out, send, tone } = seatStrip(audio, master, roomIn)
 		// what the seat sounds like after its level and tone, for the mixer's dots
 		const meter = audio.createAnalyser()
 		meter.fftSize = 256
-		lp.connect(meter)
+		tone.out.connect(meter)
 		return {
 			id,
 			index: i,
 			color: SEAT_COLORS[i % SEAT_COLORS.length],
 			out,
 			send,
-			lp,
+			tone,
 			meter,
 			mix: { ...MIX, mute: false },
 			module: null,
@@ -99,7 +99,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const t = audio.currentTime
 		L.out.gain.setTargetAtTime(heard(L) ? L.mix.level : 0, t, 0.02)
 		L.send.gain.setTargetAtTime(L.mix.space, t, 0.02)
-		setTone(L.lp, L.mix.tone, t)
+		setTone(L.tone, L.mix.tone, t)
 	}
 
 	function setLen(L, n) {
@@ -176,7 +176,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const L = seatById(seat)
 		if (!L || !data || local) return
 		L.riff = data.riff || null
-		const m = { ...MIX, ...data.mix, mute: !!data.mute }
+		const m = { ...readMix(data.mix), mute: !!data.mute }
 		if (Object.keys(m).some((k) => m[k] !== L.mix[k])) {
 			Object.assign(L.mix, m)
 			applyMix(L)
@@ -325,29 +325,45 @@ export function resize(state, from, to) {
 	return out
 }
 
-// A seat's mix: level (0..1.5), space (room send), tone (0 dark .. 1 open, a lowpass on everything it plays)
-export const MIX = { level: 0.9, space: 0.25, tone: 1 }
-// what differs from the default, for the seat's data; null when nothing does
+// A seat's mix: level (0..1.5), space (room send), tone (0 dark .. 0.5 untouched .. 1 bright)
+export const MIX = { level: 0.9, space: 0.25, tone: 0.5 }
+// what differs from the default, for the seat's data; null when nothing does. `v: 2` marks the centred tone
 export function mixData(mix) {
 	const m = {}
 	for (const k in MIX) if (Number.isFinite(mix?.[k]) && mix[k] !== MIX[k]) m[k] = mix[k]
+	if ('tone' in m) m.v = 2
 	return Object.keys(m).length ? m : null
 }
-// instruments play into `out` (level), then the tone filter, then the room and master
+// a seat's mix from its data. Before v2, tone ran 0 dark .. 1 open (the default, so never saved): halve it
+export function readMix(data) {
+	const m = { ...MIX }
+	for (const k in MIX) if (Number.isFinite(data?.[k])) m[k] = data[k]
+	if (Number.isFinite(data?.tone) && data.v !== 2) m.tone = data.tone / 2
+	return m
+}
+// instruments play into `out` (level), then the tone (a lowpass, then a high shelf), then the room and master
 export function seatStrip(audio, master, roomIn) {
 	const out = audio.createGain()
 	const lp = audio.createBiquadFilter()
+	const shelf = audio.createBiquadFilter()
+	shelf.type = 'highshelf'
+	shelf.frequency.value = 5000
 	const send = audio.createGain()
-	setTone(lp, MIX.tone, 0)
-	out.connect(lp).connect(master)
-	lp.connect(send).connect(roomIn)
-	return { out, send, lp }
+	const tone = { lp, shelf, out: shelf }
+	setTone(tone, MIX.tone, 0)
+	out.connect(lp).connect(shelf).connect(master)
+	shelf.connect(send).connect(roomIn)
+	return { out, send, tone }
 }
-// tone 1 is wide open; down to 0 it closes to a dark 140 Hz with a little resonance on the way
-export function setTone(lp, tone, t) {
-	tone = Math.max(0, Math.min(1, tone ?? 1))
-	lp.frequency.setTargetAtTime(140 * (20000 / 140) ** tone, t, 0.03)
-	lp.Q.setTargetAtTime(0.7 + 1.8 * Math.sin(Math.PI * (1 - tone) * 0.9) ** 2, t, 0.03)
+// the middle leaves the sound alone. Leftwards the high shelf dips (a bit dark only softens the hats) while the
+// lowpass closes, slowly at first and then fast, to a thud at 150 Hz; rightwards the shelf lifts the top, up to +6 dB
+export function setTone({ lp, shelf }, tone, t) {
+	tone = Math.max(0, Math.min(1, tone ?? MIX.tone))
+	const dark = Math.max(0, 1 - tone * 2),
+		bright = Math.max(0, tone * 2 - 1)
+	lp.frequency.setTargetAtTime(20000 * (150 / 20000) ** (dark ** 4), t, 0.03)
+	lp.Q.setTargetAtTime(0.6 + 0.8 * dark ** 4, t, 0.03)
+	shelf.gain.setTargetAtTime(6 * bright - 5 * dark, t, 0.03)
 }
 
 // The master chain every seat plays into: glue compressor, limiter, a shared room. The export renders through it too.

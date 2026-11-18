@@ -1505,11 +1505,12 @@ export function createView(
 			g.globalAlpha = engine.heard(i) ? 0.3 + 0.7 * Math.min(1, L.mix.level / 0.9) : 0.28
 			warp(L, r0, r1)
 			g.globalAlpha = 1
-			if (L.mix.tone < 1) {
+			const dark = Math.max(0, 1 - L.mix.tone * 2)
+			if (dark > 0) {
 				g.beginPath()
 				g.arc(CX, CY, r1, 0, TAU)
 				g.arc(CX, CY, r0, 0, TAU, true)
-				g.fillStyle = ink((1 - L.mix.tone) * 0.4)
+				g.fillStyle = ink(dark * 0.4)
 				g.fill()
 			}
 			if (!small()) {
@@ -1669,14 +1670,16 @@ export function createView(
 			g.strokeStyle = INK
 			g.lineWidth = 1.2
 			g.stroke(sq)
-			// faint crosshair through the default: as loud as a seat starts, wide open
-			const [hx, hy] = mixXY(F, { level: 0.9, tone: 1 })
+			// faint crosshair through the default: as loud as a seat starts, the tone untouched
+			const [hx, hy] = mixXY(F, { level: 0.9, tone: 0.5 })
 			g.strokeStyle = ink(0.12)
 			g.lineWidth = 1
 			g.setLineDash([2, 4])
 			g.beginPath()
 			g.moveTo(F.x + F.pad, hy)
-			g.lineTo(hx, hy)
+			g.lineTo(F.x + F.s - F.pad, hy)
+			g.moveTo(hx, F.y + F.pad)
+			g.lineTo(hx, F.y + F.s - F.pad)
 			g.stroke()
 			g.setLineDash([])
 			// the four edges say which way is which; they light up while you drag
@@ -1765,7 +1768,9 @@ export function createView(
 				}
 				g.beginPath()
 				g.arc(d.x, d.y, r * (1 + 0.15 * pu), 0, TAU)
-				g.fillStyle = L.mix.mute ? PAPER : mixHex(L.color, INK, (1 - L.mix.tone) * 0.5)
+				g.fillStyle = L.mix.mute ? PAPER : L.mix.tone < 0.5
+						? mixHex(L.color, INK, (1 - L.mix.tone * 2) * 0.5)
+						: mixHex(L.color, PAPER, (L.mix.tone * 2 - 1) * 0.35)
 				g.fill()
 				g.strokeStyle = L.mix.mute ? L.color : INK
 				g.lineWidth = own ? 1.6 : L.mix.mute ? 1.5 : 0.8

@@ -4,7 +4,7 @@
 import { registry } from './instruments/index.js'
 import { val } from './instruments/lib/util.js'
 import { kit } from './instruments/lib/kit.js'
-import { mixBus, seatStrip, setTone, MIX, SEAT_COLORS } from './engine.js'
+import { mixBus, seatStrip, setTone, readMix, MIX, SEAT_COLORS } from './engine.js'
 import { INK_THEME } from './palette.js'
 
 const RATE = 48000
@@ -53,7 +53,7 @@ export async function renderRecording(rec, seatIds) {
 	})
 
 	const seats = seatIds.map((id, i) => {
-		const { out, send, lp } = seatStrip(off, master, roomIn)
+		const { out, send, tone } = seatStrip(off, master, roomIn)
 		out.gain.value = MIX.level
 		send.gain.value = MIX.space
 		return {
@@ -61,7 +61,7 @@ export async function renderRecording(rec, seatIds) {
 			color: SEAT_COLORS[i % SEAT_COLORS.length],
 			out,
 			send,
-			lp,
+			tone,
 			mod: null,
 			inst: null,
 			params: null,
@@ -87,10 +87,10 @@ export async function renderRecording(rec, seatIds) {
 		}
 		if (data.params) Object.assign(L.params, data.params)
 		L.inst.setState(data.state)
-		const m = { ...MIX, ...data.mix }
+		const m = readMix(data.mix)
 		L.out.gain.setValueAtTime(data.mute ? 0 : m.level, cursor)
 		L.send.gain.setValueAtTime(m.space, cursor)
-		setTone(L.lp, m.tone, cursor)
+		setTone(L.tone, m.tone, cursor)
 	}
 
 	for (let g = 0; g < total; g++) {

@@ -139,7 +139,7 @@ try {
 			() => false,
 		)
 	check(
-		k && mix.level > 0.9 && mix.tone < 1 && mixed,
+		k && mix.level > 0.9 && mix.tone < 0.5 && mixed,
 		`ben hears ana's mix (${JSON.stringify(mix)})`,
 	)
 	// ana taps her dot without moving it: her seat goes quiet for ben too
