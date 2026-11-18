@@ -8,10 +8,11 @@ import { chordOf, nameOf, letterOf, triadOf, keyOf, mtof } from './instruments/l
 import { SERIF, INK, PAPER } from './palette.js'
 
 const VERMILION = '#d64a28'
-// one rung of the ladder per this many px of drag, so the lit rung tracks the finger
+// rung height: the ladder sits level with your pointer and the rung beside it is the one you get
 const STEP_PX = 28
-// the ladder's starting rung floats this far above the finger, clear of the thumb
-const LIFT = 96
+const LADDER_W = 168
+// the ladder stands this far beside the pointer, wider for a thumb
+const GAP = { touch: 44, pen: 26, mouse: 22 }
 // each tab leans its own way, like the seat badges
 const LEAN = [-7, 5, -3, 8, -5, 3, -8, 6]
 const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th']
@@ -131,7 +132,8 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 			const l = clock.latestLoop()
 			const bar = Math.floor(h.phase * l.bars)
 			const from = chordOf(l, bar).deg
-			held = { id: e.pointerId, bar, from, deg: from, x0: e.clientX, y0: e.clientY, moved: false }
+			held = { id: e.pointerId, bar, from, deg: from, y0: e.clientY, moved: false, steps: 0 }
+			place(held, e)
 			canvas.setPointerCapture(e.pointerId)
 			const a = angOf((bar + 0.5) / l.bars)
 			heart?.look?.(Math.cos(a), Math.sin(a))
@@ -140,9 +142,10 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 	)
 	canvas.addEventListener('pointermove', (e) => {
 		if (!held || e.pointerId !== held.id) return
-		// three rungs each way reach all seven chords, so the ladder stops instead of wrapping
-		const steps = Math.max(-3, Math.min(3, Math.round((held.y0 - e.clientY) / STEP_PX)))
-		if (steps) held.moved = true
+		if (Math.abs(e.clientY - held.y0) > 6) held.moved = true
+		if (!held.moved) return
+		// the rung level with the pointer; three each way reach all seven chords, so it stops instead of wrapping
+		const steps = Math.max(-3, Math.min(3, Math.round((held.base - e.clientY) / STEP_PX)))
 		const deg = (((held.from + steps) % 7) + 7) % 7
 		if (deg !== held.deg) hear(clock.latestLoop(), deg)
 		held.deg = deg
@@ -213,6 +216,20 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		drawLadder(next)
 	}
 
+	// The ladder goes beside the pointer with the chord you pressed level with it, then each rung up or down
+	// is one step of the key, 1:1 under the pointer. Near a screen edge the ladder shifts rather than squeeze.
+	function place(h, e) {
+		const S = STEP_PX,
+			W = innerWidth,
+			H = innerHeight,
+			w = LADDER_W
+		const gap = GAP[e.pointerType] ?? GAP.mouse
+		const right = e.clientX + gap + w <= W - 6
+		h.side = right ? 1 : -1
+		h.x = right ? e.clientX + gap + w / 2 : Math.max(w / 2 + 6, e.clientX - gap - w / 2)
+		h.base = Math.max(3 * S + S / 2 + 24, Math.min(H - 3 * S - S / 2 - 6, e.clientY))
+	}
+
 	// Seven rungs, the chord you started on in the middle, one step of the key per rung. Each rung reads
 	// 'Dm iv'; the lit one also says what the numeral means: '4th of A minor, a minor chord'.
 	function drawLadder(l) {
@@ -231,11 +248,8 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		g.setTransform(dpr, 0, 0, dpr, 0, 0)
 		g.clearRect(0, 0, W, H)
 		const S = STEP_PX,
-			w = 168
-		let base = held.y0 - LIFT
-		// keep the top rung on screen; if that squeezes, the ladder slides down rather than off
-		base = Math.max(base, 3 * S + 34)
-		const x = Math.max(w / 2 + 6, Math.min(W - w / 2 - 6, held.x0))
+			w = LADDER_W,
+			{ base, x, side } = held
 		const top = base - 3 * S - S / 2 - 18,
 			bot = base + 3 * S + S / 2
 		// paper card, a little crooked
@@ -254,6 +268,15 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		g.shadowColor = 'transparent'
 		g.stroke()
 		g.restore()
+		// a notch on the pointer's side, level with the lit rung
+		const ny = base - held.steps * S,
+			nx = x - (side * w) / 2
+		g.fillStyle = INK
+		g.beginPath()
+		g.moveTo(nx - side * 9, ny)
+		g.lineTo(nx, ny - 6)
+		g.lineTo(nx, ny + 6)
+		g.fill()
 		// the key, as the ladder's title
 		g.fillStyle = INK
 		g.globalAlpha = 0.6
