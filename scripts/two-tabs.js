@@ -85,6 +85,27 @@ try {
 			() => false,
 		)
 	check(want && rolled, `ben plays ana's chords (${want})`)
+	// ana presses the key under the eye and slides two rungs up: ben's loop changes key too
+	const kt = await a.evaluate(() => {
+		const k = [...document.querySelectorAll('span')].find((s) =>
+			/^[A-G] (minor|major)$/.test(s.textContent),
+		)
+		const r = k.getBoundingClientRect()
+		return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+	})
+	await a.mouse.move(kt.x, kt.y)
+	await a.mouse.down()
+	await a.mouse.move(kt.x, kt.y - 56, { steps: 6 })
+	await a.mouse.up()
+	const keyed = await b
+		.waitForFunction(() => window.jam.transport.clock.loopAt().root === 'C', null, {
+			timeout: 8000,
+		})
+		.then(
+			() => true,
+			() => false,
+		)
+	check(keyed, 'ben plays in the key ana picked (C)')
 	// ana opens the mixer and drags her dot up and to the left: louder and darker, for ben too
 	const b0 = await a.evaluate(() => window.jam.view.mixer()?.button)
 	if (b0) await a.mouse.click(b0.x, b0.y)
@@ -110,7 +131,10 @@ try {
 			() => true,
 			() => false,
 		)
-	check(k && mix.level > 0.9 && mix.tone < 1 && mixed, `ben hears ana's mix (${JSON.stringify(mix)})`)
+	check(
+		k && mix.level > 0.9 && mix.tone < 1 && mixed,
+		`ben hears ana's mix (${JSON.stringify(mix)})`,
+	)
 	const errs = [...a.errors, ...b.errors]
 	check(!errs.length, 'no page errors' + errs.map((e) => '\n  ' + e).join(''))
 } finally {

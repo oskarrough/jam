@@ -2,9 +2,9 @@
 // quarter of the loop; tap the eye there to roll it on, or drag up and down to scrub. It travels with the
 // loop, so it lands on the next bar for everyone and replays carry it.
 // A tab leads with the chord a player can read (Dm) and carries its numeral (iv) small, as the lesson.
-// The key the numerals count from sits under the eye (A minor). Pressing a tab raises a ladder of the
+// The key the numerals count from sits under the eye (A minor); press it for a ladder of keys, tap it to flip minor and major. Pressing a tab raises a ladder of the
 // key's seven chords above your finger: slide to a rung and you hear it, quietly and only you; let go to play it.
-import { chordOf, nameOf, letterOf, triadOf, keyOf, mtof } from './instruments/lib/kit.js'
+import { chordOf, nameOf, letterOf, triadOf, keyOf, mtof, ROOTS } from './instruments/lib/kit.js'
 import { SERIF, INK, PAPER } from './palette.js'
 
 const VERMILION = '#d64a28'
@@ -17,6 +17,9 @@ const GAP = { touch: 44, pen: 26, mouse: 22 }
 const LEAN = [-7, 5, -3, 8, -5, 3, -8, 6]
 const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th']
 const QUALITY = { m: 'minor', '°': 'dim', '': 'major' }
+const KEYS = Object.keys(ROOTS)
+const wrap = (i) => ((i % 7) + 7) % 7
+const isMajor = (l) => keyOf(l).endsWith('major')
 
 export function createHarmony({ canvas, view, transport, heart, engine, readOnly = false }) {
 	const { clock } = transport
@@ -130,9 +133,24 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 			if (!h) return
 			e.stopImmediatePropagation()
 			const l = clock.latestLoop()
+			const start = { id: e.pointerId, y0: e.clientY, moved: false, steps: 0 }
+			// the key label wins its own presses: a ladder of keys, never a chord
+			const k = keyTag.getBoundingClientRect()
+			if (
+				e.clientX > k.left - 6 &&
+				e.clientX < k.right + 6 &&
+				e.clientY > k.top - 6 &&
+				e.clientY < k.bottom + 6
+			) {
+				const from = Math.max(0, KEYS.indexOf(l.root ?? 'A'))
+				held = { ...start, kind: 'key', from, idx: from }
+				place(held, e)
+				canvas.setPointerCapture(e.pointerId)
+				return
+			}
 			const bar = Math.floor(h.phase * l.bars)
 			const from = chordOf(l, bar).deg
-			held = { id: e.pointerId, bar, from, deg: from, y0: e.clientY, moved: false, steps: 0 }
+			held = { ...start, kind: 'chord', bar, from, idx: from }
 			place(held, e)
 			canvas.setPointerCapture(e.pointerId)
 			const a = angOf((bar + 0.5) / l.bars)
@@ -146,22 +164,40 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		if (!held.moved) return
 		// the rung level with the pointer; three each way reach all seven chords, so it stops instead of wrapping
 		const steps = Math.max(-3, Math.min(3, Math.round((held.base - e.clientY) / STEP_PX)))
-		const deg = (((held.from + steps) % 7) + 7) % 7
-		if (deg !== held.deg) hear(clock.latestLoop(), deg)
-		held.deg = deg
+		const idx = wrap(held.from + steps)
+		const l = clock.latestLoop()
+		if (idx !== held.idx) held.kind === 'key' ? hear({ ...l, root: KEYS[idx] }, 0) : hear(l, idx)
+		held.idx = idx
 		held.steps = steps
 	})
+	// key and chords always travel together: a patch lands on the playing loop, so sending one alone
+	// would drop the other if it was changed this bar and hasn't landed yet
+	const commit = (l, patch) =>
+		transport.setLoop({
+			root: l.root ?? 'A',
+			scale: l.scale,
+			...(l.chords ? { chords: l.chords } : {}),
+			...patch,
+		})
 	const up = (e) => {
 		if (!held || e.pointerId !== held.id) return
 		const h = held
 		held = null
 		if (e.type === 'pointercancel') return
-		const deg = h.moved ? h.deg : (h.from + 1) % 7
-		if (deg === h.from) return
 		const l = clock.latestLoop()
+		if (h.kind === 'key') {
+			// slide picks the root; a tap flips minor and major on the same root. Root and scale travel
+			// together, since a patch lands on the playing loop and would drop a change still pending.
+			const root = h.moved ? KEYS[h.idx] : (l.root ?? 'A')
+			const scale = h.moved ? l.scale : isMajor(l) ? 'minor pent' : 'major pent'
+			if (root === (l.root ?? 'A') && scale === l.scale) return
+			return commit(l, { root, scale })
+		}
+		const deg = h.moved ? h.idx : (h.from + 1) % 7
+		if (deg === h.from) return
 		const chords = Array.from({ length: l.bars }, (_, b) => chordOf(l, b).deg)
 		chords[h.bar] = deg
-		transport.setLoop({ chords })
+		commit(l, { chords })
 	}
 	canvas.addEventListener('pointerup', up)
 	canvas.addEventListener('pointercancel', up)
@@ -178,23 +214,25 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 			return
 		}
 		const l = p.loop,
-			next = clock.latestLoop(),
 			n = l.bars
+		// while you slide the key ladder, the tabs already speak the key under your pointer
+		let next = clock.latestLoop()
+		if (held?.kind === 'key') next = { ...next, root: KEYS[held.idx] }
 		const absBar = Math.floor(p.beats / l.beatsPerBar)
 		const first = absBar - (((absBar % n) + n) % n)
 		const px = Math.max(12, Math.round(c.r * 0.19))
 		const rr = c.r - px * 0.9
-		const key = `${c.x},${c.y},${c.r},${absBar},${held?.bar},${held?.deg}`
-		if (shown?.loop === l && shown.next === next && key === shown.key) return
-		shown = { loop: l, next, key }
+		const key = `${c.x},${c.y},${c.r},${absBar},${held?.kind},${held?.bar},${held?.idx}`
+		if (shown?.loop === l && shown.next === clock.latestLoop() && key === shown.key) return
+		shown = { loop: l, next: clock.latestLoop(), key }
 		box.style.display = ''
 		while (labels.length < n) labels.push(label())
 		labels.forEach((s, k) => {
 			if (k >= n) return (s.style.display = 'none')
 			const current = first + k === absBar
-			const pressed = held?.bar === k
+			const pressed = held?.kind === 'chord' && held.bar === k
 			const nowDeg = chordOf(l, first + k).deg
-			const deg = pressed ? held.deg : chordOf(next, first + k).deg
+			const deg = pressed ? held.idx : chordOf(next, first + k).deg
 			const chord = letterOf(next, deg)
 			const pending = !pressed && chord !== letterOf(l, nowDeg)
 			const a = angOf((k + 0.5) / n)
@@ -211,6 +249,7 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 			s.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%) rotate(${LEAN[k % LEAN.length]}deg) scale(${scale})`
 		})
 		keyTag.textContent = keyOf(next)
+		keyTag.style.color = held?.kind === 'key' ? VERMILION : INK
 		keyTag.style.fontSize = Math.max(10, Math.round(px * 0.6)) + 'px'
 		keyTag.style.transform = `translate(${Math.round(c.x)}px, ${Math.round(c.y + c.r * 0.86)}px) translate(-50%, -50%) rotate(-2deg)`
 		drawLadder(next)
@@ -283,7 +322,7 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		g.font = `italic 500 11px ${SERIF}`
 		g.textAlign = 'center'
 		g.textBaseline = 'middle'
-		g.fillText(`in ${keyOf(l)}`, x, top + 11)
+		g.fillText(held.kind === 'key' ? 'key · tap to flip' : `in ${keyOf(l)}`, x, top + 11)
 		g.globalAlpha = 1
 		// rails
 		g.strokeStyle = INK
@@ -298,12 +337,13 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		g.globalAlpha = 1
 		const lit = held.steps ?? 0
 		for (let i = -3; i <= 3; i++) {
-			const deg = (((held.from + i) % 7) + 7) % 7
+			const idx = wrap(held.from + i)
 			const y = base - i * S
 			const on = i === lit,
 				start = i === 0
-			const name = letterOf(l, deg),
-				num = nameOf(l.scale, deg)
+			const keyed = held.kind === 'key' && { ...l, root: KEYS[idx] }
+			const name = keyed ? KEYS[idx] : letterOf(l, idx),
+				num = keyed ? keyOf(keyed).split(' ')[1] : nameOf(l.scale, idx)
 			if (on) {
 				// a scribbled ring round the lit rung
 				g.strokeStyle = VERMILION
@@ -324,11 +364,11 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 				// where you came from: a small tick on the left rail
 				g.fillRect(x - w / 2 + 10, y - 1, 8, 2)
 			}
-			if (on) {
+			if (on && !keyed) {
 				const quality = QUALITY[name.slice(-1)] ?? QUALITY['']
 				g.font = `italic 500 10px ${SERIF}`
 				g.globalAlpha = 0.85
-				g.fillText(`${ORDINAL[deg]}, ${quality}`, x + 16, y + 1)
+				g.fillText(`${ORDINAL[idx]}, ${quality}`, x + 16, y + 1)
 			}
 			g.globalAlpha = 1
 		}
