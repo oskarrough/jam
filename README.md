@@ -4,16 +4,50 @@ Try it on https://jam.0sk.ar
 
 ---
 
-Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and the hand sweeps round them all on one shared clock. You don't pick notes from a menu; you draw on your ring and the drawing plays. Tap your own seat to zoom into your instrument, and its glyph token to swap it for another. Robots are off by default: the point is that people make the music, not the code playing by itself. Turn them on when you want help, and they take empty seats and redraw their ring every few loops until a person sits down. Drag your own seat badge onto a robot's and it takes your ring as a motif and improvises on it in its own instrument: echo, a variation or two, then a call-and-response, round again.
+Everyone sits at one dial. A seat is a ring, a ring is an instrument. You draw and the drawing plays. The hand sweeps round them all on one shared clock. Robots are off unless you want help.
 
-It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, the key and the chords (one a bar, typed as numerals: `i III iv v`; players change them on the eye: tap a quarter to roll that bar's chord, drag up or down to scrub), which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. Controls aren't a developer backstage; they're part of the instrument.
+It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, which instrument sits in which ring and every one of its knobs. All of it changes live, mid-jam, for everyone. Controls aren't a developer backstage; they're part of the instrument. Hold a tab on the eye and choose a chord from the ladder. The key sits under the eye.
 
-And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fifteen so far:
+And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean.
 
-- **bass**: an elastic riff; pull the knot to stretch it. **tide**: draw water, notes ring where it crosses the chord's threads. **bell**: tap for a bell, drag up to drop a bouncing marble. **bloom**: holds the room's chord; draw it higher and it opens up, the 7th and 9th flowering on top
-- **drums**: paint kick, snare and hat in three bands
-- **steps**: a step sequencer where every note grows a fat tail; pull the knob at its end to hold the note across steps, piano-roll style
-- **contour, gears, sweep, drift, scribble, strum, swarm, orbits, embers**: nine stranger ones, described with steps in [lab/README.md](lab/README.md)
+### Beat
+
+- drums: Paint kick, snare and hat.
+- gears: Turn gears to shift the beat.
+- embers: Throw sparks that pop and burn out.
+- steps: Tap notes and pull their tails to hold them.
+
+### Low
+
+- bass: Pull the knot to stretch the riff.
+
+### Chords
+
+- bloom: Draw higher to open the chord.
+- sweep: Sweep a filter and hear your hand played back.
+- drift: Drop stones that drone.
+- strum: Swipe strings into a repeating strum.
+- tide: Draw water that rings where it crosses a thread.
+
+### Tune
+
+- bell: Drop marbles that ring on the bounce.
+- scribble: Scribble vowels from oo to ee.
+- swarm: String wires across fireflies' paths.
+- orbits: Place planets that play as they go round.
+- contour: Draw a line that sings.
+
+Play them one at a time in [the lab](lab/README.md).
+
+## Play
+
+The sheet’s bracket sets loop length. Inks underneath are brushes for the next stroke.
+
+Keys: `space` sound, `1`–`4` seats, `e` erase, `Ctrl`/`⌘`-`Z` undo, `d` controls.
+
+Share makes a link to the song. In the console: `jam.export()` / `jam.import()`.
+
+Run `python3 -m http.server` to play across local tabs, or [run a relay](sync/README.md) to play across machines.
 
 ## Words
 
@@ -24,22 +58,6 @@ And the instruments are **creative**, in the sense that each one is a different 
 - **erase** rubs out under the pen; **wipe** clears your whole ring.
 - **loud** is one note's level; **level** is an instrument's volume. **range** is pitch spread, **decay** is tail length.
 - **controls**: the `d` panel.
-
-## Play
-
-    python3 -m http.server          # any static server; there is no build
-    open http://localhost:8000      # a second tab takes a second seat
-
-On its own the page plays across tabs in one browser. With a relay it plays across machines:
-
-    cd sync && pnpm i && pnpm start   # the page plus a WebSocket relay on :8787
-    open http://localhost:8787      # finds the relay by itself
-
-`/` is the one open jam everyone lands in; `/j/<name>` is your own (the page's "New jam" makes one). Your own starts blank: you're dealt an instrument with nothing drawn, and the other seats are bare rings until someone sits there and picks one. `?name=you` sets your name, `?ws=off` keeps you local.
-
-"Share" copies a link that holds the song itself (loop, key and chords, every ring, the mix) in its hash, so it needs no relay. Opening it with a relay forks the song into a new `/j/<name>`; without one it loads into the local jam. Every jam also saves itself in this browser, per room: a reload brings a local jam back, and a relay jam that comes back empty is refilled. In the console, `jam.export()` is the song as data and `jam.import(songOrLink)` loads one (`src/song.js`).
-
-Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`/`⌘`-`Z` undo (`Shift` to redo), `d` controls. On a phone, tap with two fingers to undo, three to redo. In the mixer (the button by your badge), drag your dot for level and tone, tap any dot to mute that seat for everyone, hold someone else's to hear it alone, just you (hold again to stop).
 
 ## Deploy
 
@@ -81,4 +99,4 @@ That writes a small working instrument, registers it, and the link seats you wit
 
 ### Swap the transport
 
-`src/transport/local.js` and `sync/sync.js` share one API: `on('welcome'|'peers'|'apply'|'cursor'|'loop')`, `edit(seat, data)` (returns when it lands, on the next bar), `seatAt`, `cursor`, `setLoop` (next bar), `setMe`, `peers`, `debug()`, and a `clock` in shared milliseconds. Seat data is `{instrument, state, params}`; a seat is `peer.instrument === seat id`.
+`src/transport/local.js` and `sync/sync.js` share one API: `on('welcome'|'peers'|'apply'|'cursor'|'loop')`, `edit(seat, data)` (returns the shared time it will land), `seatAt`, `cursor`, `setLoop` (next bar), `setMe`, `peers`, `debug()`, and a `clock` in shared milliseconds. Seat data is `{instrument, state, params}`; a peer occupies a seat when `peer.seat` matches its id.
