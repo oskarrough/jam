@@ -3,13 +3,26 @@
 import GUI from './vendor/lil-gui.esm.min.js'
 import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/kit.js'
 
-export function createDebug({ engine, transport, view, bots, me, sit, registry, heart }) {
-	const { clock } = transport
+export function createDebug(options) {
 	const gui = new GUI({
 		title: matchMedia('(pointer: coarse)').matches ? 'controls' : 'controls  (d)',
 		width: 280,
 	})
 	gui.close()
+	let refresh, timer
+	gui.onOpenClose((folder) => {
+		if (folder !== gui) return
+		clearInterval(timer)
+		if (gui._closed) return
+		refresh ??= buildPanel(gui, options)
+		refresh()
+		timer = setInterval(refresh, 100)
+	})
+	return { gui, toggle: () => (gui._closed ? gui.open() : gui.close()) }
+}
+
+function buildPanel(gui, { engine, transport, view, bots, me, sit, registry, heart }) {
+	const { clock } = transport
 
 	const meF = gui.addFolder('me')
 	const meState = {
@@ -29,13 +42,11 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 		},
 	}
 	meF.add(meState, 'name')
-	meF
-		.add(
-			meState,
-			'seat',
-			engine.seats.map((L) => L.id),
-		)
-		.listen()
+	meF.add(
+		meState,
+		'seat',
+		engine.seats.map((L) => L.id),
+	)
 
 	const loopF = gui.addFolder('loop')
 	const cur = () => clock.loopAt()
@@ -78,15 +89,12 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 			set instrument(v) {
 				engine.setInstrument(L, v, { state: registry.get(v).sample?.(engine.steps(L)) })
 				engine.push(L)
-				buildParams()
 			},
 		}
-		f.add(sel, 'instrument', ids).listen()
+		f.add(sel, 'instrument', ids)
 		f.add(L.mix, 'level', 0, 1.5, 0.01).onChange(() => engine.applyMix(L))
 		f.add(L.mix, 'space', 0, 1, 0.01).onChange(() => engine.applyMix(L))
-		f.add(L.mix, 'mute')
-			.onChange((v) => engine.setMute(L, v))
-			.listen()
+		f.add(L.mix, 'mute').onChange((v) => engine.setMute(L, v))
 		f.add(
 			{
 				clear: () => {
@@ -96,8 +104,10 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 			},
 			'clear',
 		).name('wipe')
-		let pf = null
+		let pf = null,
+			boundParams
 		function buildParams() {
+			boundParams = L.params
 			pf?.destroy()
 			pf = f.addFolder(`${L.module.name} params`)
 			for (const [k, d] of Object.entries(L.module.params || {})) {
@@ -106,12 +116,12 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 				else if (d && typeof d === 'object' && 'min' in d)
 					c = pf.add(L.params, k, d.min, d.max, d.step)
 				else c = pf.add(L.params, k)
-				c.onChange(() => engine.pushSoon(L)).listen()
+				c.onChange(() => engine.pushSoon(L))
 			}
 		}
 		buildParams()
 		engine.on('seats', () => {
-			if (pf && pf._title !== `${L.module.name} params`) buildParams()
+			if (L.params !== boundParams) buildParams()
 		})
 	})
 
@@ -121,7 +131,7 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 			return transport.kind || 'ws'
 		},
 	}
-	netF.add(info, 'transport').disable().listen()
+	netF.add(info, 'transport').disable()
 	if (transport.fake) {
 		netF.add(transport.fake, 'latency', 0, 600, 1).name('fake latency ms')
 		netF.add(transport.fake, 'jitter', 0, 300, 1).name('fake jitter ms')
@@ -132,7 +142,7 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	const keys = ['connected', 'peers', 'rtt', 'jitter', 'offset', 'drift', 'pending', 'lateMs']
 	keys.forEach((k) => {
 		nd[k] = ''
-		netF.add(nd, k).disable().listen()
+		netF.add(nd, k).disable()
 	})
 
 	const clkF = gui.addFolder('clock')
@@ -146,7 +156,7 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 		scheduled: 0,
 		'late steps': 0,
 	}
-	Object.keys(cd).forEach((k) => clkF.add(cd, k).disable().listen())
+	Object.keys(cd).forEach((k) => clkF.add(cd, k).disable())
 	clkF.add(engine.cfg, 'lookaheadMs', 20, 500, 5).name('lookahead ms')
 	clkF
 		.add({ tick: engine.cfg.tickMs }, 'tick', 5, 100, 1)
@@ -265,7 +275,6 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 	botF
 		.add(bots.opts, 'on')
 		.onChange(() => document.getElementById('bots')?.setAttribute('aria-pressed', bots.opts.on))
-		.listen()
 	botF.add(bots.opts, 'minLoops', 1, 16, 1).name('min loops between')
 	botF.add(bots.opts, 'maxLoops', 1, 32, 1).name('max loops between')
 	const bd = {
@@ -276,11 +285,16 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 			return bots.count
 		},
 	}
-	botF.add(bd, 'leading').disable().listen()
-	botF.add(bd, 'active').disable().listen()
+	botF.add(bd, 'leading').disable()
+	botF.add(bd, 'active').disable()
 
 	const fmt = (v, d = 1) => (v == null ? '—' : typeof v === 'number' ? v.toFixed(d) : String(v))
-	setInterval(() => {
+	function refreshOpen(folder) {
+		for (const c of folder.controllers)
+			if (!c.domElement.contains(document.activeElement)) c.updateDisplay()
+		for (const child of folder.folders) if (!child._closed) refreshOpen(child)
+	}
+	return () => {
 		const d = transport.debug()
 		keys.forEach((k) => (nd[k] = fmt(d[k])))
 		const p = clock.pos()
@@ -293,7 +307,6 @@ export function createDebug({ engine, transport, view, bots, me, sit, registry, 
 			`${((engine.audio.outputLatency || 0) * 1000).toFixed(0)} + ${((engine.audio.baseLatency || 0) * 1000).toFixed(0)} ms`
 		cd.scheduled = engine.stats.scheduled
 		cd['late steps'] = engine.stats.late
-	}, 100)
-
-	return { gui, toggle: () => (gui._closed ? gui.open() : gui.close()) }
+		refreshOpen(gui)
+	}
 }

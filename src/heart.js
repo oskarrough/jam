@@ -141,9 +141,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 		opts.scratch = dark
 		opts.shadow = dark ? 0.18 : 0.35
 		opts.shade = dark ? mixHex(h, '#000000', 0.35) : ink
-		gui?.controllersRecursive().forEach((c) => c.updateDisplay())
 	}
-	let gui = null
 	const stub = { opts, stats, canvas: null, addGui() {}, destroy() {} }
 
 	const canvas = document.createElement('canvas')
@@ -878,7 +876,7 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 	raf = requestAnimationFrame(frame)
 
 	function addGui(g0) {
-		const f = (gui = g0.addFolder('heart').close())
+		const f = g0.addFolder('heart').close()
 		f.add(opts, 'on')
 		f.add(opts, 'additive', 0, 1, 0.01).name('ink ↔ light')
 		f.add(opts, 'chamber').onChange(() => {
@@ -931,8 +929,8 @@ export function createHeart({ engine, geom, after = document.getElementById('c')
 				return stats.ms.toFixed(2) + ' ms'
 			},
 		}
-		f.add(sd, 'splats').disable().listen()
-		f.add(sd, 'cpu').disable().listen()
+		f.add(sd, 'splats').disable()
+		f.add(sd, 'cpu').disable()
 		return f
 	}
 

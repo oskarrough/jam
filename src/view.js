@@ -322,14 +322,14 @@ export function createView(
 
 	const angOf = (phase) => -Math.PI / 2 + phase * TAU
 	const polar = (a, r) => [CX + Math.cos(a) * r, CY + Math.sin(a) * r]
-	const seatAngles = () => seats.map((_, i) => Math.PI * 0.75 - (i * TAU) / seats.length)
+	const seatAngle = (i) => Math.PI * 0.75 - (i * TAU) / seats.length
 	const seatPos = (i) =>
 		opts.mode === 'dial'
-			? polar(seatAngles()[i], S * 0.505)
+			? polar(seatAngle(i), S * 0.505)
 			: [stripRect(i).x - 2, stripRect(i).y + 16]
 	const seatR = () => Math.max(12, S * 0.028)
 	// a point on the badges' rim, k badge-widths round from seat i (positive is clockwise)
-	const rimFrom = (i, k) => polar(seatAngles()[i] + (k * seatR() * 2.3) / (S * 0.505), S * 0.505)
+	const rimFrom = (i, k) => polar(seatAngle(i) + (k * seatR() * 2.3) / (S * 0.505), S * 0.505)
 	const wipeAt = () => {
 		const i = seats.findIndex((_, j) => canDraw(j))
 		return i < 0 || focus.on || zt > 0 || opts.mode !== 'dial'
@@ -705,9 +705,13 @@ export function createView(
 	}
 
 	// dent: optional { a, depth, w } pushes the outline in (depth > 0) or out around angle a; that's the jelly
-	function wobble(c, cx, cy, r, seed, amp = 0.8, dent = null) {
+	const outlines = new Map()
+	function outline(cx, cy, r, seed, amp, dent) {
+		const key = seed + '/' + amp
+		const cached = outlines.get(key)
+		if (!dent?.depth && cached?.x === cx && cached.y === cy && cached.r === r) return cached.path
+		const path = new Path2D()
 		const p = [(seed * 1.7) % TAU, (seed * 2.9) % TAU, (seed * 4.3) % TAU]
-		c.beginPath()
 		for (let k = 0; k <= 160; k++) {
 			const a = (k / 160) * TAU
 			let rr =
@@ -719,9 +723,11 @@ export function createView(
 			if (dent && dent.depth) rr -= dent.depth * dentAt(a, dent.a, dent.w)
 			const x = cx + Math.cos(a) * rr,
 				y = cy + Math.sin(a) * rr
-			k ? c.lineTo(x, y) : c.moveTo(x, y)
+			k ? path.lineTo(x, y) : path.moveTo(x, y)
 		}
-		c.closePath()
+		path.closePath()
+		if (!dent?.depth) outlines.set(key, { x: cx, y: cy, r, path })
+		return path
 	}
 
 	function paintBackdrop(cv, G) {
@@ -1084,6 +1090,8 @@ export function createView(
 		return null
 	}
 
+	const legends = []
+	document.fonts?.addEventListener('loadingdone', () => (legends.length = 0))
 	function drawSeat(i, x, y, label) {
 		const L = seats[i],
 			st = occupant(i),
@@ -1123,19 +1131,17 @@ export function createView(
 		if (st.riff) {
 			g.strokeStyle = st.riff.color
 			g.lineWidth = 2
-			wobble(g, x, y, r + 3.5, i * 9 + 4, 0.5)
-			g.stroke()
+			g.stroke(outline(x, y, r + 3.5, i * 9 + 4, 0.5))
 		}
 		// the badge is a moon whose phase says who sits there, lit side toward the eye:
 		// empty a new moon, a robot half, a player gibbous, you full
 		const J = seatJelly[i],
-			disc = () => wobble(g, x, y, r, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 }),
+			disc = outline(x, y, r, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 }),
 			lit = empty ? 0.04 : st.me ? 1 : st.bot ? 0.5 : 0.78
-		disc()
 		g.fillStyle = INK
-		g.fill()
+		g.fill(disc)
 		g.save()
-		g.clip()
+		g.clip(disc)
 		g.translate(x, y)
 		g.rotate(a + Math.PI)
 		const k = 1 - 2 * lit // the terminator: an ellipse from +r (a sliver) to -r (full)
@@ -1145,18 +1151,16 @@ export function createView(
 		g.fillStyle = L.color
 		g.fill()
 		g.restore()
-		disc()
 		g.strokeStyle = empty ? rgba(PAPER, 0.7) : INK
 		g.lineWidth = st.me ? 2.2 : 1.1
 		if (empty) g.setLineDash([2.5, 3])
-		g.stroke()
+		g.stroke(disc)
 		g.setLineDash([])
 		if (st.me) {
 			// yours: a second, inner rim in paper
-			wobble(g, x, y, r - 3.5, i * 3 + 1, 0.4)
 			g.strokeStyle = PAPER
 			g.lineWidth = 1
-			g.stroke()
+			g.stroke(outline(x, y, r - 3.5, i * 3 + 1, 0.4))
 		}
 		// every badge wears its instrument's glyph: pale on a taken seat, faint ink on an empty one
 		const img = glyphImg(L.module.id, empty ? rgba(PAPER, 0.45) : PAPER)
@@ -1169,25 +1173,36 @@ export function createView(
 		const px = Math.max(10, S * 0.016),
 			R = r + px * 0.95,
 			col = G.dark ? G.paper : INK
-		const o = {
-			px,
-			col,
-			halo: rgba(G.sky[G.dark ? 0 : 2], 0.85),
-			max: Math.PI * 1.7,
-			font: (p) =>
-				`${st.me ? 800 : 700} ${Math.round(p * 10) / 10}px Syne, "Bricolage Grotesque", sans-serif`,
+		const text = empty ? L.module.name + tag : L.module.name + ' ✦ ' + st.name + tag
+		const halo = rgba(G.sky[G.dark ? 0 : 2], 0.85)
+		const key = [text, st.me, empty, px, R, a, halo, col, DPR].join('|')
+		let legend = legends[i]
+		if (!legend || legend.key !== key) {
+			const cv = legend?.cv || document.createElement('canvas')
+			const margin = Math.ceil(R + px * 2)
+			cv.width = cv.height = Math.ceil(2 * margin * DPR)
+			const ctx = cv.getContext('2d')
+			ctx.scale(DPR, DPR)
+			const w = arcText(ctx, margin, margin, text, a, R, {
+				px,
+				col,
+				halo,
+				max: Math.PI * 1.7,
+				font: (p) =>
+					`${st.me ? 800 : 700} ${Math.round(p * 10) / 10}px Syne, "Bricolage Grotesque", sans-serif`,
+			})
+			if (empty) {
+				ctx.strokeStyle = rgba(col, 0.55)
+				ctx.lineWidth = 1
+				ctx.setLineDash([2, 4])
+				ctx.beginPath()
+				ctx.arc(margin, margin, R, a + w / 2 + 0.25, a + TAU - w / 2 - 0.25)
+				ctx.stroke()
+			}
+			legend = legends[i] = { cv, margin, key }
 		}
-		const name = L.module.name.toLowerCase()
-		if (!empty) return arcText(x, y, `${name} ✦ ${st.name}${tag}`, a, R, o)
-		const w = arcText(x, y, name + tag, a, R, o)
-		g.save()
-		g.strokeStyle = rgba(col, 0.55)
-		g.lineWidth = 1
-		g.setLineDash([2, 4])
-		g.beginPath()
-		g.arc(x, y, R, a + w / 2 + 0.25, a + TAU - w / 2 - 0.25)
-		g.stroke()
-		g.restore()
+		const { cv, margin } = legend
+		g.drawImage(cv, x - margin, y - margin, cv.width / DPR, cv.height / DPR)
 	}
 
 	// muted: an ink slash through the badge, edged in paper so it reads over the glyph
@@ -1207,7 +1222,7 @@ export function createView(
 
 	// hand-set letters along a circle round (ox, oy), centred on angle a. Upright on both halves: on the top half
 	// they run clockwise with their feet toward the centre, on the bottom half anticlockwise. Returns the angle spanned.
-	function arcText(ox, oy, text, a, R, o) {
+	function arcText(g, ox, oy, text, a, R, o) {
 		const px = o.px
 		g.save()
 		g.font = o.font(px)
@@ -1219,7 +1234,7 @@ export function createView(
 		// too long for the circle: set it smaller until it fits in o.max radians
 		if (o.max && total / R > o.max && px > 7) {
 			g.restore()
-			return arcText(ox, oy, text, a, R - px * 0.06, { ...o, px: px * 0.92 })
+			return arcText(g, ox, oy, text, a, R - px * 0.06, { ...o, px: px * 0.92 })
 		}
 		const bottom = Math.sin(a) > 0.05,
 			dir = bottom ? -1 : 1
@@ -1261,6 +1276,33 @@ export function createView(
 		return (cv.frost = b)
 	}
 
+	let ticks
+	function drawTicks(inner, outer, steps, loop) {
+		const beats = loop ? loop.bars * loop.beatsPerBar : 8
+		const bpb = loop?.beatsPerBar || 4
+		const key = [CX, CY, inner, outer, beats, bpb, steps].join()
+		if (ticks?.key !== key) {
+			const paths = Array.from({ length: 4 }, () => new Path2D())
+			const mark = (path, phase, from, to) => {
+				const a = angOf(phase)
+				path.moveTo(...polar(a, from))
+				path.lineTo(...polar(a, to))
+			}
+			for (let b = 0; b < beats; b++) {
+				const bar = b % bpb === 0
+				mark(paths[bar ? 1 : 0], b / beats, inner, outer + (bar ? 5 : 0))
+			}
+			for (let s = 0; s < steps; s++)
+				mark(paths[s % 4 ? 2 : 3], s / steps, outer - 1, outer + (s % 4 ? 1.5 : 3.5))
+			ticks = { paths, key }
+		}
+		g.lineWidth = 0.5
+		ticks.paths.forEach((path, i) => {
+			g.strokeStyle = ink([0.05, 0.16, 0.12, 0.3][i])
+			g.stroke(path)
+		})
+	}
+
 	function drawDial(t, dt, phase, loop) {
 		const outer = ringIn(seats.length - 1) + ringT() + 8,
 			inner = ringIn(0) - 6,
@@ -1271,7 +1313,7 @@ export function createView(
 		const sweep = ringP(seats.length - 1)
 		const seatP = (i) => {
 			if (introT0 === null) return 0
-			if (seatsAt[i] == null && sweep >= ((((seatAngles()[i] + Math.PI / 2) / TAU) % 1) + 1) % 1)
+			if (seatsAt[i] == null && sweep >= ((((seatAngle(i) + Math.PI / 2) / TAU) % 1) + 1) % 1)
 				seatsAt[i] = introT0 < 0 ? -1e9 : introNow
 			return seatsAt[i] == null ? 0 : clamp01((introNow - seatsAt[i]) / Math.max(1, INTRO.seatMs))
 		}
@@ -1290,20 +1332,18 @@ export function createView(
 		g.arc(CX + S * 0.012, CY + S * 0.016, M, 0, TAU)
 		g.fill()
 		g.save()
-		wobble(g, CX, CY, M, 1, 1.2)
-		g.clip()
+		const rim = outline(CX, CY, M, 1, 1.2)
+		g.clip(rim)
 		g.drawImage(frost(bg), 0, 0, W, H)
 		g.fillStyle = rgba(mixHex(PAPER, G.sky[1], 0.16), 0.84)
 		g.fillRect(CX - M - 4, CY - M - 4, M * 2 + 8, M * 2 + 8)
 		g.restore()
-		wobble(g, CX, CY, M, 1, 1.2)
 		g.strokeStyle = ink(0.75)
 		g.lineWidth = 1.2
-		g.stroke()
+		g.stroke(rim)
 		g.lineWidth = 0.5
 		g.strokeStyle = ink(0.22)
-		wobble(g, CX, CY, M - 5, 2, 1)
-		g.stroke()
+		g.stroke(outline(CX, CY, M - 5, 2, 1))
 		g.fillStyle = ink(0.45)
 		for (let k = 0; k < 4; k++) {
 			const [x, y] = polar(angOf(k / 4 + 1 / 8), M - S * 0.012)
@@ -1324,32 +1364,8 @@ export function createView(
 			g.globalAlpha /= handP
 		}
 
-		const beats = loop ? loop.bars * loop.beatsPerBar : 8,
-			bpb = loop?.beatsPerBar || 4
-		g.lineWidth = 0.5
-		for (let b = 0; b < beats; b++) {
-			const a = angOf(b / beats),
-				bar = b % bpb === 0
-			const [x1, y1] = polar(a, inner),
-				[x2, y2] = polar(a, outer + (bar ? 5 : 0))
-			g.strokeStyle = bar ? ink(0.16) : ink(0.05)
-			g.beginPath()
-			g.moveTo(x1, y1)
-			g.lineTo(x2, y2)
-			g.stroke()
-		}
 		const steps = engine.steps()
-		g.lineWidth = 0.5
-		for (let s = 0; s < steps; s++) {
-			const a = angOf(s / steps),
-				[x1, y1] = polar(a, outer - 1),
-				[x2, y2] = polar(a, outer + (s % 4 ? 1.5 : 3.5))
-			g.strokeStyle = ink(s % 4 ? 0.12 : 0.3)
-			g.beginPath()
-			g.moveTo(x1, y1)
-			g.lineTo(x2, y2)
-			g.stroke()
-		}
+		drawTicks(inner, outer, steps, loop)
 
 		seats.forEach((L, i) => {
 			const r0 = ringIn(i),
@@ -1378,10 +1394,10 @@ export function createView(
 			g.lineWidth = own ? 1.1 : 0.6
 			const J = ringJelly[i],
 				depth = J.s.x * ringT() * 0.28
-			wobble(g, CX, CY, r0, i * 3 + 11, own ? 0.9 : 0.6, { a: J.a, depth: -depth * 0.6, w: 0.3 })
-			g.stroke()
-			wobble(g, CX, CY, r1, i * 3 + 12, own ? 0.9 : 0.6, { a: J.a, depth, w: 0.32 })
-			g.stroke()
+			g.stroke(
+				outline(CX, CY, r0, i * 3 + 11, own ? 0.9 : 0.6, { a: J.a, depth: -depth * 0.6, w: 0.3 }),
+			)
+			g.stroke(outline(CX, CY, r1, i * 3 + 12, own ? 0.9 : 0.6, { a: J.a, depth, w: 0.32 }))
 			if (own && hover && hover.seat === i && !drag) {
 				const a0 = angOf(Math.floor(hover.x * steps) / steps),
 					a1 = angOf((Math.floor(hover.x * steps) + 1) / steps)
@@ -1433,12 +1449,10 @@ export function createView(
 
 		g.strokeStyle = ink(0.8)
 		g.lineWidth = 1.1
-		wobble(g, CX, CY, porthole(), 21, 0.8)
-		g.stroke()
+		g.stroke(outline(CX, CY, porthole(), 21, 0.8))
 		g.strokeStyle = ink(0.15)
 		g.lineWidth = 0.5
-		wobble(g, CX, CY, porthole() - 4, 22, 0.6)
-		g.stroke()
+		g.stroke(outline(CX, CY, porthole() - 4, 22, 0.6))
 
 		g.restore()
 
@@ -1462,12 +1476,16 @@ export function createView(
 		g.beginPath()
 		g.arc(x + 2, y + 3, r, 0, TAU)
 		g.fill()
-		wobble(g, x, y, r, 41, 0.5, { a: wipeJelly.a, depth: wipeJelly.s.x * r * 0.4, w: 0.7 })
+		const path = outline(x, y, r, 41, 0.5, {
+			a: wipeJelly.a,
+			depth: wipeJelly.s.x * r * 0.4,
+			w: 0.7,
+		})
 		g.fillStyle = PAPER
-		g.fill()
+		g.fill(path)
 		g.strokeStyle = INK
 		g.lineWidth = 1
-		g.stroke()
+		g.stroke(path)
 		const img = (broom ||= Object.assign(new Image(), {
 			src: 'data:image/svg+xml,' + encodeURIComponent(BROOM),
 		}))
@@ -1572,8 +1590,7 @@ export function createView(
 		g.stroke()
 		if (go >= 1) {
 			g.lineDashOffset = performance.now() / 90
-			wobble(g, tx, ty, r + 9, hint.to * 11 + 5, 0.8)
-			g.stroke()
+			g.stroke(outline(tx, ty, r + 9, hint.to * 11 + 5, 0.8))
 		}
 		g.setLineDash([])
 		g.fillStyle = seats[hint.from].color
@@ -1599,8 +1616,7 @@ export function createView(
 			g.lineWidth = over === j ? 1.8 : 1
 			g.setLineDash(over === j ? [] : [3, 4])
 			g.lineDashOffset = reduce ? 0 : performance.now() / 90
-			wobble(g, x, y, r + 9, j * 11 + 5, 0.8)
-			g.stroke()
+			g.stroke(outline(x, y, r + 9, j * 11 + 5, 0.8))
 			g.setLineDash([])
 		})
 		const dx = handing.x - sx,

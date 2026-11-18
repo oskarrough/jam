@@ -5,7 +5,7 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 export function spring({ k = 520, c = 11 } = {}) {
 	const s = { x: 0, v: 0, target: 0 }
 	s.step = (dt) => {
-		if (reduce) {
+		if (reduce || s.settled()) {
 			s.x = s.target
 			s.v = 0
 			return s.x
