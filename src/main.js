@@ -757,6 +757,12 @@ hint = createHint({
 	glyph: strip.glyph,
 	choose: (id) => strip.choose(id) && popFlash(id),
 })
+// a sideways two-finger trackpad swipe over the sheet moves to the next instrument (picker.js); drawing is a press, so they never meet
+$('c').addEventListener(
+	'wheel',
+	(e) => view.focus.on && view.focus.seat === me.seat && !replay && strip.wheel(e),
+	{ passive: false },
+)
 function toggleFocus() {
 	view.setFocus(view.focus.on ? -1 : me.seat)
 }
@@ -765,10 +771,10 @@ addEventListener('zoom', (e) => {
 	document.body.classList.toggle('zoomed', on)
 	if (on) {
 		sheetbar.style.left = sheet.x + 'px'
-		sheetbar.style.top = sheet.y - (innerWidth < 640 ? 104 : 54) + 'px'
+		sheetbar.style.top = sheet.y - (innerWidth < 640 ? 114 : 70) + 'px'
 		sheetbar.style.width = sheet.w + 'px'
 		// the tool strip sits inside the sheet's frame, under the drawing
-		sheetbar.style.setProperty('--inks-top', (innerWidth < 640 ? 104 : 54) + sheet.h + 'px')
+		sheetbar.style.setProperty('--inks-top', (innerWidth < 640 ? 114 : 70) + sheet.h + 'px')
 		sheetbar.style.setProperty('--inks-h', (sheet.tools || 0) + 'px')
 		strip.paint()
 	}

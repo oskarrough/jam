@@ -1,14 +1,17 @@
-// pnpm perf [-- --zoom] [--quick]: main-thread JS per frame on a phone viewport, split by loop (view = dial, heart = splats).
+// pnpm perf [-- --zoom] [--desktop] [--quick]: main-thread JS per frame on a phone viewport, split by loop (view = dial, heart = splats).
 // Headless draws WebGL in software, so frame rate here says little; the JS cost per frame is what taps wait behind.
 import { serve, playwright } from './lib/browser.js'
 
 const zoom = process.argv.includes('--zoom'),
+	desktop = process.argv.includes('--desktop'),
 	[warm, sample] = process.argv.includes('--quick') ? [1500, 2000] : [6000, 4000]
 const srv = await serve()
 const pw = playwright()
 const browser = await pw.chromium.launch()
 try {
-	const ctx = await browser.newContext({ ...pw.devices['iPhone 13'] })
+	const ctx = await browser.newContext(
+		desktop ? { viewport: { width: 1280, height: 860 } } : { ...pw.devices['iPhone 13'] },
+	)
 	await ctx.addInitScript(() => {
 		const raf = window.requestAnimationFrame.bind(window),
 			ms = (window.__ms = {}),
@@ -16,7 +19,16 @@ try {
 		window.requestAnimationFrame = (cb) => {
 			if (!names.has(cb)) {
 				const src = cb.toString()
-				names.set(cb, src.includes('introTick') ? 'view' : src.includes('geom()') ? 'heart' : null)
+				names.set(
+					cb,
+					src.includes('introTick')
+						? 'view'
+						: src.includes('geom()')
+							? 'heart'
+							: src.includes('previewTick')
+								? 'preview'
+								: null,
+				)
 			}
 			const k = names.get(cb)
 			if (!k) return raf(cb)

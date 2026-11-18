@@ -1,6 +1,8 @@
-// Instrument strip: while zoomed in, every instrument sits above the sheet as a drawn glyph; tap one to swap your ring's instrument.
+// Instrument strip: while zoomed in, every instrument sits above the sheet as a drawn glyph with its name under it;
+// hover one for a live preview of its sheet (preview.js), tap one to swap your ring's instrument.
 
 import { jellify } from './jelly.js'
+import { createPreview } from './preview.js'
 import { groupStarts } from './instruments/index.js'
 
 // each instrument module carries its own 32×32 glyph (mod.glyph); `f` marks filled bits
@@ -14,35 +16,36 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	el.setAttribute('aria-label', 'Instruments')
 	const row = document.createElement('div')
 	row.className = 'glyphs'
-	const caption = document.createElement('p')
-	caption.className = 'caption'
 	// an instrument's inks (mod.inks), like a painter's brushes, in the tool strip along the sheet's bottom edge; one per stroke
 	const inks = document.createElement('p')
 	inks.className = 'inks'
 	inks.setAttribute('aria-label', 'Inks')
-	el.append(row, caption, inks)
+	el.append(row, inks)
 	const seat = () => engine.seats[me.seat]
-	const showCurrent = () => {
-		const L = seat()
-		caption.textContent = L ? L.module.name.toLowerCase() : ''
-	}
+	const preview = createPreview({ engine, registry, el })
 	const buttons = []
 	for (const [id, mod] of registry) {
 		if (mod.hidden) continue
+		const slot = document.createElement('div')
+		slot.className = groupStarts.has(id) ? 'pick role' : 'pick'
 		const b = document.createElement('button')
-		b.className = groupStarts.has(id) ? 'glyph token role' : 'glyph token'
+		b.className = 'glyph token'
 		b.dataset.id = id
 		b.setAttribute('aria-label', mod.name)
-		b.title = mod.name.toLowerCase()
 		b.innerHTML = glyph(id)
-		const say = () => (caption.textContent = mod.name.toLowerCase())
-		b.addEventListener('pointerenter', say)
-		b.addEventListener('focus', say)
-		b.addEventListener('pointerleave', showCurrent)
-		b.addEventListener('blur', showCurrent)
-		b.onclick = () => choose(id)
+		const name = document.createElement('span')
+		name.className = 'name'
+		name.textContent = mod.name.toLowerCase()
+		name.setAttribute('aria-hidden', 'true')
+		const show = () => preview.show(id, slot, seat()?.color)
+		slot.addEventListener('pointerenter', (e) => e.pointerType === 'mouse' && show())
+		slot.addEventListener('pointerleave', () => preview.hide())
+		b.addEventListener('focus', () => b.matches(':focus-visible') && show())
+		b.addEventListener('blur', () => preview.hide())
+		b.onclick = name.onclick = () => choose(id)
 		jellify(b, { amount: 0.18 })
-		row.append(b)
+		slot.append(b, name)
+		row.append(slot)
 		buttons.push(b)
 	}
 
@@ -131,14 +134,31 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		if (!L) return
 		el.style.setProperty('--c', L.color)
 		for (const b of buttons) b.setAttribute('aria-pressed', b.dataset.id === L.module.id)
-		showCurrent()
 		paintInks()
 		const cur = buttons.find((b) => b.dataset.id === L.module.id)
 		// arrows switch the instrument (main.js), so a focused glyph follows the choice
 		if (cur && buttons.includes(document.activeElement)) cur.focus()
 		if (cur && row.scrollWidth > row.clientWidth)
-			row.scrollLeft = cur.offsetLeft - row.clientWidth / 2 + cur.offsetWidth / 2
+			row.scrollLeft =
+				cur.parentNode.offsetLeft - row.clientWidth / 2 + cur.parentNode.offsetWidth / 2
 	}
 
-	return { paint, cycle, glyph, choose }
+	// a sideways two-finger trackpad swipe over the sheet: one swipe, one instrument along, like paging. The swipe's
+	// glide-out is ignored until the wheel rests.
+	let swipe = null
+	function wheel(e) {
+		if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || e.ctrlKey) return false
+		e.preventDefault()
+		swipe ||= { acc: 0, done: false }
+		clearTimeout(swipe.t)
+		swipe.t = setTimeout(() => (swipe = null), 300)
+		swipe.acc += e.deltaX
+		if (!swipe.done && Math.abs(swipe.acc) > 50) {
+			swipe.done = true
+			cycle(Math.sign(swipe.acc))
+		}
+		return true
+	}
+
+	return { paint, cycle, glyph, choose, wheel }
 }

@@ -152,7 +152,7 @@ export function createView(
 		const narrow = W < 640,
 			top = narrow ? 44 : 24,
 			bottom = narrow ? 96 : 84,
-			STRIP = narrow ? 112 : 58 // the strip wraps to two rows on a phone
+			STRIP = narrow ? 122 : 74 // glyphs with their names under them; two rows on a phone
 		S0 = Math.max(240, Math.min(W - 24, H - top - bottom))
 		CX0 = W / 2
 		CY0 = top + (H - top - bottom) / 2

@@ -458,7 +458,7 @@ body.zoomed .lil-gui.root {
 	.glyphs {
 		flex-wrap: wrap;
 		overflow: visible;
-		max-width: calc(7 * 42px + 8px);
+		max-width: calc(7 * 44px + 8px);
 	}
 }
 @media (max-width: 370px) {
@@ -489,9 +489,9 @@ body.zoomed .lil-gui.root {
 .sheetbar {
 	position: fixed;
 	z-index: 5;
-	height: 46px;
+	height: 66px;
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 14px;
 }
 .sheetbar[hidden] {
@@ -499,7 +499,7 @@ body.zoomed .lil-gui.root {
 }
 .glyphs {
 	display: flex;
-	gap: 6px;
+	gap: 4px;
 	padding: 4px 6px 6px 2px;
 	overflow-x: auto;
 	scrollbar-width: none;
@@ -514,8 +514,50 @@ body.zoomed .lil-gui.root {
 	height: 38px;
 	box-shadow: 2px 3px 0 var(--shadow);
 }
-.glyph.role {
-	margin-left: 8px;
+/* a glyph with its name under it, attached: one slot, all the same width */
+.pick {
+	width: 48px;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+.pick.role {
+	margin-left: 10px;
+}
+.pick .name {
+	color: var(--title);
+	font: italic 400 12px/1 var(--serif);
+	white-space: nowrap;
+	cursor: pointer;
+	opacity: 0.75;
+}
+.pick:has([aria-pressed='true']) .name {
+	opacity: 1;
+	font-weight: 600;
+}
+/* hovering a glyph: its sheet, live, just under it (src/preview.js); drawn in ink, turned dark like the big sheet */
+.preview {
+	position: absolute;
+	z-index: 6;
+	background: #1b1529;
+	border: 2px solid var(--paper);
+	border-radius: 8px;
+	box-shadow: 4px 6px 0 var(--shadow);
+	overflow: hidden;
+	pointer-events: none;
+	line-height: 0;
+}
+.preview[hidden] {
+	display: none;
+}
+.preview canvas {
+	position: static;
+	display: block;
+	width: 264px;
+	height: 164px;
+	filter: invert(1) hue-rotate(180deg);
 }
 .glyph svg {
 	width: 24px;
@@ -532,25 +574,16 @@ body.zoomed .lil-gui.root {
 .glyph[aria-pressed='true'] svg .f {
 	fill: var(--paper);
 }
-.caption {
-	margin: 0;
-	color: var(--title);
-	font: italic 400 20px/1 var(--serif);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	min-width: 0;
-}
-/* on a phone the strip wraps to two rows; the name sits quietly at the end of the second, so you know what you're on */
+/* on a phone the strip wraps to two rows */
 @media (max-width: 640px) {
-	.caption {
-		position: absolute;
-		right: 4px;
-		top: 58px;
-		max-width: 30%;
-		font-size: 16px;
-		opacity: 0.7;
-		pointer-events: none;
+	.pick {
+		width: 40px;
+	}
+	.pick.role {
+		margin-left: 0;
+	}
+	.pick .name {
+		font-size: 10px;
 	}
 	.glyph.token {
 		width: 36px;
