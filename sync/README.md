@@ -38,13 +38,16 @@ We send control data (patterns, cursors), never audio, and edits are quantized t
 
 ## API (`sync.js`)
 
-    const t = createTransport({ url, room, name, instrument, color })
+[`src/transport/local.js`](../src/transport/local.js) implements the same transport API for tabs in one browser. The clock uses shared milliseconds. A peer occupies a seat when `peer.seat` matches its id. Seat data carries `{instrument, state, params}` and an optional loop length `len`.
+
+    const t = createTransport({ url, room, name, seat, color })
     t.on('welcome' | 'peers' | 'apply' | 'pending' | 'cursor' | 'loop' | 'status', fn)
-    t.edit(seat, state)          -> server ms it lands at
+    t.edit(seat, data)          -> server ms it lands at
     t.seatAt(seat, serverMs?)    -> state in effect then
     t.cursor(x, y, down, seat)   // 0..1
     t.setLoop({ bpm, bars, beatsPerBar })
-    t.setMe({ name, instrument, color })
+    t.setMe({ name, seat, color })
+    t.peers                     // current peers
     t.clock.now() toLocal() toAudio(ctx, ms) pos() nextBar() nextLoop() loopAt()
     t.clock.instrumentClock(16)  -> { bpm, steps, startTime, pos() } for the instruments thread
     t.debug()                    -> { connected, peers, rtt, jitter, offset, drift, locked, pending, lateMs, ... }
