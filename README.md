@@ -39,7 +39,7 @@ On its own the page plays across tabs in one browser. With a relay it plays acro
 
 "Share" copies a link that holds the song itself (loop, key and chords, every ring, the mix) in its hash, so it needs no relay. Opening it with a relay forks the song into a new `/j/<name>`; without one it loads into the local jam. Every jam also saves itself in this browser, per room: a reload brings a local jam back, and a relay jam that comes back empty is refilled. In the console, `jam.export()` is the song as data and `jam.import(songOrLink)` loads one (`src/song.js`).
 
-Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`/`⌘`-`Z` undo (`Shift` to redo), `d` controls. On a phone, tap with two fingers to undo, three to redo. In the mixer (the button by your badge), drag your dot for level and tone, tap any dot to mute that seat for everyone, hold one to hear it alone, just you.
+Keys: `space` sound, `1`–`4` change seat, `e` or `Shift`-drag to erase, `Ctrl`/`⌘`-`Z` undo (`Shift` to redo), `d` controls. On a phone, tap with two fingers to undo, three to redo. In the mixer (the button by your badge), drag your dot for level and tone, tap any dot to mute that seat for everyone, hold someone else's to hear it alone, just you (hold again to stop).
 
 ## Deploy
 

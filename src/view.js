@@ -376,7 +376,10 @@ export function createView(
 			mixer.drag = null
 		}
 	}
-	const dotUnder = (x, y) => {
+	// the dot under a press; your own wins when it's in reach, since it's the one you grab
+	const dotUnder = (x, y, own = -1) => {
+		const mine = mixer.dots.find((d) => d.i === own)
+		if (mine && Math.hypot(x - mine.x, y - mine.y) < mine.r + 2) return own
 		let best = -1,
 			bd = Infinity
 		for (const d of mixer.dots) {
@@ -447,7 +450,7 @@ export function createView(
 			canvas.setPointerCapture(e.pointerId)
 			const { level, tone } = seats[m.i].mix
 			// moving drags your dot from wherever you pressed; a still tap on a dot mutes that seat for
-			// everyone, holding one solos it in your ears
+			// everyone, holding someone else's solos it in your ears (hold it again to stop)
 			const md = (mixer.drag = {
 				i: m.i,
 				id: e.pointerId,
@@ -455,10 +458,12 @@ export function createView(
 				y0: e.clientY,
 				from: { level, tone },
 				moved: false,
-				on: dotUnder(e.clientX, e.clientY),
+				on: dotUnder(e.clientX, e.clientY, m.i),
 				long: false,
+				t0: performance.now(),
 			})
-			if (md.on >= 0)
+			// your own dot is for dragging: holding it before you move never solos
+			if (md.on >= 0 && md.on !== m.i)
 				md.timer = setTimeout(() => {
 					if (mixer.drag !== md || md.moved) return
 					md.long = true
@@ -1703,25 +1708,28 @@ export function createView(
 			g.font = serif(fs)
 			g.textBaseline = 'middle'
 			g.lineJoin = 'round'
+			// each edge swells as your dot heads its way: at rest from the middle, full at the edge
 			const md = mixer.drag,
 				cur = seats[me].mix,
-				dl = md ? cur.level - md.from.level : 0,
-				dtn = md ? cur.tone - md.from.tone : 0
-			for (const [w, x, y, al, rot, lit] of [
-				['louder', F.x + F.s / 2, F.y + F.pad * 0.5, 'center', 0, dl > 0.01],
-				['quieter', F.x + F.s / 2, F.y + F.s - F.pad * 0.5, 'center', 0, dl < -0.01],
-				['darker', F.x + F.pad * 0.5, F.y + F.s / 2, 'center', -Math.PI / 2, dtn < -0.01],
-				['brighter', F.x + F.s - F.pad * 0.5, F.y + F.s / 2, 'center', Math.PI / 2, dtn > 0.01],
+				u = Math.max(0, Math.min(1, cur.level / LEVEL_MAX)),
+				v = Math.max(0, Math.min(1, cur.tone)),
+				toward = (t) => Math.max(0, t * 2 - 1)
+			for (const [w, x, y, rot, t] of [
+				['louder', F.x + F.s / 2, F.y + F.pad * 0.5, 0, toward(u)],
+				['quieter', F.x + F.s / 2, F.y + F.s - F.pad * 0.5, 0, toward(1 - u)],
+				['darker', F.x + F.pad * 0.5, F.y + F.s / 2, -Math.PI / 2, toward(1 - v)],
+				['brighter', F.x + F.s - F.pad * 0.5, F.y + F.s / 2, Math.PI / 2, toward(v)],
 			]) {
+				const k = t * (2 - t) // ease out: the first steps from the middle already show
 				g.save()
 				g.translate(x, y)
 				g.rotate(rot)
-				g.textAlign = al
-				g.font = serif(fs * (lit ? 1.15 : 1), lit ? 600 : 400)
+				g.textAlign = 'center'
+				g.font = serif(fs * (1 + 0.15 * k), Math.round((400 + 300 * k) / 10) * 10)
 				g.lineWidth = 4
 				g.strokeStyle = rgba(PAPER, 0.85)
 				g.strokeText(w, 0, 0)
-				g.fillStyle = lit ? INK : ink(dragging ? 0.75 : 0.55)
+				g.fillStyle = ink((md ? 0.6 : 0.5) + (1 - (md ? 0.6 : 0.5)) * k)
 				g.fillText(w, 0, 0)
 				g.restore()
 			}
@@ -1799,6 +1807,17 @@ export function createView(
 					g.lineWidth = 1
 					g.stroke()
 				}
+				// a hold on someone else's dot fills a ring round it; full, it solos (or unsolos)
+				const hold = mixer.drag
+				if (hold && hold.on === d.i && hold.timer && !hold.moved && !hold.long) {
+					const p = Math.min(1, (performance.now() - hold.t0) / LONG_MS)
+					g.beginPath()
+					g.arc(d.x, d.y, r + 5, -Math.PI / 2, -Math.PI / 2 + p * TAU)
+					g.strokeStyle = INK
+					g.lineWidth = 2.5
+					g.lineCap = 'round'
+					g.stroke()
+				}
 				// names while you drag, so you can see you're about to bury the bass
 				if ((dragging && !own) || (own && mixer.p > 0.5 && !dragging)) {
 					g.font = serif(Math.max(11, F.s * 0.045), own ? 600 : 400)
@@ -1812,6 +1831,29 @@ export function createView(
 					g.fillStyle = INK
 					g.fillText(name, tx, d.y)
 				}
+			}
+			// a quiet line under the square says what a hold is about to do, or that a solo is on
+			const hold = mixer.drag,
+				holding = hold && hold.timer && !hold.moved && !hold.long && hold.on >= 0,
+				nameOf = (i) => seats[i]?.module?.name?.toLowerCase() || 'seat'
+			const line = holding
+				? engine.solo === hold.on
+					? `keep holding to hear everyone`
+					: `keep holding to hear ${nameOf(hold.on)} alone`
+				: engine.solo >= 0
+					? `solo: ${nameOf(engine.solo)} · hold its dot to undo`
+					: ''
+			if (line) {
+				g.globalAlpha = Math.min(1, mixer.p * 1.4)
+				g.font = serif(Math.max(12, F.s * 0.05), 500)
+				g.textAlign = 'center'
+				g.textBaseline = 'top'
+				g.lineWidth = 4
+				g.lineJoin = 'round'
+				g.strokeStyle = rgba(PAPER, 0.9)
+				g.strokeText(line, F.x + F.s / 2, F.y + F.s + 12)
+				g.fillStyle = INK
+				g.fillText(line, F.x + F.s / 2, F.y + F.s + 12)
 			}
 		})
 		g.restore()
