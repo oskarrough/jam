@@ -44,6 +44,15 @@ export function nameOf(scale, r) {
 		fifth = at(4) - at(0)
 	return third === 4 ? NUMERALS[r].toUpperCase() : fifth === 6 ? NUMERALS[r] + '°' : NUMERALS[r]
 }
+// the same chord as a player reads it, in the loop's key: degree 3 of A minor pent is 'Dm'
+const LETTERS = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B']
+export function letterOf(l, r) {
+	const p = PARENT[l?.scale] || PARENT['minor pent']
+	const root = ROOTS[l?.root ?? 'A'] ?? 57
+	const n = nameOf(l?.scale, r)
+	const quality = n.endsWith('°') ? '°' : n === n.toUpperCase() ? '' : 'm'
+	return LETTERS[(root + p[r]) % 12] + quality
+}
 
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))

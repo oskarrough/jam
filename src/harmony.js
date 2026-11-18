@@ -1,13 +1,17 @@
 // Harmony belongs to the room, and the eye holds it. Each bar's chord sits on the eye's rim at that bar's
 // quarter of the loop; tap the eye there to roll it on, or drag up and down to scrub. It travels with the
 // loop, so it lands on the next bar for everyone and replays carry it.
-import { chordOf, nameOf } from './instruments/lib/kit.js'
+// A tab leads with the chord a player can read (Dm) and carries its numeral (iv) small, as the lesson:
+// pressing one spells out what the numeral means (its step in the key, minor when lower case).
+import { chordOf, nameOf, letterOf } from './instruments/lib/kit.js'
 import { SERIF, INK, PAPER } from './palette.js'
 
 const VERMILION = '#d64a28'
 const STEP_PX = 18
 // each tab leans its own way, like the seat badges
 const LEAN = [-7, 5, -3, 8, -5, 3, -8, 6]
+const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th']
+const QUALITY = { m: 'minor', '°': 'dim', '': 'major' }
 
 export function createHarmony({ canvas, view, transport, heart, readOnly = false }) {
 	const { clock } = transport
@@ -39,6 +43,23 @@ export function createHarmony({ canvas, view, transport, heart, readOnly = false
 			transformOrigin: '50% 50%',
 			transition: 'color .2s',
 		})
+		s.chord = document.createElement('span')
+		s.num = document.createElement('span')
+		Object.assign(s.num.style, { fontSize: '.62em', marginLeft: '.2em', opacity: '.6' })
+		s.hint = document.createElement('span')
+		Object.assign(s.hint.style, {
+			position: 'absolute',
+			left: '50%',
+			top: '100%',
+			transform: 'translate(-50%, .15em)',
+			fontSize: '.56em',
+			fontWeight: '500',
+			color: INK,
+			background: PAPER,
+			padding: '0 .3em',
+			borderRadius: '.4em',
+		})
+		s.append(s.chord, s.num, s.hint)
 		box.append(s)
 		return s
 	}
@@ -119,19 +140,22 @@ export function createHarmony({ canvas, view, transport, heart, readOnly = false
 			if (k >= n) return (s.style.display = 'none')
 			const current = first + k === absBar
 			const pressed = held?.bar === k
-			const now = chordOf(l, first + k).name
-			const name = pressed
-				? nameOf(next.scale, held.deg)
-				: next === l
-					? now
-					: chordOf(next, first + k).name
-			const pending = !pressed && name !== now
+			const nowDeg = chordOf(l, first + k).deg
+			const deg = pressed ? held.deg : chordOf(next, first + k).deg
+			const chord = letterOf(next, deg)
+			const pending = !pressed && chord !== letterOf(l, nowDeg)
 			const a = angOf((k + 0.5) / n)
 			const x = c.x + Math.cos(a) * rr,
 				y = c.y + Math.sin(a) * rr
 			const scale = pressed ? 1.7 : current ? 1.25 : 1
 			s.style.display = ''
-			s.textContent = name
+			s.chord.textContent = chord
+			s.num.textContent = nameOf(next.scale, deg)
+			s.num.style.opacity = pressed ? '1' : '.6'
+			s.hint.textContent = pressed
+				? `${ORDINAL[deg]} of ${next.root ?? 'A'} · ${QUALITY[chord.slice(-1)] ?? QUALITY['']}`
+				: ''
+			s.hint.style.display = pressed ? '' : 'none'
 			s.style.fontSize = px + 'px'
 			s.style.color = pressed || current ? VERMILION : INK
 			s.style.textDecoration = pending ? `underline dotted ${VERMILION}` : 'none'
