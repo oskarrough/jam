@@ -33,7 +33,7 @@ function rng(seed) {
 export function createView(
 	canvas,
 	engine,
-	{ occupant, canDraw, onSit, onPointer, onHand, canHand, onWipe, onMute, onSolo },
+	{ occupant, canDraw, onSit, onPointer, onHand, canHand, onWipe, onMute, onSolo, onMix },
 ) {
 	const g = canvas.getContext('2d')
 	const { seats, transport } = engine
@@ -337,6 +337,16 @@ export function createView(
 			: { i, xy: rimFrom(i, 1.75), r: seatR() * 0.72 }
 	}
 	const wipeJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
+	// your seat's mix knob sits on the badge's other side: drag up for louder, sideways for darker or brighter
+	const mixAt = () => {
+		const w = wipeAt()
+		return w && onMix ? { i: w.i, xy: rimFrom(w.i, -1.75), r: w.r } : null
+	}
+	const mixJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
+	let mixing = null, // a press on the knob: {i, id, x0, y0, level, tone, moved}
+		mixTap = 0,
+		mixShow = 0 // until when the knob's four words stay up
+	const MIX_PX = () => Math.max(110, S * 0.35) // drag this far to go from one end to the other
 
 	// screen -> seat hit: {seat, x, y} in the seat's 0..1 space
 	function hit(px, py, only = null) {
@@ -384,7 +394,7 @@ export function createView(
 	})
 	canvas.addEventListener('pointerdown', (e) => {
 		// a second finger never draws: two-finger gestures (tap undoes, drag erases) belong to the host
-		if (e.pointerType === 'touch' && (drag || handing)) return
+		if (e.pointerType === 'touch' && (drag || handing || mixing)) return
 		if (inSheet(e.clientX, e.clientY) && canDraw(focus.seat)) {
 			canvas.setPointerCapture(e.pointerId)
 			drag = { seat: focus.seat, id: e.pointerId, alt: e.shiftKey, button: e.button, sheet: true }
@@ -409,6 +419,15 @@ export function createView(
 			press(wipeJelly, Math.atan2(e.clientY - w.xy[1], e.clientX - w.xy[0]))
 			setTimeout(() => release(wipeJelly), 110)
 			return onWipe()
+		}
+		const m = mixAt()
+		if (m && Math.hypot(e.clientX - m.xy[0], e.clientY - m.xy[1]) < m.r + 9) {
+			press(mixJelly, Math.atan2(e.clientY - m.xy[1], e.clientX - m.xy[0]))
+			canvas.setPointerCapture(e.pointerId)
+			const { level, tone } = seats[m.i].mix
+			mixing = { i: m.i, id: e.pointerId, x0: e.clientX, y0: e.clientY, level, tone, moved: false }
+			mixShow = Infinity
+			return
 		}
 		for (let i = 0; i < seats.length; i++) {
 			const [x, y] = seatPos(i)
@@ -466,13 +485,27 @@ export function createView(
 		})
 		const onDial = focus.on && Math.hypot(e.clientX - CX, e.clientY - CY) < medallion()
 		const w = wipeAt(),
-			onWipeTok = w && Math.hypot(e.clientX - w.xy[0], e.clientY - w.xy[1]) < w.r + 5
+			onWipeTok = w && Math.hypot(e.clientX - w.xy[0], e.clientY - w.xy[1]) < w.r + 5,
+			m = mixAt(),
+			onKnob = m && Math.hypot(e.clientX - m.xy[0], e.clientY - m.xy[1]) < m.r + 5
 		canvas.style.cursor =
-			onSeat || onDial || onWipeTok || (focus.on && !inSheet(e.clientX, e.clientY))
+			onSeat || onDial || onWipeTok || onKnob || (focus.on && !inSheet(e.clientX, e.clientY))
 				? 'pointer'
 				: inSheet(e.clientX, e.clientY) || (hover && canDraw(hover.seat))
 					? ''
 					: 'default'
+		if (mixing && e.pointerId === mixing.id) {
+			const dx = e.clientX - mixing.x0,
+				dy = e.clientY - mixing.y0
+			if (Math.hypot(dx, dy) > 4) mixing.moved = true
+			if (!mixing.moved) return
+			canvas.style.cursor = 'grabbing'
+			const k = MIX_PX()
+			return onMix(mixing.i, {
+				level: Math.round(Math.max(0, Math.min(1.5, mixing.level - (dy / k) * 1.5)) * 100) / 100,
+				tone: Math.round(Math.max(0, Math.min(1, mixing.tone + dx / k)) * 100) / 100,
+			})
+		}
 		if (handing && e.pointerId === handing.id) {
 			handing.x = e.clientX
 			handing.y = e.clientY
@@ -530,6 +563,19 @@ export function createView(
 		onSit(from)
 	}
 	const up = (e) => {
+		if (mixing && e.pointerId === mixing.id) {
+			const { i, moved } = mixing
+			mixing = null
+			release(mixJelly)
+			mixShow = performance.now() + (moved ? 600 : 1800)
+			if (moved || e.type === 'pointercancel') return
+			// a double tap puts the seat back as it was: default level, wide open
+			if (performance.now() - mixTap < DOUBLE_MS) {
+				mixTap = 0
+				onMix(i, { level: 0.9, tone: 1 })
+			} else mixTap = performance.now()
+			return
+		}
 		if (drag?.pending && e.pointerId === drag.id) {
 			// a still, quick tap on the floating dial: a badge acts as a badge, anywhere else goes back
 			clearTimeout(drag.timer)
@@ -577,7 +623,7 @@ export function createView(
 	}
 	canvas.addEventListener('pointerup', up)
 	canvas.addEventListener('pointercancel', (e) => {
-		if (handing && e.pointerId === handing.id) up(e)
+		if ((handing && e.pointerId === handing.id) || (mixing && e.pointerId === mixing.id)) up(e)
 	})
 
 	function setFocus(i) {
@@ -866,6 +912,7 @@ export function createView(
 		for (const j of ringJelly) j.s.step(dt)
 		for (const j of seatJelly) j.s.step(dt)
 		wipeJelly.s.step(dt)
+		mixJelly.s.step(dt)
 
 		if (opts.ground === 'cycle' && p) {
 			const ln = Math.floor(p.loops ?? p.beats / ((loop?.bars || 2) * (loop?.beatsPerBar || 4)))
@@ -1412,10 +1459,18 @@ export function createView(
 				warp(L, r0, r1, L.ghost)
 				g.globalAlpha = 1
 			}
-			// a ring you can't hear (muted for the jam, or someone else soloed in your ears) fades back
-			if (!engine.heard(i)) g.globalAlpha = 0.28
+			// a ring you can't hear (muted for the jam, or someone else soloed in your ears) fades back,
+			// a quiet one part way; a dark one sinks under a veil of ink
+			g.globalAlpha = engine.heard(i) ? 0.3 + 0.7 * Math.min(1, L.mix.level / 0.9) : 0.28
 			warp(L, r0, r1)
 			g.globalAlpha = 1
+			if (L.mix.tone < 1) {
+				g.beginPath()
+				g.arc(CX, CY, r1, 0, TAU)
+				g.arc(CX, CY, r0, 0, TAU, true)
+				g.fillStyle = ink((1 - L.mix.tone) * 0.4)
+				g.fill()
+			}
 			if (!small()) {
 				g.translate(...polar(-Math.PI / 2 - 0.2, r0 + ringT() / 2))
 				g.rotate(-0.2)
@@ -1464,6 +1519,7 @@ export function createView(
 			g.globalAlpha = Math.min(1, sp * 3)
 			around(x, y, EASES['out back'](sp), () => drawSeat(i, x, y, true))
 			if (canDraw(i)) around(x, y, EASES['out back'](sp), drawWipe)
+			if (canDraw(i)) around(x, y, EASES['out back'](sp), drawKnob)
 			g.restore()
 		})
 	}
@@ -1493,6 +1549,66 @@ export function createView(
 			g.drawImage(img, x - r * 0.72, y - r * 0.72, r * 1.44, r * 1.44)
 	}
 	let broom = null
+	// the mix knob: a ring of level in the seat's colour round a dot that darkens with the tone
+	function drawKnob() {
+		const m = mixAt()
+		if (!m) return
+		const [x, y] = m.xy,
+			r = m.r,
+			L = seats[m.i],
+			{ level, tone } = L.mix
+		g.fillStyle = 'rgba(40,25,60,.4)'
+		g.beginPath()
+		g.arc(x + 2, y + 3, r, 0, TAU)
+		g.fill()
+		const path = outline(x, y, r, 43, 0.5, { a: mixJelly.a, depth: mixJelly.s.x * r * 0.4, w: 0.7 })
+		g.fillStyle = PAPER
+		g.fill(path)
+		g.strokeStyle = INK
+		g.lineWidth = 1
+		g.stroke(path)
+		const a0 = Math.PI * 0.75,
+			span = Math.PI * 1.5,
+			rr = r * 0.62
+		g.lineCap = 'round'
+		g.lineWidth = Math.max(2, r * 0.22)
+		g.strokeStyle = ink(0.15)
+		g.beginPath()
+		g.arc(x, y, rr, a0, a0 + span)
+		g.stroke()
+		g.strokeStyle = L.color
+		g.beginPath()
+		g.arc(x, y, rr, a0, a0 + span * Math.min(1, level / 1.5) + 0.001)
+		g.stroke()
+		g.lineCap = 'butt'
+		g.fillStyle = mixHex(L.color, INK, (1 - tone) * 0.85)
+		g.strokeStyle = INK
+		g.lineWidth = 0.8
+		g.beginPath()
+		g.arc(x, y, r * 0.3, 0, TAU)
+		g.fill()
+		g.stroke()
+		if (mixShow < performance.now()) return
+		// pressed, dragged or tapped: four words say which way is which
+		const d = r * 1.55
+		g.font = serif(Math.max(11, S * 0.017))
+		g.textAlign = 'center'
+		g.textBaseline = 'middle'
+		g.lineJoin = 'round'
+		g.lineWidth = 3
+		g.strokeStyle = rgba(PAPER, 0.9)
+		g.fillStyle = INK
+		for (const [w, dx, dy] of [
+			['louder', 0, -1],
+			['quieter', 0, 1],
+			['darker', -1, 0],
+			['brighter', 1, 0],
+		]) {
+			g.textAlign = dx < 0 ? 'right' : dx > 0 ? 'left' : 'center'
+			g.strokeText(w, x + dx * d, y + dy * d)
+			g.fillText(w, x + dx * d, y + dy * d)
+		}
+	}
 	let offer = null
 	function drawOffer() {
 		if (!offer) return
@@ -1785,6 +1901,11 @@ export function createView(
 		seatAt: (i) => {
 			const [x, y] = seatPos(i)
 			return { x, y, r: seatR() }
+		},
+		// your mix knob, CSS px; null when it isn't on screen
+		knob: () => {
+			const m = mixAt()
+			return m && { x: m.xy[0], y: m.xy[1], r: m.r }
 		},
 		// the bare disc inside the innermost ring, CSS px; null in strips mode
 		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER } : null),

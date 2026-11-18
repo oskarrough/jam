@@ -3,7 +3,7 @@
 //           frames: [{seat: data} ×N],   // seat data per bar; a seat is omitted if unchanged since the bar before
 //           cursors: [[ms, seatIndex, x, y, down, name], …], room, at }
 
-import { partOf } from './engine.js'
+import { partOf, mixData } from './engine.js'
 import { createClock } from '../sync/sync.js'
 import { chordOf } from './instruments/lib/kit.js'
 
@@ -86,6 +86,8 @@ export function createRecorder({ engine, transport, seatName }) {
 				seats.forEach((L) => {
 					const d = partOf(L)
 					if (L.mix.mute) d.mute = true
+					const m = mixData(L.mix)
+					if (m) d.mix = m
 					const signature = JSON.stringify(d)
 					if (signatures.get(L.id) === signature) return
 					signatures.set(L.id, signature)

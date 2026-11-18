@@ -182,6 +182,7 @@ view = createView(document.getElementById('c'), engine, {
 	onWipe: () => wipe(),
 	onMute: (i) => !replay && engine.setMute(seats[i], !seats[i].mix.mute),
 	onSolo: (i) => engine.setSolo(i),
+	onMix: (i, patch) => !replay && engine.setMix(seats[i], patch),
 	onPointer: pointerTo,
 })
 const ghost = createGhost({ engine, view, me })

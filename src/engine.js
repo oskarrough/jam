@@ -66,17 +66,15 @@ export function createEngine(transport, { seatIds, instruments }) {
 	})
 
 	const seats = seatIds.map((id, i) => {
-		const out = audio.createGain()
-		const send = audio.createGain()
-		out.connect(master)
-		out.connect(send).connect(roomIn)
+		const { out, send, lp } = seatStrip(audio, master, roomIn)
 		return {
 			id,
 			index: i,
 			color: SEAT_COLORS[i % SEAT_COLORS.length],
 			out,
 			send,
-			mix: { level: 0.9, space: 0.25, mute: false },
+			lp,
+			mix: { ...MIX, mute: false },
 			module: null,
 			instance: null,
 			params: {},
@@ -89,12 +87,14 @@ export function createEngine(transport, { seatIds, instruments }) {
 		L.clock = seatClock(L)
 	})
 
-	// mute is the jam's (it travels with the seat's data); solo is yours alone, in your own ears
+	// mute, level, tone and space are the jam's (they travel with the seat's data); solo is yours alone, in your own ears
 	let solo = -1
 	const heard = (L) => !L.mix.mute && (solo < 0 || solo === L.index)
 	function applyMix(L) {
-		L.out.gain.setTargetAtTime(heard(L) ? L.mix.level : 0, audio.currentTime, 0.02)
-		L.send.gain.setTargetAtTime(L.mix.space, audio.currentTime, 0.02)
+		const t = audio.currentTime
+		L.out.gain.setTargetAtTime(heard(L) ? L.mix.level : 0, t, 0.02)
+		L.send.gain.setTargetAtTime(L.mix.space, t, 0.02)
+		setTone(L.lp, L.mix.tone, t)
 	}
 
 	function setLen(L, n) {
@@ -151,6 +151,8 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const data = structuredClone(partOf(L))
 		if (L.riff) data.riff = L.riff
 		if (L.mix.mute) data.mute = true
+		const m = mixData(L.mix)
+		if (m) data.mix = m
 		lastSent.set(L.id, performance.now())
 		return transport.edit(L.id, data, { now })
 	}
@@ -169,9 +171,11 @@ export function createEngine(transport, { seatIds, instruments }) {
 		const L = seatById(seat)
 		if (!L || !data || local) return
 		L.riff = data.riff || null
-		if (!!data.mute !== L.mix.mute) {
-			L.mix.mute = !!data.mute
+		const m = { ...MIX, ...data.mix, mute: !!data.mute }
+		if (Object.keys(m).some((k) => m[k] !== L.mix[k])) {
+			Object.assign(L.mix, m)
 			applyMix(L)
+			emit('mix', L)
 		}
 		applyPart(L, data)
 		emit('apply', L)
@@ -259,6 +263,13 @@ export function createEngine(transport, { seatIds, instruments }) {
 			push(L, { now: true })
 			emit('mix', L)
 		},
+		// level, tone or space from the dial or the panel: heard at once here, sent to the jam
+		setMix(L, patch) {
+			Object.assign(L.mix, patch)
+			applyMix(L)
+			pushSoon(L)
+			emit('mix', L)
+		},
 		setSolo(i) {
 			solo = solo === i ? -1 : i
 			seats.forEach(applyMix)
@@ -302,6 +313,31 @@ export function resize(state, from, to) {
 		if (Array.isArray(out[k]) && out[k].length === from)
 			out[k] = Array.from({ length: to }, (_, i) => structuredClone(out[k][i % from]))
 	return out
+}
+
+// A seat's mix: level (0..1.5), space (room send), tone (0 dark .. 1 open, a lowpass on everything it plays)
+export const MIX = { level: 0.9, space: 0.25, tone: 1 }
+// what differs from the default, for the seat's data; null when nothing does
+export function mixData(mix) {
+	const m = {}
+	for (const k in MIX) if (Number.isFinite(mix?.[k]) && mix[k] !== MIX[k]) m[k] = mix[k]
+	return Object.keys(m).length ? m : null
+}
+// instruments play into `out` (level), then the tone filter, then the room and master
+export function seatStrip(audio, master, roomIn) {
+	const out = audio.createGain()
+	const lp = audio.createBiquadFilter()
+	const send = audio.createGain()
+	setTone(lp, MIX.tone, 0)
+	out.connect(lp).connect(master)
+	lp.connect(send).connect(roomIn)
+	return { out, send, lp }
+}
+// tone 1 is wide open; down to 0 it closes to a dark 140 Hz with a little resonance on the way
+export function setTone(lp, tone, t) {
+	tone = Math.max(0, Math.min(1, tone ?? 1))
+	lp.frequency.setTargetAtTime(140 * (20000 / 140) ** tone, t, 0.03)
+	lp.Q.setTargetAtTime(0.7 + 1.8 * Math.sin(Math.PI * (1 - tone) * 0.9) ** 2, t, 0.03)
 }
 
 // The master chain every seat plays into: glue compressor, limiter, a shared room. The export renders through it too.

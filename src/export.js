@@ -4,13 +4,12 @@
 import { registry } from './instruments/index.js'
 import { val } from './instruments/lib/util.js'
 import { kit } from './instruments/lib/kit.js'
-import { mixBus, SEAT_COLORS } from './engine.js'
+import { mixBus, seatStrip, setTone, MIX, SEAT_COLORS } from './engine.js'
 import { INK_THEME } from './palette.js'
 
 const RATE = 48000
 const LEAD = 0.05 // s of air before the downbeat
 const TAIL = 3 // s to let the room ring out after the last bar
-const MIX = { level: 0.9, space: 0.25 } // a seat's default mix; mixes are local, so the recording has none
 
 /** Renders rec to a stereo AudioBuffer, faster than realtime. */
 export async function renderRecording(rec, seatIds) {
@@ -54,16 +53,15 @@ export async function renderRecording(rec, seatIds) {
 	})
 
 	const seats = seatIds.map((id, i) => {
-		const out = off.createGain()
-		const send = off.createGain()
+		const { out, send, lp } = seatStrip(off, master, roomIn)
 		out.gain.value = MIX.level
 		send.gain.value = MIX.space
-		out.connect(master)
-		out.connect(send).connect(roomIn)
 		return {
 			id,
 			color: SEAT_COLORS[i % SEAT_COLORS.length],
 			out,
+			send,
+			lp,
 			mod: null,
 			inst: null,
 			params: null,
@@ -89,7 +87,10 @@ export async function renderRecording(rec, seatIds) {
 		}
 		if (data.params) Object.assign(L.params, data.params)
 		L.inst.setState(data.state)
-		L.out.gain.setValueAtTime(data.mute ? 0 : MIX.level, cursor)
+		const m = { ...MIX, ...data.mix }
+		L.out.gain.setValueAtTime(data.mute ? 0 : m.level, cursor)
+		L.send.gain.setValueAtTime(m.space, cursor)
+		setTone(L.lp, m.tone, cursor)
 	}
 
 	for (let g = 0; g < total; g++) {
