@@ -126,11 +126,11 @@ function ks(S, f, cfg) {
 	const sr = S.ctx.sampleRate
 	const N = Math.max(2, Math.floor(sr / f - cfg.b))
 	const key = cfg.id + ':' + N
-	let e = S.ks[key]
+	let e = S.ks.get(key)
 	if (!e) {
 		const len = Math.floor(sr * cfg.dur)
 		const buf = S.ctx.createBuffer(1, len, sr)
-		const y = new Float32Array(len)
+		const y = buf.getChannelData(0)
 		let lp = 0,
 			mean = 0
 		for (let i = 0; i < N; i++) {
@@ -154,8 +154,9 @@ function ks(S, f, cfg) {
 			const k = i / fade
 			y[len - fade + i] *= (1 - k) * (1 - k)
 		}
-		buf.copyToChannel(y, 0)
-		e = S.ks[key] = { buf, f0: sr / (N + b) }
+		e = { buf, f0: sr / (N + b) }
+		if (S.ks.size >= 160) S.ks.delete(S.ks.keys().next().value)
+		S.ks.set(key, e)
 	}
 	return e
 }
@@ -426,7 +427,7 @@ function state(ac) {
 	const noiseBuf = ac.createBuffer(1, n, ac.sampleRate)
 	const d = noiseBuf.getChannelData(0)
 	for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1
-	S = { ctx: ac, nyq: ac.sampleRate / 2, waves: {}, ks: {}, noise: noiseBuf }
+	S = { ctx: ac, nyq: ac.sampleRate / 2, waves: {}, ks: new Map(), noise: noiseBuf }
 	states.set(ac, S)
 	return S
 }
@@ -446,7 +447,6 @@ export function voice(name, trim = 0) {
 	const def = INST[name]
 	return ({ audio, out }, m, t, dur, vel = 0.7) => {
 		const S = state(audio)
-		if (Object.keys(S.ks).length > 160) S.ks = {}
 		try {
 			def.play(S, input(S, out, name, trim), t, dur, mtof(m), vel, P)
 		} catch (e) {

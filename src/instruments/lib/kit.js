@@ -168,6 +168,7 @@ function makeVoices(ac, noise) {
 					d[i] = v
 					p = next
 				}
+				if (ksCache.size >= 160) ksCache.delete(ksCache.keys().next().value)
 				ksCache.set(k, buf)
 			}
 			const src = ac.createBufferSource()

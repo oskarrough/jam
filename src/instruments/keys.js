@@ -159,6 +159,28 @@ export function crossings(ys, j0, j1, threadsAt) {
 	return out
 }
 
+// Dry samples break the wave. Keep the filled water and its inked edge at drawing size.
+function wavePaths(ys, X, Y, h) {
+	const water = new Path2D(),
+		edge = new Path2D()
+	for (let j = 0; j < W; j++) {
+		if (ys[j] === null) continue
+		water.moveTo(X(j), h)
+		edge.moveTo(X(j), Y(ys[j]))
+		water.lineTo(X(j + 0.5), Y(ys[j]))
+		while (j + 1 < W && ys[j + 1] !== null) {
+			j++
+			water.lineTo(X(j + 0.5), Y(ys[j]))
+			edge.lineTo(X(j + 0.5), Y(ys[j]))
+		}
+		edge.lineTo(X(j + 1), Y(ys[j]))
+		water.lineTo(X(j + 1), Y(ys[j]))
+		water.lineTo(X(j + 1), h)
+		water.closePath()
+	}
+	return { water, edge }
+}
+
 export default {
 	id: 'keys',
 	glyph:
@@ -178,25 +200,21 @@ export default {
 		const size = [1, 1]
 		const fx = flashes()
 		let ys = parseTide(SAMPLE)
+		let wave = null
 		let last = null // last painted sample, so a fast drag leaves no holes
-		const oct = () => val(ctx.params.octave)
-		const stepOf = (j) => (j * clock.steps) / W
-		const memo = new Map()
-		// threads change with the jam's bar, wherever this seat's loop is in it: base is the jam step
-		// this loop pass began on. Cache a bar's threads by its first step and the chord's notes.
-		let base = 0
-		const threadsAt = (j) => {
-			const s = base + Math.floor(stepOf(j))
-			const bs = harmony.barSteps(),
-				bar = Math.floor(s / bs) * bs
-			const ch = harmony.chord(bar).notes.join() + ':' + oct()
-			let t = memo.get(bar)
-			if (memo.size > 64) memo.clear()
-			if (!t || t.key !== ch) memo.set(bar, (t = { key: ch, list: threads(harmony, bar, oct()) }))
-			return t.list
+		// A seat can start mid-bar. Resolve each bar once per draw or scheduling pass.
+		function barThreads(base, steps, barSteps) {
+			const bars = new Map()
+			const octave = val(ctx.params.octave)
+			return (j) => {
+				const bar = Math.floor((base + Math.floor((j * steps) / W)) / barSteps)
+				if (!bars.has(bar)) bars.set(bar, threads(harmony, bar * barSteps, octave))
+				return bars.get(bar)
+			}
 		}
 
 		function paint(x, y, erase) {
+			wave = null
 			const j = clamp(Math.floor(x * W), 0, W - 1)
 			const v = erase ? null : clamp(y, 0, 1)
 			if (last === null || Math.abs(j - last.j) > W / 2) ys[j] = v
@@ -214,6 +232,7 @@ export default {
 				return { tide: tideOf(ys) }
 			},
 			setState(s) {
+				wave = null
 				if (typeof s?.tide === 'string') ys = parseTide(s.tide)
 				else if (Array.isArray(s?.notes)) {
 					// a part saved by the old line-drawing keys: a wave through its notes
@@ -225,6 +244,7 @@ export default {
 				} else ys = new Array(W).fill(null)
 			},
 			clear() {
+				wave = null
 				ys = new Array(W).fill(null)
 			},
 			pointer: withPointer(size, (e) => {
@@ -244,15 +264,17 @@ export default {
 				else if (e.type === 'up' || e.type === 'cancel') last = null
 			}),
 			step(i, time, dur) {
-				const j0 = Math.ceil((i * W) / clock.steps),
-					j1 = Math.ceil(((i + 1) * W) / clock.steps)
+				const steps = clock.steps,
+					bs = harmony.barSteps(),
+					j0 = Math.ceil((i * W) / steps),
+					j1 = Math.ceil(((i + 1) * W) / steps)
 				const fn = play(ctx)
-				base = absOf(clock, time) - i
+				const threadsAt = barThreads(absOf(clock, time) - i, steps, bs)
 				for (const c of crossings(ys, j0, j1, threadsAt)) {
-					const t = stepOf(c.at)
+					const t = (c.at * steps) / W
 					// it rings until the water next crosses a thread, or dries, at most a bar
 					let end = Math.ceil(c.at + 0.01)
-					const lim = end + (W * harmony.barSteps()) / clock.steps
+					const lim = end + (W * bs) / steps
 					for (; end < lim; end++) {
 						const a = ys[(end - 1 + W) % W],
 							b = ys[end % W]
@@ -263,7 +285,7 @@ export default {
 						)
 							break
 					}
-					const d = Math.max(0.5, stepOf(end) - t) * dur
+					const d = Math.max(0.5, (end * steps) / W - t) * dur
 					fn(ctx, c.m, time + Math.max(0, t - i) * dur, d, c.entry ? 0.75 : 0.62)
 					fx.hit(c.m * 1000 + Math.round(c.at), time + Math.max(0, t - i) * dur)
 				}
@@ -279,7 +301,8 @@ export default {
 				const now = clock.now()
 				const bs = harmony.barSteps(),
 					steps = clock.steps
-				base = Math.floor(absNow(clock) / steps) * steps
+				const base = Math.floor(absNow(clock) / steps) * steps
+				const threadsAt = barThreads(base, steps, bs)
 				gx.lineCap = 'round'
 				gx.lineJoin = 'round'
 				// threads, bar by bar
@@ -295,37 +318,16 @@ export default {
 						gx.stroke()
 					}
 				}
-				// the water: filled to the bottom, its surface inked
-				const runs = []
-				let run = null
-				for (let j = 0; j < W; j++) {
-					if (ys[j] === null) run = null
-					else {
-						if (!run) runs.push((run = []))
-						run.push(j)
-					}
-				}
-				for (const r of runs) {
-					gx.beginPath()
-					gx.moveTo(X(r[0]), h)
-					for (const j of r) gx.lineTo(X(j + 0.5), Y(ys[j]))
-					gx.lineTo(X(r[r.length - 1] + 1), Y(ys[r[r.length - 1]]))
-					gx.lineTo(X(r[r.length - 1] + 1), h)
-					gx.closePath()
-					gx.fillStyle = rgba(color, strip ? 0.3 : 0.18)
-					gx.fill()
-				}
+				if (!wave || wave.w !== w || wave.h !== h) wave = { ...wavePaths(ys, X, Y, h), w, h }
+				gx.fillStyle = rgba(color, strip ? 0.3 : 0.18)
+				gx.fill(wave.water)
 				const lw = Math.max(1.4, Math.min(4, h * 0.05))
-				for (const pass of [0, 1]) {
-					for (const r of runs) {
-						gx.beginPath()
-						r.forEach((j, k) => (k ? gx.lineTo(X(j + 0.5), Y(ys[j])) : gx.moveTo(X(j), Y(ys[j]))))
-						gx.lineTo(X(r[r.length - 1] + 1), Y(ys[r[r.length - 1]]))
-						gx.strokeStyle = pass ? color : INK
-						gx.lineWidth = pass ? lw : lw + 2.2
-						gx.stroke()
-					}
-				}
+				gx.lineWidth = lw + 2.2
+				gx.strokeStyle = INK
+				gx.stroke(wave.edge)
+				gx.lineWidth = lw
+				gx.strokeStyle = color
+				gx.stroke(wave.edge)
 				// where the water crosses a thread: the notes
 				const r0 = Math.max(2, Math.min(6.5, h * 0.05))
 				gx.lineWidth = 1.1
