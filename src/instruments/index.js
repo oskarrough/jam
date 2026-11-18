@@ -1,40 +1,42 @@
 // The instruments, one file each; README.md here has the contract.
 // `npm run new-instrument <name>` starts one. Order here is picker order.
 
-import bass from './bass.js'
-import keys from './keys.js'
-import bell from './bell.js'
 import drums from './drums.js'
-import contour from './contour.js'
-import grid from './grid.js'
-import rings from './rings.js'
+import gears from './gears.js'
+import embers from './embers.js'
+import steps from './steps.js'
+import bass from './bass.js'
+import bloom from './bloom.js'
+import strum from './strum.js'
 import sweep from './sweep.js'
 import drift from './drift.js'
+import tide from './tide.js'
+import bell from './bell.js'
 import scribble from './scribble.js'
-import strum from './strum.js'
 import swarm from './swarm.js'
 import orbits from './orbits.js'
-import embers from './embers.js'
-import bloom from './bloom.js'
+import contour from './contour.js'
 // new instruments: imported above this line by `pnpm new-instrument`
 
+// grouped by role: beat, low, chords, tune; the picker leaves a little room before each group's first
 export const instruments = [
-	bass,
-	keys,
-	bell,
-	bloom,
 	drums,
-	contour,
-	grid,
-	rings,
+	gears,
+	embers,
+	steps,
+	bass,
+	bloom,
+	strum,
 	sweep,
 	drift,
+	tide,
+	bell,
 	scribble,
-	strum,
 	swarm,
 	orbits,
-	embers,
+	contour,
 ]
+export const groupStarts = new Set(['bass', 'bloom', 'bell'])
 export const registry = new Map()
 
 export function register(mod) {

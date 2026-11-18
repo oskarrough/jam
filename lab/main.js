@@ -4,8 +4,8 @@ import { instruments as all } from '../src/instruments/index.js'
 
 const LAB = [
 	'contour',
-	'grid',
-	'rings',
+	'steps',
+	'gears',
 	'sweep',
 	'drift',
 	'scribble',

@@ -1,4 +1,4 @@
-// Keys: tide. Draw a wave; the threads are the notes of this bar's chord and move when the chord does.
+// Tide: draw a wave; the threads are the notes of this bar's chord and move when the chord does.
 // A note sounds wherever the water crosses a thread, so a cliff is a chord, a slope an arpeggio, flat water
 // a held note. Where water starts, the thread nearest its surface sounds, so a tap is one note.
 //
@@ -182,10 +182,10 @@ function wavePaths(ys, X, Y, h) {
 }
 
 export default {
-	id: 'keys',
+	id: 'tide',
 	glyph:
 		'<path d="M3 10h26M3 16h26M3 22h26" stroke-width="1"/><path d="M3 24c5 0 6-14 11-14s5 10 9 10 4-6 6-6" stroke-width="2.4"/>',
-	name: 'Keys',
+	name: 'Tide',
 	how: 'Draw a wave. The threads are this bar’s chord; a note sounds wherever the water crosses one. Steep is a chord, a slope an arpeggio, flat water holds. Shift-drag dries it up.',
 	voices: V.voices,
 	params: V.params,
@@ -235,7 +235,7 @@ export default {
 				wave = null
 				if (typeof s?.tide === 'string') ys = parseTide(s.tide)
 				else if (Array.isArray(s?.notes)) {
-					// a part saved by the old line-drawing keys: a wave through its notes
+					// a part saved by the old line-drawing instrument: a wave through its notes
 					const n = s.notes.length
 					ys = through(
 						s.notes.flatMap((v, i) => (v >= 0 ? [[i / n, clamp((v + 1) / 9, 0, 1)]] : [])),

@@ -13,8 +13,8 @@ mostly well under 1 KB.
 | #   | instrument | gesture                                                        | intended feel                                                         |
 | --- | ---------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
 | 01  | contour    | draw a line; x is time, y is pitch                             | singing with a pencil; the glide makes sloppy lines sound deliberate  |
-| 02  | grid       | paint cells                                                    | the control group: precise, familiar, a little office-like            |
-| 03  | rings      | rotate and stretch euclidean rings, each with its own length   | turning a lock; uneven ring lengths drift into polymeter on their own |
+| 02  | steps      | paint cells                                                    | the control group: precise, familiar, a little office-like            |
+| 03  | gears      | rotate and stretch euclidean gears, each with its own length   | turning a lock; uneven gear lengths drift into polymeter on their own |
 | 04  | sweep      | hold and move over a held chord; records at the playhead       | DJ hands: you perform the filter, then it performs you back           |
 | 05  | drift      | drop up to five drone stones in a pond                         | slow and ambient; the chord breathes and rotates without you          |
 | 06  | scribble   | scribble freely; replayed in stroke order as vowel grains      | handwriting as voice; frantic scribbles stutter, calm ones hum        |
@@ -51,7 +51,7 @@ that advances once per loop (`chord(absStep, steps)`).
 
 All ten implement `generate(steps, params)` and `sample(steps)`, so bots can redraw them.
 Seats wider than 2.5× their height (the dial's rings, the strips view) get an unrolled
-layout where the instrument needs one: rings become three rows of pulses, orbits become
+layout where the instrument needs one: gears become three rows of pulses, orbits become
 crossing dots on orbit bands.
 
 Instruments whose motion depends on time (swarm, orbits) compute it purely from loop

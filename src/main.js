@@ -26,7 +26,7 @@ const room = (q.get('room') || pathJam || 'open').toLowerCase().slice(0, 48)
 // Seeded by room and day, so everyone in a room sees the same lineup and the open jam changes daily.
 const STRANGE = [
 	'contour',
-	'grid',
+	'steps',
 	'sweep',
 	'bloom',
 	'drift',
@@ -46,7 +46,7 @@ const START = (() => {
 	return ['bass', deal(), deal(), 'drums']
 })()
 // Someone who has never switched instruments is dealt one that's fun in five seconds without reading.
-// Grid and contour still turn up for robots and in the picker.
+// Steps and contour still turn up for robots and in the picker.
 const FIRST = ['strum', 'swarm', 'orbits', 'embers', 'scribble']
 const newcomer = () => {
 	try {

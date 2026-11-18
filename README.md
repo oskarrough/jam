@@ -10,16 +10,16 @@ It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars
 
 And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fifteen so far:
 
-- **bass**: an elastic riff; pull the knot to stretch it. **keys**: draw water, notes ring where it crosses the chord's threads. **bell**: tap for a bell, drag up to drop a bouncing marble. **bloom**: holds the room's chord; draw it higher and it opens up, the 7th and 9th flowering on top
+- **bass**: an elastic riff; pull the knot to stretch it. **tide**: draw water, notes ring where it crosses the chord's threads. **bell**: tap for a bell, drag up to drop a bouncing marble. **bloom**: holds the room's chord; draw it higher and it opens up, the 7th and 9th flowering on top
 - **drums**: paint kick, snare and hat in three bands
-- **contour, grid, rings, sweep, drift, scribble, strum, swarm, orbits, embers**: ten stranger ones, described in [lab/README.md](lab/README.md)
+- **contour, steps, gears, sweep, drift, scribble, strum, swarm, orbits, embers**: ten stranger ones, described in [lab/README.md](lab/README.md)
 
 ## Words
 
 - **seat**: your place at the machine, and who sits there (you, a friend, a robot). Code says seat too.
 - **ring**: what's drawn on the dial for a seat. Only a picture.
 - **instrument**: what you play, a gesture plus its sound. The thing you pick from the glyphs.
-- **voice**: the sound alone. Bass, keys and bell each have a few voices to pick from.
+- **voice**: the sound alone. Bass, tide and bell each have a few voices to pick from.
 - **erase** rubs out under the pen; **wipe** clears your whole ring.
 - **loud** is one note's level; **level** is an instrument's volume. **range** is pitch spread, **decay** is tail length.
 - **controls**: the `d` panel.

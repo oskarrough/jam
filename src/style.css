@@ -453,6 +453,9 @@ body.zoomed .lil-gui.root {
 	height: 38px;
 	box-shadow: 2px 3px 0 var(--shadow);
 }
+.glyph.role {
+	margin-left: 8px;
+}
 .glyph svg {
 	width: 24px;
 	height: 24px;

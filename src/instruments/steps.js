@@ -1,4 +1,4 @@
-// 02 Grid: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
+// 02 Steps: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
 // Words along the bottom pick pitch, length, loud or chance; drag the bracket to shorten the pattern (polymeter).
 //
 // state: { len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 0..9, loud 0..9, chance 0..9]
@@ -50,12 +50,12 @@ function blob(g, x, y, rx, ry, seed) {
 }
 
 export default {
-	id: 'grid',
+	id: 'steps',
 	// columns are pattern steps, not loop phase, so the host playhead would lie; the playing step glows
 	playhead: false,
 	glyph:
 		'<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
-	name: 'Grid',
+	name: 'Steps',
 	how: 'Tap a step to switch it. Drag to draw pitch, length, loud or chance (pick one along the bottom). Drag the bracket to shorten the pattern.',
 	demo: () => [tap(0.03, 0.45), tap(0.28, 0.45), tap(0.53, 0.45), line(0.03, 0.3, 0.6, 0.6, 14)],
 	params: {

@@ -33,7 +33,7 @@ try {
 	await page.click('#sound')
 	await page.evaluate((zoom) => {
 		const { engine, registry, view } = window.jam
-		for (const [i, id] of ['keys', 'bass', 'bell', 'drums'].entries())
+		for (const [i, id] of ['tide', 'bass', 'bell', 'drums'].entries())
 			engine.setInstrument(engine.seats[i], id, { state: registry.get(id).sample(engine.steps()) })
 		if (zoom) view.setFocus(0)
 	}, zoom)

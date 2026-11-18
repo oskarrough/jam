@@ -1,7 +1,7 @@
 // Phrase adapters for the lab instruments: state <-> { n, drums, notes: [{ s, p, v }] }.
 // See src/phrase.js. `to` reads one loop of a seat; `from` writes a phrase back as close as its gestures allow.
 import { SLOTS, clamp, intersect } from './util.js'
-import { hit } from '../rings.js'
+import { hit } from '../gears.js'
 import { REVS, lapsOf } from '../orbits.js'
 import { makeFlies, flyPos } from '../swarm.js'
 
@@ -75,7 +75,7 @@ export const adapters = {
 	},
 
 	// pattern of up to 16 steps, each [pitch 0..14, length, loud, chance]; read over one loop, repeats and all
-	grid: {
+	steps: {
 		to(st, n) {
 			const notes = []
 			for (let s = 0; s < n; s++) {
@@ -94,13 +94,13 @@ export const adapters = {
 		},
 	},
 
-	// drums: ring 0 hat (outer), 1 snare, 2 kick; phrase rows 0 kick, 1 snare, 2 hat
-	rings: {
+	// drums: gear 0 hat (outer), 1 snare, 2 kick; phrase rows 0 kick, 1 snare, 2 hat
+	gears: {
 		to(st, n, params, m) {
 			const ns = [P(m, params, 'outer'), P(m, params, 'middle'), P(m, params, 'inner')]
 			const notes = []
 			for (let s = 0; s < n; s++)
-				st.rings.forEach((r, i) => {
+				st.gears.forEach((r, i) => {
 					if (hit(s % ns[i], ns[i], Math.min(r.k, ns[i]), r.rot))
 						notes.push({ s, p: 2 - i, v: 0.8 })
 				})
@@ -110,7 +110,7 @@ export const adapters = {
 			const ns = [P(m, params, 'outer'), P(m, params, 'middle'), P(m, params, 'inner')]
 			const rows = drumRows(ph)
 			return {
-				rings: ns.map((len, i) => {
+				gears: ns.map((len, i) => {
 					const at = sorted(rows.filter((x) => x.p === 2 - i)).map((x) =>
 						Math.round((x.s / ph.n) * n),
 					)

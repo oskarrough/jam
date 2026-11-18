@@ -1,6 +1,7 @@
 // Instrument strip: while zoomed in, every instrument sits above the sheet as a drawn glyph; tap one to swap your ring's instrument.
 
 import { jellify } from './jelly.js'
+import { groupStarts } from './instruments/index.js'
 
 // each instrument module carries its own 32×32 glyph (mod.glyph); `f` marks filled bits
 const fallback = '<circle cx="16" cy="16" r="9"/>'
@@ -59,7 +60,7 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	const buttons = []
 	for (const [id, mod] of registry) {
 		const b = document.createElement('button')
-		b.className = 'glyph token'
+		b.className = groupStarts.has(id) ? 'glyph token role' : 'glyph token'
 		b.dataset.id = id
 		b.setAttribute('aria-label', mod.name)
 		b.title = mod.name.toLowerCase()

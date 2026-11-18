@@ -18,10 +18,14 @@ export function createHint({ engine, view, me, registry, glyph, choose }) {
 	const later = (f, ms) => timers.push(setTimeout(f, ms))
 
 	const seat = () => engine.seats[me.seat]
-	// other instruments, the strange ones first: the familiar three come last
+	// other instruments, the strange ones first: the familiar ones come last
+	const FAMILIAR = ['bass', 'tide', 'bell']
 	const others = () => {
 		const ids = [...registry.keys()].filter((id) => id !== seat()?.module.id)
-		return [...ids.slice(3), ...ids.slice(0, 3)]
+		return [
+			...ids.filter((id) => !FAMILIAR.includes(id)),
+			...ids.filter((id) => FAMILIAR.includes(id)),
+		]
 	}
 	function card(id, x, y) {
 		const b = document.createElement('button')

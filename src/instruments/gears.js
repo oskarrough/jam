@@ -1,5 +1,5 @@
-// 03 Rings: three euclidean rhythms on concentric rings, each with its own length.
-// Ring lengths that differ from 16 drift against the loop (polymeter).
+// 03 Gears: three euclidean rhythms on concentric gears, each with its own length.
+// Gear lengths that differ from 16 drift against the loop (polymeter).
 import { rubbing } from './lib/erase.js'
 import { kit } from './lib/kit.js'
 import { isStrip, withPointer, view, absOf, theme, clamp, TAU, flashes } from './lib/util.js'
@@ -12,29 +12,29 @@ export const hit = (j, n, k, rot) => (((((j - rot) % n) + n) % n) * k) % n < k
 
 // Tapping a step toggles it: k goes up or down by one, and of all the rotations that put the
 // tapped step where you want it, the one that moves the fewest other pulses wins.
-function toggle(ring, n, j) {
-	const k = Math.min(ring.k, n),
-		want = !hit(j, n, k, ring.rot),
+function toggle(gear, n, j) {
+	const k = Math.min(gear.k, n),
+		want = !hit(j, n, k, gear.rot),
 		k2 = clamp(k + (want ? 1 : -1), 0, n)
-	let best = ring.rot,
+	let best = gear.rot,
 		keep = -1
 	for (let rot = 0; rot < n; rot++) {
 		if (hit(j, n, k2, rot) !== want) continue
 		let same = 0
-		for (let i = 0; i < n; i++) if (hit(i, n, k2, rot) === hit(i, n, k, ring.rot)) same++
+		for (let i = 0; i < n; i++) if (hit(i, n, k2, rot) === hit(i, n, k, gear.rot)) same++
 		if (same > keep) {
 			keep = same
 			best = rot
 		}
 	}
-	ring.k = k2
-	ring.rot = best
+	gear.k = k2
+	gear.rot = best
 }
 
 function gen(steps, p = {}) {
 	const n = [p.outer ?? 16, p.middle ?? 12, p.inner ?? 16]
 	return {
-		rings: n.map((len) => ({
+		gears: n.map((len) => ({
 			k: 1 + Math.floor(Math.random() * len * 0.6),
 			rot: Math.floor(Math.random() * len),
 		})),
@@ -42,12 +42,12 @@ function gen(steps, p = {}) {
 }
 
 export default {
-	id: 'rings',
+	id: 'gears',
 	glyph:
-		'<circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="8.5"/><circle cx="16" cy="16" r="13"/><circle class="f" cx="16" cy="3" r="1.8"/>',
-	name: 'Rings',
-	playhead: false, // time goes round each ring
-	how: 'Tap a dot to turn it on or off; the rest of the ring spreads out evenly around it. Drag along a ring to turn it, drag outward or inward for more or fewer pulses.',
+		'<circle cx="16" cy="16" r="10"/><path d="M25.2 19.8L28.5 21.2M19.8 25.2L21.2 28.5M12.2 25.2L10.8 28.5M6.8 19.8L3.5 21.2M6.8 12.2L3.5 10.8M12.2 6.8L10.8 3.5M19.8 6.8L21.2 3.5M25.2 12.2L28.5 10.8" stroke-width="2.6"/><circle cx="16" cy="16" r="4.5"/><circle class="f" cx="16" cy="8" r="1.8"/>',
+	name: 'Gears',
+	playhead: false, // time goes round each gear
+	how: 'Tap a dot to turn it on or off; the rest of the gear spreads out evenly around it. Drag along a gear to turn it, drag outward or inward for more or fewer pulses.',
 	demo: (shape, aspect) =>
 		shape === 'ring'
 			? [tap(0.2, 0.17), line(0.2, 0.5, 0.45, 0.5, 10)]
@@ -70,7 +70,7 @@ export default {
 		const th = theme(ctx)
 		const size = [1, 1] // seat size from the last frame, for pointer maths
 		const state = {
-			rings: [
+			gears: [
 				{ k: 7, rot: 0 },
 				{ k: 3, rot: 3 },
 				{ k: 4, rot: 0 },
@@ -87,24 +87,24 @@ export default {
 			return { R, r: Math.hypot(dx, dy), a: Math.atan2(dy, dx) + Math.PI / 2 }
 		}
 
-		// unrolled: one row per ring (outer on top), x is the loop. Drag sideways to rotate,
+		// unrolled: one row per gear (outer on top), x is the loop. Drag sideways to rotate,
 		// tap to add a pulse, shift-tap to remove one.
 		function stripPointer(e) {
 			if (e.type === 'down') {
 				const i = clamp(Math.floor(e.y * 3), 0, 2)
-				drag = { i, x0: e.x, rot0: state.rings[i].rot, moved: 0, strip: true }
+				drag = { i, x0: e.x, rot0: state.gears[i].rot, moved: 0, strip: true }
 			} else if (e.type === 'move' && drag?.strip) {
 				const n = ns()[drag.i]
 				drag.moved = Math.max(drag.moved, Math.abs(e.x - drag.x0) * e.w)
 				const m = Math.round((e.x - drag.x0) * clock.steps)
-				state.rings[drag.i].rot = (((drag.rot0 + m) % n) + n) % n
+				state.gears[drag.i].rot = (((drag.rot0 + m) % n) + n) % n
 			} else if (e.type === 'up' && drag?.strip) {
 				if (drag.moved < 5) {
 					const n = ns()[drag.i],
 						steps = clock.steps
 					const start = Math.floor(view(clock).abs / steps) * steps,
 						s = clamp(Math.floor(e.x * steps), 0, steps - 1)
-					toggle(state.rings[drag.i], n, (((start + s) % n) + n) % n)
+					toggle(state.gears[drag.i], n, (((start + s) % n) + n) % n)
 				}
 				drag = null
 			}
@@ -117,7 +117,7 @@ export default {
 			const cw = w / steps,
 				rh = h / 3
 			ns().forEach((n, r) => {
-				const { k, rot } = state.rings[r]
+				const { k, rot } = state.gears[r]
 				const cy = rh * r + rh / 2
 				for (let s = 0; s < steps; s++) {
 					const j = (((start + s) % n) + n) % n
@@ -135,7 +135,7 @@ export default {
 					g.beginPath()
 					g.arc(cx, cy, size, 0, TAU)
 					g.fill()
-					// this ring's own downbeat, which drifts when its length isn't the loop's
+					// this gear's own downbeat, which drifts when its length isn't the loop's
 					if (j === 0 && n !== steps) {
 						g.fillStyle = th.dim
 						g.fillRect(cw * s, rh * r + 1, 1, rh - 2)
@@ -147,7 +147,7 @@ export default {
 		return {
 			state,
 			pointer: withPointer(size, (e) => {
-				// erasing takes one pulse off each ring the rubber crosses
+				// erasing takes one pulse off each gear the rubber crosses
 				if (e.alt) {
 					if (e.type === 'up') return void (drag = null)
 					if (e.type === 'down' || !drag?.rubbed) drag = { rubbed: new Set() }
@@ -156,11 +156,14 @@ export default {
 					if (isStrip(e.w, e.h, e.shape)) i = clamp(Math.floor(e.y * 3), 0, 2)
 					else {
 						const { R, r } = geom(e)
-						i = RADII.reduce((b, f, j) => (Math.abs(r - f * R) < Math.abs(r - RADII[b] * R) ? j : b), 0)
+						i = RADII.reduce(
+							(b, f, j) => (Math.abs(r - f * R) < Math.abs(r - RADII[b] * R) ? j : b),
+							0,
+						)
 					}
 					if (drag.rubbed.has(i)) return
 					drag.rubbed.add(i)
-					state.rings[i].k = Math.max(0, state.rings[i].k - 1)
+					state.gears[i].k = Math.max(0, state.gears[i].k - 1)
 					return
 				}
 				if (isStrip(e.w, e.h, e.shape)) return stripPointer(e)
@@ -175,11 +178,11 @@ export default {
 							best = i
 						}
 					})
-					const ring = state.rings[best]
-					drag = { i: best, a0: a, r0: r, rot0: ring.rot, k0: ring.k, moved: 0, R }
+					const gear = state.gears[best]
+					drag = { i: best, a0: a, r0: r, rot0: gear.rot, k0: gear.k, moved: 0, R }
 				} else if (e.type === 'move' && drag) {
 					const n = ns()[drag.i]
-					const ring = state.rings[drag.i]
+					const gear = state.gears[drag.i]
 					let da = a - drag.a0
 					da = Math.atan2(Math.sin(da), Math.cos(da))
 					const along = Math.abs(da) * drag.r0,
@@ -188,13 +191,13 @@ export default {
 					// one gesture does one thing: whichever way it went first
 					if (!drag.mode && drag.moved > 8) drag.mode = along > out ? 'turn' : 'count'
 					if (drag.mode === 'turn')
-						ring.rot = (((drag.rot0 + Math.round((da / TAU) * n)) % n) + n) % n
+						gear.rot = (((drag.rot0 + Math.round((da / TAU) * n)) % n) + n) % n
 					if (drag.mode === 'count')
-						ring.k = clamp(drag.k0 + Math.round((r - drag.r0) / (drag.R * 0.05)), 0, n)
+						gear.k = clamp(drag.k0 + Math.round((r - drag.r0) / (drag.R * 0.05)), 0, n)
 				} else if (e.type === 'up' && drag) {
 					if (drag.moved < 8) {
 						const n = ns()[drag.i]
-						toggle(state.rings[drag.i], n, ((Math.round((drag.a0 / TAU) * n) % n) + n) % n)
+						toggle(state.gears[drag.i], n, ((Math.round((drag.a0 / TAU) * n) % n) + n) % n)
 					}
 					drag = null
 				}
@@ -202,7 +205,7 @@ export default {
 			step(i, time, dur) {
 				const abs = absOf(clock, time)
 				ns().forEach((n, r) => {
-					const { k, rot } = state.rings[r]
+					const { k, rot } = state.gears[r]
 					const j = abs % n
 					if (!hit(j, n, Math.min(k, n), rot)) return
 					const v = VOICES[r]
@@ -223,14 +226,14 @@ export default {
 				const abs = Math.floor(t.abs)
 				ns().forEach((n, r) => {
 					const rad = RADII[r] * R
-					const { k, rot } = state.rings[r]
+					const { k, rot } = state.gears[r]
 					g.strokeStyle = th.faint
 					g.lineWidth = 1
 					g.beginPath()
 					g.arc(cx, cy, rad, 0, TAU)
 					g.stroke()
 					const cur = ((abs % n) + n) % n
-					// playhead hand per ring, at its own polymeter position
+					// playhead hand per gear, at its own polymeter position
 					const frac = ((((t.abs % n) + n) % n) / n) * TAU - Math.PI / 2
 					if (t.playing) {
 						g.strokeStyle = th.dim
@@ -272,10 +275,10 @@ export default {
 				})
 			},
 			setState(s) {
-				state.rings = s.rings.map((r) => ({ ...r }))
+				state.gears = s.gears.map((r) => ({ ...r }))
 			},
 			clear() {
-				state.rings.forEach((r) => {
+				state.gears.forEach((r) => {
 					r.k = 0
 					r.rot = 0
 				})

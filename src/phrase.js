@@ -3,7 +3,7 @@
 
 import { adapters as labAdapters } from './instruments/lib/phrases.js'
 import { riffOf } from './instruments/bass.js'
-import { parseTide, tideOf, through, W } from './instruments/keys.js'
+import { parseTide, tideOf, through, W } from './instruments/tide.js'
 import { parseMarbles, marblesOf, strikes } from './instruments/bell.js'
 
 export const OCT = 5
@@ -69,9 +69,9 @@ const bass = {
 	},
 }
 
-// keys: a tide, { tide } one height per sample. Read as a melody that moves with the water, 10 degrees tall;
+// tide: { tide } one height per sample. Read as a melody that moves with the water, 10 degrees tall;
 // written as water through the notes.
-const keys = {
+const tide = {
 	to(state, n) {
 		const ys = parseTide(state?.tide),
 			notes = []
@@ -141,7 +141,7 @@ const drums = {
 	},
 }
 
-const adapters = { bass, keys, bell, drums, ...labAdapters }
+const adapters = { bass, tide, bell, drums, ...labAdapters }
 
 export const canPhrase = (id) => !!adapters[id]
 
