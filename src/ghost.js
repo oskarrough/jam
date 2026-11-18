@@ -1,4 +1,4 @@
-// Ghost hand: on an instrument switch, a cursor in your colour plays that instrument's `demo` gesture once on your seat
+// Ghost hand: when you first sit, and on an instrument switch, a cursor in your colour plays that instrument's `demo` gesture once on your seat
 // (src/instruments/lib/demo.js). Rests after two showings per instrument, and stops the moment you touch your seat.
 
 export function createGhost({ engine, view, me, times = 2 }) {

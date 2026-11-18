@@ -5,7 +5,7 @@ import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/
 
 export function createDebug(options) {
 	const gui = new GUI({
-		title: matchMedia('(pointer: coarse)').matches ? 'controls' : 'controls  (d)',
+		title: matchMedia('(pointer: coarse), (max-width: 640px)').matches ? 'controls' : 'controls  (d)',
 		width: 280,
 	})
 	gui.close()

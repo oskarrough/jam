@@ -286,8 +286,10 @@ export default {
 			g.font = `600 ${Math.max(11, Math.min(16, h * 0.05))}px ${SANS}`
 			g.textAlign = 'center'
 			g.textBaseline = 'middle'
+			// the words share the row with the pattern length at the right edge, so they leave it room
+			const lw = w - g.measureText(`${state.len}`).width - 12
 			PARAMS.forEach((name, i) => {
-				const x = ((i + 0.5) / PARAMS.length) * w,
+				const x = ((i + 0.5) / PARAMS.length) * lw,
 					y = top + (h - top) / 2
 				const on = name === ui.param
 				g.fillStyle = tint(ink, on ? 1 : 0.45)

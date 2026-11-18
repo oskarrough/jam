@@ -45,6 +45,16 @@ const START = (() => {
 	const deal = () => pile.splice(Math.floor(r() * pile.length), 1)[0]
 	return ['bass', deal(), deal(), 'drums']
 })()
+// Someone who has never switched instruments is dealt one that's fun in five seconds without reading.
+// Grid and contour still turn up for robots and in the picker.
+const FIRST = ['strum', 'swarm', 'orbits', 'embers', 'scribble']
+const newcomer = () => {
+	try {
+		return !localStorage.getItem('roughjam.switched')
+	} catch {
+		return true
+	}
+}
 // no invented names: 'player N' by seat unless ?name=
 const name = q.get('name') || ''
 
@@ -129,7 +139,8 @@ const riffWho = (r) => {
 	const p = transport.peers.find((q) => q.id === r.from)
 	return p ? occupant(seats.findIndex((L) => L.id === p.seat))?.label : 'a player'
 }
-let bots = null
+let bots = null,
+	hint = null
 
 function sit(i) {
 	if (replay) return
@@ -147,6 +158,8 @@ let lastPt = null
 function pointerTo(i, e) {
 	const L = seats[i]
 	if (e.type === 'down') ghost?.stop()
+	// your first stroke: now the hint can show the other instruments
+	if (e.type === 'up' && i === me.seat) hint?.start()
 	if (me.erase || e.button === 2) e.alt = true
 	e.shape = view.focus.on && view.focus.seat === i ? 'sheet' : 'ring'
 	if (e.type === 'down') undo.remember(i)
@@ -224,14 +237,22 @@ transport.on('welcome', () => {
 				sit(i)
 				break
 			}
-	const want = registry.get(q.get('instrument'))
+	let want = registry.get(q.get('instrument'))
+	// a newcomer's first seat: one of the five-second instruments, and the ghost plays it once on their ring
+	if (!want && me.seat >= 0 && newcomer() && !FIRST.includes(seats[me.seat].module.id))
+		want = registry.get(
+			FIRST.map((_, k) => FIRST[(k + new Date().getDate()) % FIRST.length]).find(
+				(id) => !seats.some((L) => L.module.id === id),
+			) || FIRST[0],
+		)
+	if (!want && me.seat >= 0) ghost.play()
 	if (want && me.seat >= 0) {
 		const L = seats[me.seat]
 		if (L.module !== want) {
 			engine.setInstrument(L, want.id, { state: want.sample?.(engine.steps(L)) })
 			engine.push(L)
 		}
-		view.setFocus?.(me.seat)
+		if (q.get('instrument')) view.setFocus?.(me.seat)
 		ghost.play()
 	}
 })
@@ -541,7 +562,7 @@ const strip = createStrip({
 		hint.switched()
 	},
 })
-const hint = createHint({
+hint = createHint({
 	engine,
 	view,
 	me,
@@ -549,10 +570,6 @@ const hint = createHint({
 	glyph: strip.glyph,
 	choose: (id) => strip.choose(id) && popFlash(id),
 })
-if (!replay) {
-	if (me.seat >= 0) hint.start()
-	else transport.on('welcome', () => hint.start())
-}
 function toggleFocus() {
 	view.setFocus(view.focus.on ? -1 : me.seat)
 }

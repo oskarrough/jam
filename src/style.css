@@ -477,9 +477,16 @@ body.zoomed .lil-gui.root {
 	text-overflow: ellipsis;
 	min-width: 0;
 }
+/* on a phone the strip wraps to two rows; the name sits quietly at the end of the second, so you know what you're on */
 @media (max-width: 640px) {
 	.caption {
-		display: none;
+		position: absolute;
+		right: 4px;
+		top: 58px;
+		max-width: 30%;
+		font-size: 16px;
+		opacity: 0.7;
+		pointer-events: none;
 	}
 	.glyph.token {
 		width: 36px;

@@ -1,4 +1,4 @@
-// Showing a newcomer that their badge holds other instruments: a moment after you sit, the other glyphs
+// Showing a newcomer that their badge holds other instruments: a moment after your first stroke, the other glyphs
 // fan out of your badge into the dial like a hand of cards, then fold back. Tap a card to switch at once.
 // Every visit until your first switch; after that never again in this browser.
 
@@ -42,7 +42,9 @@ export function createHint({ engine, view, me, registry, glyph, choose }) {
 	}
 
 	function fan() {
-		if (done || me.seat < 0 || view.focus.on) return
+		if (done || me.seat < 0) return
+		// zoomed in, the strip above the sheet already shows them; wait for the dial
+		if (view.focus.on) return later(fan, 1500)
 		const s = view.seatAt(me.seat),
 			c = view.center()
 		// pointing from the badge into the dial, where there is always room
@@ -76,7 +78,7 @@ export function createHint({ engine, view, me, registry, glyph, choose }) {
 	}
 
 	return {
-		// once you have a seat
+		// after your first stroke, so you know what playing is before you learn you can swap
 		start() {
 			if (done || started) return
 			started = true
