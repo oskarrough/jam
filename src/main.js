@@ -180,7 +180,8 @@ const canDraw = (i) => !replay && me.seat === i
 const riffWho = (r) => {
 	if (r.from === transport.id) return 'you'
 	const p = transport.peers.find((q) => q.id === r.from)
-	return p ? occupant(seats.findIndex((L) => L.id === p.seat))?.label : 'a player'
+	const i = p ? seats.findIndex((L) => L.id === p.seat) : -1
+	return i >= 0 ? occupant(i).label : p?.name || 'a player'
 }
 let bots = null,
 	hint = null
@@ -190,9 +191,64 @@ function sit(i) {
 	const p = humanAt(i)
 	if (p && p.id !== transport.id) return
 	me.seat = i
+	me.standing = false
 	seats[i].riff = null // a person taking the seat ends a robot riff
 	if (view?.focus.on) view.setFocus(i)
 	transport.setMe({ seat: seats[i].id, name: me.name })
+	seatline()
+}
+// standing up frees the seat for whoever's waiting; you keep listening, and sit again by tapping a free one.
+// Presence says 'up', so the waiting line skips you.
+function stand() {
+	if (replay || me.seat < 0) return
+	if (view.focus.on) view.setFocus(-1)
+	ghost.stop()
+	me.seat = -1
+	me.standing = true
+	transport.setMe({ seat: 'up', name: me.name })
+	seatline()
+}
+// Four seats, any number listening. Whoever isn't seated and didn't stand up waits in one line, first arrived
+// first; every tab sorts the same peer list the same way, so the k-th in line takes the k-th free seat and nobody
+// races. Two who sat on one seat at the same moment: the later arrival gets up and waits again.
+const seatOf = (p) => seats.findIndex((L) => L.id === p.seat)
+const before = (a, b) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0) || (a.id < b.id ? -1 : 1)
+function settle() {
+	if (replay || !welcomed) return
+	const all = transport.peers
+	const mine = all.find((p) => p.id === transport.id)
+	if (me.seat >= 0 && mine) {
+		const rival = all.find((p) => p.id !== transport.id && p.seat === seats[me.seat].id)
+		if (rival && before(rival, mine) < 0) {
+			me.seat = -1
+			if (view.focus.on) view.setFocus(-1)
+			transport.setMe({ seat: null, name: me.name })
+		}
+	}
+	if (me.seat < 0 && !me.standing) {
+		const free = [1, 2, 0, 3].filter((i) => !humanAt(i))
+		const line = all.filter((p) => seatOf(p) < 0 && p.seat !== 'up').sort(before)
+		const k = line.findIndex((p) => p.id === transport.id)
+		if (k >= 0 && k < free.length) sit(free[k])
+	}
+	seatline()
+}
+let welcomed = false
+transport.on('peers', settle)
+// under the jam's chips: how many are here, and your seat, given up or waited for, in one quiet word
+function seatline() {
+	const el = document.getElementById('seatline')
+	if (!el || replay || !welcomed) return
+	const n = transport.peers.length
+	const here = n > 1 ? `${n} here · ` : 'just you here · '
+	if (me.seat >= 0) el.replaceChildren(here, word('stand up', stand))
+	else if (me.standing) el.replaceChildren(here, 'listening · ', word('sit again', rejoin))
+	else el.replaceChildren(here + 'listening · the next free seat is yours')
+}
+function rejoin() {
+	me.standing = false
+	transport.setMe({ seat: null, name: me.name })
+	settle()
 }
 
 // every stroke on a ring or sheet comes through here. Erasing (token, shift, right button, two fingers)
@@ -291,12 +347,8 @@ const freeName = () => {
 }
 transport.on('welcome', ({ seats: snap }) => {
 	if (!me.name) me.name = freeName()
-	if (me.seat < 0)
-		for (const i of [1, 2, 0, 3])
-			if (!humanAt(i)) {
-				sit(i)
-				break
-			}
+	welcomed = true
+	settle()
 	// the jam's seats as they stand land a moment after the welcome; deal after them, or they'd undo the deal here.
 	// A song from the link, or the one saved here when the jam comes back empty, takes the place of the deal.
 	if (!replay && !restoring)
@@ -372,6 +424,7 @@ const $ = (id) => document.getElementById(id)
 
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
+const seatEl = $('seatline')
 const word = (text, fn) => {
 	const b = document.createElement('button')
 	b.textContent = text
@@ -429,7 +482,9 @@ else if (isOpenJam) {
 	back.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>'
 	jellify(back, { amount: 0.12 })
 	const chip = shareChip()
-	chip.prepend(Object.assign(document.createElement('span'), { className: 'name', textContent: room }))
+	chip.prepend(
+		Object.assign(document.createElement('span'), { className: 'name', textContent: room }),
+	)
 	jamline.append(back, chip)
 }
 // share: a link that carries the song itself, so it works with no relay and offline; opening it forks the song
@@ -733,6 +788,8 @@ function rideSheet() {
 		jamline.style.transform = m ? `translateY(${-14 * m}px)` : ''
 		jamline.style.pointerEvents = m ? 'none' : ''
 		jamline.style.visibility = m >= 1 ? 'hidden' : ''
+		seatEl.style.opacity = jamline.style.opacity
+		seatEl.style.visibility = jamline.style.visibility
 		riding = view.moving || (view.focus.on && x > 0) ? requestAnimationFrame(go) : 0
 	}
 	riding = requestAnimationFrame(go)

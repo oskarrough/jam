@@ -41,7 +41,7 @@ export function createLocalTransport({
 	const history = seatHistory(clock, (from) => from === id)
 	const { on, emit, seatAt, schedule, record } = history
 	const others = new Map()
-	const me = { id, name, seat, color }
+	const me = { id, name, seat, color, joinedAt: Date.now() }
 	const fake = { latency: 0, jitter: 0, quantize: 'bar' }
 	let welcomed = false,
 		sent = 0,
@@ -64,7 +64,13 @@ export function createLocalTransport({
 	}
 
 	const peers = () =>
-		[me, ...others.values()].map(({ id, name, seat, color }) => ({ id, name, seat, color }))
+		[me, ...others.values()].map(({ id, name, seat, color, joinedAt }) => ({
+			id,
+			name,
+			seat,
+			color,
+			joinedAt,
+		}))
 
 	if (chan)
 		chan.onmessage = ({ data: m }) => {
@@ -76,7 +82,7 @@ export function createLocalTransport({
 				case 'hello':
 				case 'presence': {
 					const p = known || { id: m.from, last: Date.now() }
-					for (const k of ['name', 'seat', 'color']) if (k in m) p[k] = m[k]
+					for (const k of ['name', 'seat', 'color', 'joinedAt']) if (k in m) p[k] = m[k]
 					others.set(m.from, p)
 					if (m.t === 'hello')
 						tx({
@@ -87,6 +93,7 @@ export function createLocalTransport({
 							name: me.name,
 							seat: me.seat,
 							color: me.color,
+							joinedAt: me.joinedAt,
 						})
 					emit('peers', peers())
 					break
@@ -98,6 +105,7 @@ export function createLocalTransport({
 							name: m.name,
 							seat: m.seat,
 							color: m.color,
+							joinedAt: m.joinedAt,
 							last: Date.now(),
 						})
 						emit('peers', peers())
@@ -131,7 +139,7 @@ export function createLocalTransport({
 			}
 		}
 
-	tx({ t: 'hello', name: me.name, seat: me.seat, color: me.color })
+	tx({ t: 'hello', name: me.name, seat: me.seat, color: me.color, joinedAt: me.joinedAt })
 	schedule(clock.now() + 400, () => {
 		if (!welcomed) {
 			welcomed = true

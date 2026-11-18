@@ -206,7 +206,36 @@ try {
 		picked && (await d.evaluate(() => window.jam.me.seat)) === bare,
 		`dan sits at bare seat ${bare}, picks bell, cat hears it`,
 	)
-	const errs = [...a.errors, ...b.errors, ...c2.errors, ...d.errors]
+	// four seats, five players: the fifth listens and waits; one stands up and the fifth sits down in their place
+	const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+	const five = []
+	for (const n of ['p1', 'p2', 'p3', 'p4', 'p5']) {
+		const p = await ctx3.newPage()
+		p.errors = []
+		p.on('pageerror', (e) => p.errors.push(e.message))
+		await p.goto(`${srv.url}/j/two-tabs-seats?ws=off&name=${n}`)
+		await p.waitForFunction(() => window.jam)
+		await p.waitForTimeout(800)
+		five.push(p)
+	}
+	await five[4].waitForTimeout(600)
+	const sat = await Promise.all(five.map((p) => p.evaluate(() => window.jam.me.seat)))
+	const line5 = await five[4].textContent('#seatline')
+	check(
+		new Set(sat.slice(0, 4)).size === 4 && !sat.slice(0, 4).includes(-1) && sat[4] === -1,
+		`four seated, the fifth listens (${sat}): "${line5}"`,
+	)
+	check(/5 here/.test(line5) && /next free seat/.test(line5), 'the fifth sees 5 here and waits')
+	await five[1].click('#seatline button')
+	const took = await five[4]
+		.waitForFunction((s) => window.jam.me.seat === s, sat[1], { timeout: 8000 })
+		.then(
+			() => true,
+			() => false,
+		)
+	const p2 = await five[1].evaluate(() => [window.jam.me.seat, document.getElementById('seatline').textContent])
+	check(took && p2[0] === -1, `p2 stands up, p5 takes seat ${sat[1]}; p2: "${p2[1]}"`)
+	const errs = [...a.errors, ...b.errors, ...c2.errors, ...d.errors, ...five.flatMap((p) => p.errors)]
 	check(!errs.length, 'no page errors' + errs.map((e) => '\n  ' + e).join(''))
 } finally {
 	await browser.close()
