@@ -92,7 +92,8 @@ export function kit(audio) {
 		const root = rootMidi(loop)
 		const tone = (i) => root + parent[(deg + i) % 7] + 12 * Math.floor((deg + i) / 7)
 		const notes = [tone(0), tone(2), tone(4)]
-		return { root: notes[0], notes, name }
+		// stacked thirds from the root, up to the 9th: tones[3] is the 7th, tones[4] the 9th
+		return { root: notes[0], notes, name, tones: [0, 2, 4, 6, 8].map(tone) }
 	}
 
 	k = {

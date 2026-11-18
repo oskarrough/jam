@@ -15,12 +15,14 @@ import strum from './strum.js'
 import swarm from './swarm.js'
 import orbits from './orbits.js'
 import embers from './embers.js'
+import bloom from './bloom.js'
 // new instruments: imported above this line by `pnpm new-instrument`
 
 export const instruments = [
 	bass,
 	keys,
 	bell,
+	bloom,
 	drums,
 	contour,
 	grid,

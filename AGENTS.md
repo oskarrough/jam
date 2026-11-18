@@ -1,6 +1,7 @@
 # Notes for agents
 
 - `pnpm run setup` first: fetches, fast-forwards a clean checkout, installs deps, never discards work.
+- Several agents share this checkout and its `@`. To land only your paths, commit from your own workspace: `jj workspace add --name <you> /tmp/<you> -r main@origin`, copy your files in, commit, push, `jj workspace forget <you>`.
 - Commit to `main`, no branches. Pull (rebase) before you start and again before you push; several agents push here.
 - `pnpm check` (lint, 2 s; installs deps if missing) before every push. Touched `sync/` or `src/transport/`? Also `cd sync && NODE_PATH=$(npm root -g) node test.mjs` (needs Playwright).
 - `pnpm shots [-- <instrument>] [--phone]` puts dial and sheet screenshots in `shots/` (ignored). `pnpm two-tabs` is the two-player smoke test. `pnpm perf` prints JS ms per frame (keep it low: taps wait behind it).

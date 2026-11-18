@@ -8,9 +8,9 @@ Everyone sits at one dial. Each seat is a ring, each ring is an instrument, and 
 
 It is meant to be **malleable**. Press `d` and the machine opens up: tempo, bars and meter, the key and the chords (one a bar, typed as numerals: `i III iv v`; players change them on the eye: tap a quarter to roll that bar's chord, drag up or down to scrub), which instrument sits in which ring and every one of its knobs, the network's latency, jitter and clock skew, the scheduler's lookahead. All of it changes live, mid-jam, for everyone. Controls aren't a developer backstage; they're part of the instrument.
 
-And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fourteen so far:
+And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. Fifteen so far:
 
-- **bass**: an elastic riff; pull the knot to stretch it. **keys**: draw water, notes ring where it crosses the chord's threads. **bell**: tap for a bell, drag up to drop a bouncing marble
+- **bass**: an elastic riff; pull the knot to stretch it. **keys**: draw water, notes ring where it crosses the chord's threads. **bell**: tap for a bell, drag up to drop a bouncing marble. **bloom**: holds the room's chord; draw it higher and it opens up, the 7th and 9th flowering on top
 - **drums**: paint kick, snare and hat in three bands
 - **contour, grid, rings, sweep, drift, scribble, strum, swarm, orbits, embers**: ten stranger ones, described in [lab/README.md](lab/README.md)
 

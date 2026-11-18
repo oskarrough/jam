@@ -28,6 +28,7 @@ const STRANGE = [
 	'contour',
 	'grid',
 	'sweep',
+	'bloom',
 	'drift',
 	'scribble',
 	'strum',
