@@ -18,7 +18,7 @@ mostly well under 1 KB.
 | 04  | sweep      | hold and move over a held chord; records at the playhead       | DJ hands: you perform the filter, then it performs you back           |
 | 05  | drift      | drop up to five drone stones in a pond                         | slow and ambient; the chord breathes and rotates without you          |
 | 06  | scribble   | scribble freely; replayed in stroke order as vowel grains      | handwriting as voice; frantic scribbles stutter, calm ones hum        |
-| 07  | strum      | swipe across six strings; strums record and follow the chords  | the most social one: a rhythm you play once turns into a progression  |
+| 07  | strum      | swipe down or up across six strings; it lands where you swiped | the most social one: a rhythm you play once turns into a progression  |
 | 08  | swarm      | string wires across fireflies' fixed flight paths              | composing by placing tripwires, not notes; surprising, deterministic  |
 | 09  | orbits     | place planets; size is pitch, distance is speed                | watch-it-happen polyrhythm; 3 and 6 lap orbits fall between the 16ths |
 | 10  | embers     | throw sparks above the fire; they pop on the grid and burn out | percussion that decays unless someone keeps feeding it                |
