@@ -4,9 +4,11 @@
 //
 // state = { tide } one character per sample, W samples across the loop: '.' is dry, otherwise a height
 // (LEVELS of them, '0' the bottom). A string, so the engine's loop-length resize leaves it alone.
+// state.ink: the ink of each sample, one digit each, picked under the sheet per stretch of water.
+// Parts from before inks have none: their water is all the seat's old voice.
 
 import { voice as jukebox } from './lib/voices.js'
-import { voiced } from './lib/voiced.js'
+import { voiced, head, dash } from './lib/voiced.js'
 import { kit } from './lib/kit.js'
 import {
 	mtof,
@@ -92,6 +94,9 @@ const SAMPLE = tideOf(
 		0.55,
 	),
 )
+// rhodes, with the third bar in harp
+const SAMPLE_INK = '0'.repeat(128) + '3'.repeat(64) + '0'.repeat(64)
+const parseInk = (s) => Array.from({ length: W }, (_, j) => +s[j] || 0)
 
 function triangles({ audio: ac, out, params }, m, t) {
 	const f = mtof(m),
@@ -110,11 +115,11 @@ function triangles({ audio: ac, out, params }, m, t) {
 
 const V = voiced(
 	[
-		['rhodes', jukebox('rhodes', -9.0)],
-		['triangles', triangles],
-		['organ', jukebox('organ', -3.9)],
-		['harp', jukebox('harp', -4.4)],
-		['chip', jukebox('chip', -3.7)],
+		['rhodes', jukebox('rhodes', -9.0), 'dot'],
+		['triangles', triangles, 'tri'],
+		['organ', jukebox('organ', -3.9), 'bar'],
+		['harp', jukebox('harp', -4.4), 'tall'],
+		['chip', jukebox('chip', -3.7), 'square'],
 	],
 	{
 		octave: { value: 0, min: -1, max: 1, step: 1 },
@@ -159,26 +164,41 @@ export function crossings(ys, j0, j1, threadsAt) {
 	return out
 }
 
-// Dry samples break the wave. Keep the filled water and its inked edge at drawing size.
-function wavePaths(ys, X, Y, h) {
+// Dry samples break the wave. Keep the filled water and its edge at drawing size: one edge path per ink.
+function wavePaths(ys, ks, X, Y, h) {
 	const water = new Path2D(),
-		edge = new Path2D()
+		edges = new Map()
+	let px = 0,
+		py = 0,
+		pk = -1
+	const to = (x, y, k) => {
+		if (!edges.has(k)) edges.set(k, new Path2D())
+		const e = edges.get(k)
+		if (k !== pk) e.moveTo(px, py)
+		e.lineTo(x, y)
+		px = x
+		py = y
+		pk = k
+	}
 	for (let j = 0; j < W; j++) {
 		if (ys[j] === null) continue
 		water.moveTo(X(j), h)
-		edge.moveTo(X(j), Y(ys[j]))
+		px = X(j)
+		py = Y(ys[j])
+		pk = -1
+		to(X(j + 0.5), Y(ys[j]), ks[j])
 		water.lineTo(X(j + 0.5), Y(ys[j]))
 		while (j + 1 < W && ys[j + 1] !== null) {
 			j++
 			water.lineTo(X(j + 0.5), Y(ys[j]))
-			edge.lineTo(X(j + 0.5), Y(ys[j]))
+			to(X(j + 0.5), Y(ys[j]), ks[j])
 		}
-		edge.lineTo(X(j + 1), Y(ys[j]))
+		to(X(j + 1), Y(ys[j]), ks[j])
 		water.lineTo(X(j + 1), Y(ys[j]))
 		water.lineTo(X(j + 1), h)
 		water.closePath()
 	}
-	return { water, edge }
+	return { water, edges }
 }
 
 export default {
@@ -187,19 +207,21 @@ export default {
 		'<path d="M3 10h26M3 16h26M3 22h26" stroke-width="1"/><path d="M3 24c5 0 6-14 11-14s5 10 9 10 4-6 6-6" stroke-width="2.4"/>',
 	name: 'Tide',
 	how: 'Draw a wave. The threads are this bar’s chord; a note sounds wherever the water crosses one. Steep is a chord, a slope an arpeggio, flat water holds. Shift-drag dries it up.',
-	voices: V.voices,
+	inks: V.inks,
 	params: V.params,
 	optional: ['tide'],
 	demo: () => [wave(0.06, 0.6, 0.5, 0.3, 1.5, 24)],
 	generate: () => gen(),
-	sample: () => ({ tide: SAMPLE }),
+	sample: () => ({ tide: SAMPLE, ink: SAMPLE_INK }),
 	create(ctx) {
 		const { clock } = ctx
 		const harmony = kit(ctx.audio)
-		const play = V.play
 		const size = [1, 1]
 		const fx = flashes()
 		let ys = parseTide(SAMPLE)
+		let ks = parseInk(SAMPLE_INK) // each sample's ink
+		let ink = 0 // the brush in your hand; local, but every stretch of water keeps its own
+		const inkAt = (at) => ks[Math.ceil(at) % W]
 		let wave = null
 		let last = null // last painted sample, so a fast drag leaves no holes
 		// A seat can start mid-bar. Resolve each bar once per draw or scheduling pass.
@@ -217,22 +239,32 @@ export default {
 			wave = null
 			const j = clamp(Math.floor(x * W), 0, W - 1)
 			const v = erase ? null : clamp(y, 0, 1)
-			if (last === null || Math.abs(j - last.j) > W / 2) ys[j] = v
-			else {
+			if (last === null || Math.abs(j - last.j) > W / 2) {
+				ys[j] = v
+				if (!erase) ks[j] = ink
+			} else {
 				const d = j - last.j,
 					k = Math.abs(d)
-				for (let i = 0; i <= k; i++)
-					ys[last.j + Math.sign(d) * i] = erase ? null : k ? last.y + ((v - last.y) * i) / k : v
+				for (let i = 0; i <= k; i++) {
+					const at = last.j + Math.sign(d) * i
+					ys[at] = erase ? null : k ? last.y + ((v - last.y) * i) / k : v
+					if (!erase) ks[at] = ink
+				}
 			}
 			last = { j, y: v ?? 0 }
 		}
 
 		return {
 			get state() {
-				return { tide: tideOf(ys) }
+				return { tide: tideOf(ys), ink: ks.join('') }
 			},
 			setState(s) {
 				wave = null
+				// water from before inks rings in the seat's old voice; it keeps that ink for good
+				ks =
+					typeof s?.ink === 'string'
+						? parseInk(s.ink).map((k) => k % V.names.length)
+						: new Array(W).fill(V.legacy(ctx))
 				if (typeof s?.tide === 'string') ys = parseTide(s.tide)
 				else if (Array.isArray(s?.notes)) {
 					// a part saved by the old line-drawing instrument: a wave through its notes
@@ -247,6 +279,12 @@ export default {
 				wave = null
 				ys = new Array(W).fill(null)
 			},
+			get ink() {
+				return V.names[ink]
+			},
+			set ink(v) {
+				ink = V.index(v)
+			},
 			pointer: withPointer(size, (e) => {
 				const x = clamp((e.x - PAD) / (1 - 2 * PAD), 0, 0.9999),
 					y = 1 - clamp(e.y, 0, 1)
@@ -258,7 +296,10 @@ export default {
 					if (!erase) {
 						const j = Math.floor(x * W)
 						for (let i = 1; i < W / clock.steps; i++)
-							if (j + i < W && ys[j + i] === null) ys[j + i] = y
+							if (j + i < W && ys[j + i] === null) {
+								ys[j + i] = y
+								ks[j + i] = ink
+							}
 					}
 				} else if (e.type === 'move' && e.pressed) paint(x, y, erase)
 				else if (e.type === 'up' || e.type === 'cancel') last = null
@@ -268,7 +309,6 @@ export default {
 					bs = harmony.barSteps(),
 					j0 = Math.ceil((i * W) / steps),
 					j1 = Math.ceil(((i + 1) * W) / steps)
-				const fn = play(ctx)
 				const threadsAt = barThreads(absOf(clock, time) - i, steps, bs)
 				for (const c of crossings(ys, j0, j1, threadsAt)) {
 					const t = (c.at * steps) / W
@@ -286,7 +326,7 @@ export default {
 							break
 					}
 					const d = Math.max(0.5, (end * steps) / W - t) * dur
-					fn(ctx, c.m, time + Math.max(0, t - i) * dur, d, c.entry ? 0.75 : 0.62)
+					V.fn(inkAt(c.at))(ctx, c.m, time + Math.max(0, t - i) * dur, d, c.entry ? 0.75 : 0.62)
 					fx.hit(c.m * 1000 + Math.round(c.at), time + Math.max(0, t - i) * dur)
 				}
 			},
@@ -318,18 +358,22 @@ export default {
 						gx.stroke()
 					}
 				}
-				if (!wave || wave.w !== w || wave.h !== h) wave = { ...wavePaths(ys, X, Y, h), w, h }
+				if (!wave || wave.w !== w || wave.h !== h) wave = { ...wavePaths(ys, ks, X, Y, h), w, h }
 				gx.fillStyle = rgba(color, strip ? 0.3 : 0.18)
 				gx.fill(wave.water)
 				const lw = Math.max(1.4, Math.min(4, h * 0.05))
 				gx.lineWidth = lw + 2.2
 				gx.strokeStyle = INK
-				gx.stroke(wave.edge)
+				for (const e of wave.edges.values()) gx.stroke(e)
 				gx.lineWidth = lw
 				gx.strokeStyle = color
-				gx.stroke(wave.edge)
+				for (const [k, e] of wave.edges) {
+					gx.setLineDash(dash(V.mark(k), lw))
+					gx.stroke(e)
+				}
+				gx.setLineDash([])
 				// where the water crosses a thread: the notes
-				const r0 = Math.max(2, Math.min(6.5, h * 0.05))
+				const r0 = Math.max(strip ? 3 : 2, Math.min(6.5, h * 0.05))
 				gx.lineWidth = 1.1
 				for (const c of crossings(ys, 0, W, threadsAt)) {
 					const glow = fx.glow(c.m * 1000 + Math.round(c.at), now, 0.35)
@@ -343,10 +387,7 @@ export default {
 					}
 					gx.fillStyle = glow > 0.3 ? INK : color
 					gx.strokeStyle = INK
-					gx.beginPath()
-					gx.arc(x, y, r0 + glow * 2, 0, 6.283)
-					gx.fill()
-					gx.stroke()
+					head(gx, V.mark(inkAt(c.at)), x, y, r0 + glow * 2)
 				}
 			},
 			dispose() {},

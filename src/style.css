@@ -460,7 +460,6 @@ body.zoomed .lil-gui.root {
 		overflow: visible;
 		max-width: calc(7 * 42px + 8px);
 	}
-	.sheetbar .voices,
 	.sheetbar .loops {
 		top: 112px;
 	}
@@ -561,54 +560,7 @@ body.zoomed .lil-gui.root {
 		height: 36px;
 	}
 }
-/* the voices, in the sheet's top corner (the top row is the rarest note): small italics on the ink, the one playing in your colour */
-.voices {
-	position: absolute;
-	left: 10px;
-	top: 62px;
-	margin: 0;
-	display: flex;
-	flex-wrap: wrap;
-	gap: 2px 14px;
-	max-width: calc(100% - 170px); /* the loop length has the other corner */
-}
-.voices[hidden] {
-	display: none;
-}
-.voices button {
-	padding: 2px 0 4px;
-	background: none;
-	border: 0;
-	cursor: pointer;
-	color: var(--paper);
-	opacity: 0.5;
-	font: italic 400 16px/1 var(--serif);
-	text-shadow:
-		0 0 6px var(--ink),
-		0 0 2px var(--ink);
-	text-decoration: underline wavy transparent 1.4px;
-	text-underline-offset: 5px;
-	transition: opacity 0.15s;
-}
-@media (hover: hover) and (pointer: fine) {
-	.voices button:hover {
-		opacity: 0.85;
-	}
-}
-.voices button[aria-pressed='true'] {
-	opacity: 1;
-	color: var(--c);
-	text-decoration-color: var(--c);
-}
-.voices button:active {
-	opacity: 1;
-}
-.voices button:focus-visible {
-	outline: 1.5px dashed var(--paper);
-	outline-offset: 3px;
-}
-
-/* loop length, in the sheet's other top corner: a drawn loop, then the bars, same italics as the voices */
+/* loop length, in the sheet's top corner: a drawn loop, then the bars, in small italics */
 .loops {
 	position: absolute;
 	right: 10px;

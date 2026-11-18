@@ -1,11 +1,12 @@
 // Bell: marbles. Tap for one bell. Press and drag up to drop a marble from higher: it lands where you
 // pressed, then bounces, ringing the same bell on every bounce, each one quicker and quieter, off the grid.
 //
-// state = { marbles } 't,y,h;…' (a string, so the engine's loop-length resize leaves it alone)
+// state = { marbles } 't,y,h,i;…' (a string, so the engine's loop-length resize leaves it alone)
 //   t  where it first lands, 0..1 of the loop    y  pitch, 0 low .. 1 high    h  drop height, 0 (a tap) .. 1
+//   i  its ink, picked under the sheet per marble; absent on parts from before inks (the seat's old voice)
 
 import { voice as jukebox } from './lib/voices.js'
-import { voiced } from './lib/voiced.js'
+import { voiced, head, dash } from './lib/voiced.js'
 import { kit } from './lib/kit.js'
 import {
 	mtof,
@@ -33,11 +34,20 @@ export const parseMarbles = (s) =>
 		.filter(Boolean)
 		.slice(0, MAX)
 		.map((m) => {
-			const [t, y, h] = m.split(',').map(Number)
-			return { t: ((t % 1) + 1) % 1 || 0, y: clamp(y || 0, 0, 1), h: clamp(h || 0, 0, 1) }
+			const [t, y, h, i] = m.split(',').map(Number)
+			return {
+				t: ((t % 1) + 1) % 1 || 0,
+				y: clamp(y || 0, 0, 1),
+				h: clamp(h || 0, 0, 1),
+				i: i >= 0 ? i | 0 : null,
+			}
 		})
 export const marblesOf = (list) =>
-	list.map((m) => [+m.t.toFixed(4), +m.y.toFixed(3), +m.h.toFixed(3)].join(',')).join(';')
+	list
+		.map((m) =>
+			[+m.t.toFixed(4), +m.y.toFixed(3), +m.h.toFixed(3), ...(m.i >= 0 ? [m.i] : [])].join(','),
+		)
+		.join(';')
 
 // every strike of one marble, in steps after its landing: { at, k bounce number, gap to the next }
 export function strikes(m, steps) {
@@ -64,11 +74,12 @@ function gen() {
 		})
 	return { marbles: marblesOf(list) }
 }
+// mostly glock, with a marimba and an fm marble so the inks show at once
 const SAMPLE = marblesOf([
-	{ t: 0, y: 0.55, h: 0.7 },
-	{ t: 0.375, y: 0.8, h: 0 },
-	{ t: 0.5, y: 0.35, h: 0.45 },
-	{ t: 0.8125, y: 0.65, h: 0.9 },
+	{ t: 0, y: 0.55, h: 0.7, i: 0 },
+	{ t: 0.375, y: 0.8, h: 0, i: 1 },
+	{ t: 0.5, y: 0.35, h: 0.45, i: 2 },
+	{ t: 0.8125, y: 0.65, h: 0.9, i: 0 },
 ])
 
 function fm({ audio: ac, out, params }, m, t, _d, vel = 0.7) {
@@ -86,11 +97,11 @@ function fm({ audio: ac, out, params }, m, t, _d, vel = 0.7) {
 
 const V = voiced(
 	[
-		['glock', jukebox('glock', -10.7)],
-		['fm', fm],
-		['marimba', jukebox('marimba', -7.2)],
-		['celesta', jukebox('celesta', -12.0)],
-		['music box', jukebox('musicbox', -12.0)],
+		['glock', jukebox('glock', -10.7), 'dot'],
+		['fm', fm, 'ring'],
+		['marimba', jukebox('marimba', -7.2), 'bar'],
+		['celesta', jukebox('celesta', -12.0), 'diamond'],
+		['music box', jukebox('musicbox', -12.0), 'tri'],
 	],
 	{
 		octave: { value: 0, min: -1, max: 1, step: 1 },
@@ -105,7 +116,7 @@ export default {
 		'<path d="M4 26h24"/><path d="M6 6v4M6 13q4 -9 8 0q3 -6 6 0q2 -3 4 0q1-2 2 0" stroke-width="1.6"/><circle class="f" cx="6" cy="11" r="2.4"/>',
 	name: 'Bell',
 	how: 'Tap for a bell; higher is a higher note. Press and drag up to drop a marble from higher: it bounces, ringing on every bounce. Tap a marble to take it away; drag it to move it. Shift-drag erases.',
-	voices: V.voices,
+	inks: V.inks,
 	params: V.params,
 	optional: ['marbles'],
 	demo: () => [Array.from({ length: 12 }, (_, k) => [0.2, 0.7 - k * 0.035]), [[0.62, 0.45]]],
@@ -118,6 +129,8 @@ export default {
 		const fx = flashes()
 		let list = parseMarbles(SAMPLE)
 		let g = null
+		let ink = 0 // the brush in your hand; local, but every marble keeps its own
+		const inkOf = (m) => (m.i ?? V.legacy(ctx)) % V.names.length
 		const midi = (m) => harmony.degree(Math.round(m.y * RANGE), 1 + val(ctx.params.octave))
 		const geo = (w, h, strip) => {
 			const iw = w * (1 - 2 * PAD)
@@ -146,7 +159,7 @@ export default {
 				const k = list.findIndex((m) => near(e, m) < 18)
 				if (k >= 0) return (g = { mode: 'grab', k, x0: e.px, y0: e.py, moved: 0 })
 				if (list.length >= MAX) list.shift()
-				list.push({ t: Math.round(x * clock.steps) / clock.steps, y: yOf(e.py), h: 0 })
+				list.push({ t: Math.round(x * clock.steps) / clock.steps, y: yOf(e.py), h: 0, i: ink })
 				g = { mode: 'drop', k: list.length - 1, y0: e.py }
 				return
 			}
@@ -181,16 +194,24 @@ export default {
 						.flatMap((v, i) => (v >= 0 ? [{ t: i / n, y: clamp(v / 7, 0, 1), h: 0 }] : []))
 						.slice(0, MAX)
 				} else list = []
+				// marbles from before inks ring in the seat's old voice; give them that ink for good
+				for (const m of list) m.i = inkOf(m)
 			},
 			clear() {
 				list = []
 			},
+			get ink() {
+				return V.names[ink]
+			},
+			set ink(v) {
+				ink = V.index(v)
+			},
 			pointer: withPointer(size, pointer),
 			step(i, time, dur) {
-				const steps = clock.steps,
-					fn = V.play(ctx)
+				const steps = clock.steps
 				list.forEach((m, j) => {
-					const t0 = m.t * steps
+					const t0 = m.t * steps,
+						fn = V.fn(inkOf(m))
 					for (const s of strikes(m, steps)) {
 						// where this strike falls in the loop, wrapped
 						const at = (((t0 + s.at - i) % steps) + steps) % steps
@@ -213,12 +234,13 @@ export default {
 				const lw = Math.max(1.2, Math.min(3, h * 0.035))
 				gx.lineCap = 'round'
 				gx.lineJoin = 'round'
-				const r0 = Math.max(2.4, Math.min(8, h * 0.06))
+				const r0 = Math.max(strip ? 3.2 : 2.4, Math.min(8, h * 0.06))
 				list.forEach((m, j) => {
 					const t0 = m.t * steps,
 						fy = Y(m.y),
 						ss = strikes(m, steps)
-					const g0 = ss[0].gap || 1
+					const g0 = ss[0].gap || 1,
+						mark = V.mark(inkOf(m))
 					// the path: a fall from its height, then shrinking hops, drawn once more a loop
 					// earlier so hops that wrap past the end come round at the start
 					for (const off of [0, -steps]) {
@@ -240,7 +262,9 @@ export default {
 							}
 							gx.strokeStyle = pass ? rgba(color, 0.8) : INK
 							gx.lineWidth = pass ? lw : lw + 2
+							gx.setLineDash(pass ? dash(mark, lw) : [])
 							gx.stroke()
+							gx.setLineDash([])
 						}
 					}
 					// strikes: a dot where each bounce rings, smaller as they go
@@ -257,10 +281,7 @@ export default {
 						}
 						gx.fillStyle = glow > 0.3 ? INK : color
 						gx.strokeStyle = INK
-						gx.beginPath()
-						gx.arc(x, fy, r + glow * 2, 0, 6.283)
-						gx.fill()
-						gx.stroke()
+						head(gx, mark, x, fy, r + glow * 2)
 					}
 					// the marble, in flight
 					if (m.h <= 0 || strip) return

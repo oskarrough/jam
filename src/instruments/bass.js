@@ -2,12 +2,13 @@
 // at the end of the loop stretches them: halftime, double time, or somewhere off the grid in between.
 // Draw on it (height is pitch) and it snaps back onto the steps.
 //
-// state = { riff, len? }
+// state = { riff, ink, len? }
 //   riff  one character per cell: '0'..'7' a scale degree, '.' a rest. The cells spread evenly over the loop.
+//   ink   one digit per cell, its ink, picked under the sheet per note. Absent before inks: the seat's old voice.
 //   len   only on hosts without ctx.setLen: the loop length in steps the riff stretches over.
 
 import { voice as jukebox } from './lib/voices.js'
-import { voiced } from './lib/voiced.js'
+import { voiced, head, dash } from './lib/voiced.js'
 import { kit } from './lib/kit.js'
 import { mtof, env, osc, rnd, val, rgba, clamp, withPointer, isStrip, fit } from './lib/util.js'
 import { wave } from './lib/demo.js'
@@ -21,14 +22,19 @@ export const parseRiff = (r) =>
 	[...(typeof r === 'string' ? r : '')].slice(0, MAX).map((c) => (c >= '0' && c <= '7' ? +c : -1))
 export const riffOf = (a) => a.map((v) => (v >= 0 && v <= 7 ? String(v) : '.')).join('')
 
-// cells to a new count, each note landing on the cell nearest its old onset
-export function regrid(a, n) {
-	const out = new Array(n).fill(-1)
+// cells to a new count, each note landing on the cell nearest its old onset; inks (ks) ride along
+export function regrid(a, n, ks = []) {
+	const out = new Array(n).fill(-1),
+		ink = new Array(n).fill(0)
 	a.forEach((v, c) => {
 		if (v < 0) return
 		const j = Math.round((c * n) / a.length)
-		if (j < n && out[j] < 0) out[j] = v
+		if (j < n && out[j] < 0) {
+			out[j] = v
+			ink[j] = ks[c] || 0
+		}
 	})
+	out.ink = ink
 	return out
 }
 
@@ -59,11 +65,11 @@ function saw({ audio: ac, out, params }, m, t, dur) {
 
 const V = voiced(
 	[
-		['synbass', jukebox('synbass', -5.4)],
-		['saw', saw],
-		['808', jukebox('808', -9.9)],
-		['log drum', jukebox('logdrum', -10.5)],
-		['upright', jukebox('upright', -4.4)],
+		['synbass', jukebox('synbass', -5.4), 'dot'],
+		['saw', saw, 'tri'],
+		['808', jukebox('808', -9.9), 'ring'],
+		['log drum', jukebox('logdrum', -10.5), 'bar'],
+		['upright', jukebox('upright', -4.4), 'tall'],
 	],
 	{
 		octave: { value: 0, min: -1, max: 1, step: 1 },
@@ -76,6 +82,9 @@ const SAMPLE = [
 	1, -1, -1, 4, -1, 2, -1, -1, 2, -1, -1, 7, -1, 2, -1, -1, 2, -1, -1, 5, -1, 3, -1, -1, 3, -1, -1,
 	3, -1, 3, -1, 4, -1, 3, -1, 2, -1,
 ]
+// synbass, with the turnaround in the last bar on 808
+const SAMPLE_INK = SAMPLE.map((_, c) => (c >= 56 ? 2 : 0)).join('')
+const inksOf = (s, n) => Array.from({ length: n }, (_, c) => +s?.[c] || 0)
 
 export default {
 	id: 'bass',
@@ -83,7 +92,7 @@ export default {
 		'<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/><circle class="f" cx="29" cy="19" r="2.6"/>',
 	name: 'Bass',
 	how: 'An elastic riff: draw notes, higher is higher. Pull the knot at the end to stretch the whole riff longer or squeeze it shorter. Tap a note to lift it off; Shift-drag erases.',
-	voices: V.voices,
+	inks: V.inks,
 	params: V.params,
 	optional: ['len'],
 	demo: (shape) =>
@@ -100,13 +109,21 @@ export default {
 					],
 				],
 	generate: (steps) => gen(steps),
-	sample: (steps) => ({ riff: riffOf(fit(SAMPLE, steps, -1)) }),
+	sample: (steps) => ({
+		riff: riffOf(fit(SAMPLE, steps, -1)),
+		ink: fit([...SAMPLE_INK], steps, '0').join(''),
+	}),
 	create(ctx) {
 		const { clock } = ctx
 		const harmony = kit(ctx.audio)
-		const play = V.play
 		const size = [1, 1]
 		let cells = parseRiff(riffOf(fit(SAMPLE, clock.steps, -1)))
+		let ks = inksOf(fit([...SAMPLE_INK], clock.steps, '0'), cells.length) // each cell's ink
+		let ink = 0 // the brush in your hand; local, but every note keeps its own
+		const put = (c, v) => {
+			cells[c] = v
+			if (v >= 0) ks[c] = ink
+		}
 		let len = null // fallback loop length when the host can't set the seat's own
 		let g = null // gesture in progress
 		const own = typeof ctx.setLen === 'function'
@@ -126,7 +143,7 @@ export default {
 					if (cells[c] < 0) continue
 					const t = k * l + (c * l) / n
 					if (t >= steps) break
-					yield { t, c, v: cells[c], k }
+					yield { t, c, v: cells[c], k, i: ks[c] }
 				}
 		}
 		// steps the sheet spans: the loop, or while the knot is held, room to pull it either way
@@ -155,7 +172,10 @@ export default {
 			}
 			const l = L()
 			// drawing snaps the riff back to one cell per step
-			if (e.type === 'down' && cells.length !== l) cells = regrid(cells, l)
+			if (e.type === 'down' && cells.length !== l) {
+				cells = regrid(cells, l, ks)
+				ks = cells.ink
+			}
 			const n = cells.length
 			const s = Math.floor((x * span()) % l)
 			const c = clamp(s, 0, n - 1)
@@ -164,7 +184,7 @@ export default {
 			if (e.type === 'down') {
 				if (!erase && cells[c] === v) g = { mode: 'note', c, v }
 				else {
-					cells[c] = erase ? -1 : v
+					put(c, erase ? -1 : v)
 					g = { mode: 'draw', c, v, erase }
 				}
 				return
@@ -184,16 +204,14 @@ export default {
 			if (d < -n / 2) d += n
 			const k = Math.abs(d)
 			for (let j = 1; j <= k; j++)
-				cells[(g.c + Math.sign(d) * j + n) % n] = g.erase
-					? -1
-					: Math.round(g.v + ((v - g.v) * j) / k)
-			if (!k) cells[c] = g.erase ? -1 : v
+				put((g.c + Math.sign(d) * j + n) % n, g.erase ? -1 : Math.round(g.v + ((v - g.v) * j) / k))
+			if (!k) put(c, g.erase ? -1 : v)
 			g = { ...g, c, v }
 		}
 
 		return {
 			get state() {
-				const s = { riff: riffOf(cells) }
+				const s = { riff: riffOf(cells), ink: ks.join('') }
 				if (len) s.len = len
 				return s
 			},
@@ -206,17 +224,28 @@ export default {
 						.map((v) => (Number.isInteger(v) && v >= 0 && v <= 7 ? v : -1))
 				else cells = new Array(clock.steps).fill(-1)
 				if (!cells.length) cells = [-1]
+				// notes from before inks ring in the seat's old voice; they keep that ink for good
+				ks =
+					typeof s?.ink === 'string'
+						? inksOf(s.ink, cells.length).map((k) => k % V.names.length)
+						: new Array(cells.length).fill(V.legacy(ctx))
 				len = !own && Number.isInteger(s?.len) ? clamp(s.len, 1, MAX) : null
 			},
 			clear() {
 				cells = new Array(L()).fill(-1)
+				ks = new Array(cells.length).fill(0)
+			},
+			get ink() {
+				return V.names[ink]
+			},
+			set ink(v) {
+				ink = V.index(v)
 			},
 			pointer: withPointer(size, pointer),
 			step(i, time, dur) {
 				const o = val(ctx.params.octave) - 2, // the key's A3 is 57; bass sits two octaves down
 					l = L(),
-					stretch = l / cells.length,
-					fn = play(ctx)
+					stretch = l / cells.length
 				const at = own ? i % l : i
 				// only this step's onsets: copy floor(at / l), cells whose onset falls in [at, at + 1)
 				const k = Math.floor(at / l),
@@ -226,7 +255,7 @@ export default {
 					const t = k * l + (c * l) / n
 					if (t >= at + 1 - 1e-9) break
 					if (cells[c] < 0) continue
-					fn(ctx, harmony.degree(cells[c], o), time + (t - at) * dur, dur * Math.max(0.5, stretch))
+					V.fn(ks[c])(ctx, harmony.degree(cells[c], o), time + (t - at) * dur, dur * Math.max(0.5, stretch))
 				}
 			},
 			frame(gx, w, h, clock, shape) {
@@ -273,21 +302,24 @@ export default {
 						j ? gx.lineTo(x, y) : gx.moveTo(x, y)
 					}
 				}
-				for (const pass of [0, 1]) {
+				// the ink pass whole, then the colour pass ink by ink, each leg in its first note's dash
+				for (const pass of [-1, ...new Set(notes.map((x) => x.i))]) {
 					gx.beginPath()
 					for (let j = 0; j + 1 < notes.length; j++) {
 						const a = notes[j],
 							b = notes[j + 1]
 						// neighbours on the riff only: a rest between them breaks the line
 						const gap = b.t - a.t
-						if (gap > (l / n) * 1.01 + 1e-9) continue
+						if (gap > (l / n) * 1.01 + 1e-9 || (pass >= 0 && a.i !== pass)) continue
 						curve(a, b)
 					}
-					gx.strokeStyle = pass ? color : INK
-					gx.lineWidth = pass ? lw : lw + 2.2
+					gx.strokeStyle = pass >= 0 ? color : INK
+					gx.lineWidth = pass >= 0 ? lw : lw + 2.2
+					gx.setLineDash(pass >= 0 ? dash(V.mark(pass), lw) : [])
 					gx.stroke()
 				}
-				const r = Math.max(2.2, Math.min(9, h * 0.075, cw * 0.6 + 3))
+				gx.setLineDash([])
+				const r = Math.max(strip ? 3.2 : 2.2, Math.min(9, h * 0.075, cw * 0.6 + 3))
 				gx.lineWidth = 1.1
 				for (const x of notes) {
 					const d = pos - x.t,
@@ -301,10 +333,7 @@ export default {
 					}
 					gx.strokeStyle = INK
 					gx.fillStyle = f > 0.3 ? INK : faded ? rgba(color, 0.55) : color
-					gx.beginPath()
-					gx.arc(X(x.t), Y(x.v), r + f * 2, 0, 6.283)
-					gx.fill()
-					gx.stroke()
+					head(gx, V.mark(x.i), X(x.t), Y(x.v), r + f * 2)
 				}
 				if (strip) return
 				// the elastic: a band from the start to the knot, thinner and straighter the more it's stretched

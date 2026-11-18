@@ -16,9 +16,6 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	row.className = 'glyphs'
 	const caption = document.createElement('p')
 	caption.className = 'caption'
-	const voices = document.createElement('p')
-	voices.className = 'voices'
-	voices.setAttribute('aria-label', 'Voices')
 	// the seat's loop length in bars, in the sheet's other top corner: a little drawn loop, then 1 2 4 8
 	const loops = document.createElement('p')
 	loops.className = 'loops'
@@ -45,7 +42,7 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	const inks = document.createElement('p')
 	inks.className = 'inks'
 	inks.setAttribute('aria-label', 'Inks')
-	el.append(row, caption, voices, loops, inks)
+	el.append(row, caption, loops, inks)
 	function paintLoops() {
 		const L = seat()
 		if (!L) return
@@ -102,13 +99,6 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		chosen?.(id)
 		return true
 	}
-	function voice(name) {
-		const L = seat()
-		if (!L || L.params.voice === name) return
-		L.params.voice = name
-		engine.push(L, { now: true })
-		paintVoices()
-	}
 	// then, after a gap, its modes (mod.modes): word chips for what a drag draws, tools rather than places
 	let inksShown = null
 	function paintInks() {
@@ -160,27 +150,6 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		for (const b of inks.querySelectorAll('[data-mode]'))
 			b.setAttribute('aria-pressed', b.dataset.mode === mode)
 	}
-	let shown = null
-	function paintVoices() {
-		paintInks()
-		const L = seat(),
-			names = L?.module.voices || []
-		const key = names.join('|')
-		if (key !== shown) {
-			shown = key
-			voices.replaceChildren(
-				...names.map((n) => {
-					const b = document.createElement('button')
-					b.textContent = n
-					b.onclick = () => voice(n)
-					return b
-				}),
-			)
-		}
-		voices.hidden = !names.length
-		for (const b of voices.children)
-			b.setAttribute('aria-pressed', b.textContent === L?.params.voice)
-	}
 	const ids = [...registry.keys()].filter((id) => !registry.get(id).hidden)
 	function cycle(d) {
 		const L = seat()
@@ -195,7 +164,7 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		el.style.setProperty('--c', L.color)
 		for (const b of buttons) b.setAttribute('aria-pressed', b.dataset.id === L.module.id)
 		showCurrent()
-		paintVoices()
+		paintInks()
 		paintLoops()
 		const cur = buttons.find((b) => b.dataset.id === L.module.id)
 		// arrows switch the instrument (main.js), so a focused glyph follows the choice

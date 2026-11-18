@@ -20,7 +20,7 @@ And the instruments are **creative**, in the sense that each one is a different 
 - **seat**: your place at the machine, and who sits there (you, a friend, a robot). Code says seat too.
 - **ring**: what's drawn on the dial for a seat. Only a picture.
 - **instrument**: what you play, a gesture plus its sound. The thing you pick from the glyphs.
-- **voice**: the sound alone. Bass, tide and bell each have a few voices to pick from.
+- **voice**: the sound alone. Bass, tide and bell each have a few, picked per stroke as inks.
 - **erase** rubs out under the pen; **wipe** clears your whole ring.
 - **loud** is one note's level; **level** is an instrument's volume. **range** is pitch spread, **decay** is tail length.
 - **controls**: the `d` panel.
