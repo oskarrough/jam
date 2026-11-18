@@ -6,7 +6,7 @@ Try it on https://jam.0sk.ar
 
 Everyone sits at one dial. A seat is a ring, a ring is an instrument. You draw and the drawing plays. The hand sweeps round them all on one shared clock. Robots are off unless you want help.
 
-It is meant to be **malleable**. The machine opens up: tempo, meter, key and chords, which instrument sits in which ring and every one of its knobs. All of it changes live, mid-jam, for everyone. Controls aren't a developer backstage; they're part of the instrument.
+It is meant to be **malleable**. Press `d` and the machine opens up: tempo, meter, key and chords, which instrument sits in which ring and every one of its knobs. All of it changes live, mid-jam, for everyone. Controls aren't a developer backstage; they're part of the instrument.
 
 And the instruments are **creative**, in the sense that each one is a different idea of what drawing a sound could mean. There are 15 across four groups (beat, low, chords, tune), with more to come.
 
