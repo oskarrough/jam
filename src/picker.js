@@ -140,18 +140,11 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		paintVoices()
 		paintLoops()
 		const cur = buttons.find((b) => b.dataset.id === L.module.id)
+		// arrows switch the instrument (main.js), so a focused glyph follows the choice
+		if (cur && buttons.includes(document.activeElement)) cur.focus()
 		if (cur && row.scrollWidth > row.clientWidth)
 			row.scrollLeft = cur.offsetLeft - row.clientWidth / 2 + cur.offsetWidth / 2
 	}
 
-	el.addEventListener('keydown', (e) => {
-		const i = buttons.indexOf(document.activeElement)
-		const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key]
-		if (i >= 0 && step) {
-			e.preventDefault()
-			e.stopPropagation()
-			buttons[(i + step + buttons.length) % buttons.length].focus()
-		}
-	})
 	return { paint, cycle, glyph, choose }
 }
