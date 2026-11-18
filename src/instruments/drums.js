@@ -125,12 +125,12 @@ export default {
 	glyph:
 		'<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
-	how: 'Kick, snare and hat in three rows. Tap a step for a hit, drag it up or down for how loud it hits, sideways to paint: higher in the row hits louder. Shift-drag erases.',
+	how: 'Kick, snare and hat in three rows. Tap a step for a hit: higher in the row hits louder. Drag up or down to adjust, sideways to paint. Shift-drag erases.',
 	demo: () => [
-		tap(0.07, 0.84),
-		tap(0.32, 0.84),
-		tap(0.57, 0.84),
-		line(0.32, 0.84, 0.32, 0.72, 6),
+		tap(0.07, 0.76),
+		tap(0.32, 0.9),
+		tap(0.57, 0.82),
+		line(0.32, 0.9, 0.32, 0.8, 6),
 		line(0.07, 0.17, 0.6, 0.17, 16),
 	],
 	optional: ['vel'],
@@ -188,8 +188,9 @@ export default {
 						g = { s, row, mode: 'erase' }
 						return
 					}
+					// a new hit lands at the height you tapped; an old one keeps its level
 					const had = has(s, row)
-					if (!had) put(s, row, true, LV)
+					if (!had) put(s, row, true, lvAt(e.y, row))
 					g = { s, row, had, lv: lvOf(s, row), x0: e.x, y0: e.y, mode: null }
 				} else if (e.type === 'move' && g) {
 					if (!g.mode) {
