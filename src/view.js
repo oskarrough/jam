@@ -448,10 +448,11 @@ export function createView(
 	})
 	// The length bracket on the sheet's right edge: drag it left to halve the loop, right to double it, 1 to 8 bars.
 	// While it's held the sheet shows what you'd get (cut, or repeated to fill); it lands when you let go.
-	// Instruments with a length gesture of their own (mod.ownLength) go without it.
+	// Instruments with a length gesture of their own (mod.ownLength) go without it; one whose pattern has its own
+	// length in bars (instance.bars, like steps) gets the bracket on that instead of the seat's loop.
 	const BARS = [1, 2, 4, 8]
 	let lenDrag = null
-	const barsOf = (L) => engine.steps(L) / (engine.loop().beatsPerBar * 4)
+	const barsOf = (L) => L.instance?.bars ?? engine.steps(L) / (engine.loop().beatsPerBar * 4)
 	const snapBars = (b) => BARS.reduce((a, c) => (Math.abs(Math.log2(c / b)) < Math.abs(Math.log2(a / b)) ? c : a))
 	const hasBracket = () =>
 		focus.on && sheet && onBars && canDraw(focus.seat) && !seats[focus.seat]?.module.ownLength
@@ -459,6 +460,7 @@ export function createView(
 		hasBracket() &&
 		y >= sheet.y &&
 		y <= sheet.y + sheet.h &&
+		Math.abs(y - (sheet.y + sheet.h / 2)) < sheet.h * 0.2 && // the grip's height, so the edge's corners still draw
 		Math.abs(x - (sheet.x + sheet.w)) < (matchMedia('(pointer: coarse)').matches ? 22 : 14)
 	const bracketStep = () => Math.max(40, Math.min(110, sheet.w * 0.16)) // px of drag per halving or doubling
 	function bracketMove(x) {
@@ -1169,12 +1171,12 @@ export function createView(
 			g.fillRect(x, y + h + 1, w, 2)
 		}
 		if (L && L.w === Math.round(w)) {
-			const steps = engine.steps(L),
+			const steps = L.instance?.bars ? L.instance.bars * 16 : engine.steps(L),
 				fg = dark ? (a) => rgba(PALE, a) : ink,
 				axis = L.module.playhead ?? 'x'
 			// the bracket held: r is the new length over the old, shown on the sheet when time runs across it
 			const held = lenDrag?.seat === sheetSeat ? lenDrag : null,
-				r = held && axis === 'x' ? held.bars / barsOf(L) : 1
+				r = held && (axis === 'x' || L.instance?.bars) ? held.bars / barsOf(L) : 1
 			// beat lines across the way time runs
 			const shown = steps * Math.max(1, r)
 			for (let s = 0; s < shown; s += 4) {

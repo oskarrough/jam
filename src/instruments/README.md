@@ -54,13 +54,15 @@ The instance does five things:
 | draw      | `frame(g, w, h, clock, shape)`    | Draw into a cleared w×h canvas (CSS px). `shape` is `'ring'` (a long thin strip the dial wraps round your ring, so x is loop phase clockwise from twelve) or `'sheet'` (zoomed in, big and flat). The ring is a summary; the sheet is where you play. |
 | tidy      | `dispose()`                       | Let go of timers and long-lived nodes.                                                                                                                                                                                                                |
 
+Optional: an instance whose pattern has its own length in bars keeps `bars` (get/set, 1, 2, 4 or 8). Then the bracket on the sheet's right edge sets that instead of the seat's loop (steps: longer copies the bars into the new ones).
+
 If someone sends a state your instrument doesn't understand, the registry ignores it and keeps your current one, so a mismatch can't break a seat.
 
 ## Controls
 
 The controls should vanish into the instrument. A knob gets built in only when it matters enough to play with, and then in one of two places:
 
-1. The drawing is the control. Height, length, speed and shape of the stroke carry the parameter: bass's knot stretches the riff, gears' outward drag adds pulses, the host's bracket on every sheet's right edge sets the loop to 1, 2, 4 or 8 bars, steps' own bracket the pattern, and dragging steps' offbeat ticks swings them. Prefer this; if a knob can become part of the gesture, make it so.
+1. The drawing is the control. Height, length, speed and shape of the stroke carry the parameter: bass's knot stretches the riff, gears' outward drag adds pulses, the host's bracket on every sheet's right edge sets the loop to 1, 2, 4 or 8 bars, on steps it doubles or halves the pattern itself, and dragging steps' offbeat ticks swings them. Prefer this; if a knob can become part of the gesture, make it so.
 2. The tool strip. Anything that changes what your next stroke does (inks, modes like steps' pitch/loud/chance) is a round chip in a strip inside the sheet's bottom edge, in the brush style: part of the instrument, like knobs on a device. The drawing ends above it, and taps on it never reach the drawing. Nowhere else.
 
 Everything else stays off the sheet. `d` always holds every param, as the whole machine opened up, so it's never where a control gets moved to; the only question is whether to build a knob in. No clickable words on the sheet, nothing outside its frame. Legends and readouts that take no taps (drums' row names, the chord) are fine.

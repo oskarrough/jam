@@ -242,8 +242,13 @@ view = createView(document.getElementById('c'), engine, {
 	onMix: (i, patch) => !replay && engine.setMix(seats[i], patch),
 	onPointer: pointerTo,
 	onBars(i, n) {
+		const L = seats[i]
 		undo.remember(i)
-		engine.setBars(seats[i], n)
+		// a pattern with its own length in bars (steps) grows itself; the rest change the seat's loop
+		if (L.instance?.bars) {
+			L.instance.bars = n
+			engine.push(L, { now: true })
+		} else engine.setBars(L, n)
 	},
 })
 const ghost = createGhost({ engine, view, me })

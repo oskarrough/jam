@@ -1,9 +1,9 @@
 // 02 Steps: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
 // Each note has a tail, piano-roll style: pull its knob sideways to hold the note for more steps.
-// Chips in the sheet's tool strip pick what a drag draws: pitch, loud or chance; drag the bracket to shorten the pattern (polymeter);
+// Chips in the sheet's tool strip pick what a drag draws: pitch, loud or chance; drag the bracket on the right edge to double or halve the pattern (1 to 8 bars);
 // drag the offbeat ticks under the grid sideways to swing them (params.swing, in steps).
 //
-// state: { v: 2, len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9]
+// state: { v: 2, len, s: [step x 16 a bar, 1 to 8 bars] }; len < cells only in older parts (they kept a shorter loop), step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9]
 // Mono: a note that sounds cuts the tail it lands on. Parts without v (length 0..9) are migrated on load.
 // Chance rolls are seeded by the absolute step, so every peer hears the same notes.
 import { kit } from './lib/kit.js'
@@ -24,7 +24,10 @@ const inkOf = (st) => (st && st[4]) | 0
 const rhodes = jukebox('rhodes', -8),
 	organ = jukebox('organ', -7)
 
-const N = 16
+const BAR = 16 // cells a bar; a pattern is 1, 2, 4 or 8 bars of them
+const BARS = [1, 2, 4, 8]
+// a pattern's cell count from a saved part's: whole bars, 1 to 8 (older parts were all one bar)
+const cellsOf = (n) => BAR * BARS.reduce((a, b) => (b * BAR <= n ? b : a), 1)
 const PMAX = 14
 const PARAMS = ['pitch', 'loud', 'chance']
 const MAXOF = { pitch: PMAX, loud: 9, chance: 9 }
@@ -38,8 +41,8 @@ const roll = (abs, k) =>
 	((Math.imul((abs * 2654435761) ^ (k * 40503), 2246822519) >>> 0) % 10007) / 10007
 
 function gen() {
-	const len = [16, 16, 16, 12, 8, 6][Math.floor(Math.random() * 6)]
-	const s = Array(N).fill(0)
+	const len = BAR
+	const s = Array(BAR).fill(0)
 	let p = 5 + Math.floor(Math.random() * 5)
 	for (let k = 0; k < len; k++) {
 		const strong = k % 4 === 0
@@ -69,13 +72,12 @@ function blob(g, x, y, rx, ry, seed) {
 
 export default {
 	id: 'steps',
-	ownLength: true, // its own bracket shortens the pattern instead
 	// columns are pattern steps, not loop phase, so the host playhead would lie; the playing step glows
 	playhead: false,
 	glyph:
 		'<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
 	name: 'Steps',
-	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one in the strip below); drag the bracket to shorten the pattern; drag the little ticks under the grid sideways to swing.',
+	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one in the strip below); drag the bracket on the right edge to double or halve the pattern; drag the little ticks under the grid sideways to swing.',
 	optional: ['v'],
 	inks: INKS,
 	modes: PARAMS,
@@ -99,7 +101,8 @@ export default {
 		const engine = kit(audio)
 		const size = [1, 1]
 		let shape = 'ring'
-		const state = { v: 2, len: N, s: Array(N).fill(0) }
+		const state = { v: 2, len: BAR, s: Array(BAR).fill(0) }
+		let N = BAR // cells in the pattern, state.s.length; len under it only in older parts (polymeter, no longer drawn)
 		const fx = flashes()
 		const ui = { param: 'pitch', pull: -1, swinging: false } // what a drag draws, and the tail being pulled; local to this player
 		let press = null
@@ -270,12 +273,7 @@ export default {
 			const cw = e.w / N
 			if (e.type === 'down') {
 				const knob = e.alt || e.y > BAND ? null : knobAt(e.px, e.py, e.w, e.h)
-				const reach = e.y > BAND ? 1 : 0.6
-				if (knob == null && Math.abs(e.x * N - state.len) < reach) {
-					press = { kind: 'len' }
-					return
-				}
-				// the rest of the bottom edge holds the offbeat ticks: drag them sideways to swing
+				// the bottom edge holds the offbeat ticks: drag them sideways to swing
 				if (e.y > BAND) {
 					press = { kind: 'swing', x0: e.px, s0: params.swing }
 					ui.swinging = true
@@ -293,10 +291,6 @@ export default {
 					L0: knob == null ? 0 : lenOf(state.s[knob]),
 				}
 			} else if (e.type === 'move' && press) {
-				if (press.kind === 'len') {
-					state.len = clamp(Math.round(e.x * N), 1, N)
-					return
-				}
 				if (press.kind === 'swing') {
 					params.swing = clamp(Math.round((press.s0 + (e.px - press.x0) / cw) * 100) / 100, 0, 0.5)
 					return
@@ -549,7 +543,7 @@ export default {
 				}
 			}
 			// knobs on top, so they read as the thing to grab
-			const kr = Math.max(7, Math.min(cw * 0.2, 10))
+			const kr = clamp(cw * 0.22, 4, 10)
 			for (let k = 0; k < state.len; k++) {
 				const st = state.s[k]
 				if (!st) continue
@@ -575,22 +569,6 @@ export default {
 					g.fillText(`${L}`, x, y - kh / 2 - 4)
 				}
 			}
-			const bx = state.len * cw
-			g.strokeStyle = ink
-			g.lineWidth = 2
-			g.beginPath()
-			g.moveTo(bx - 6, 3)
-			g.lineTo(bx, 3)
-			g.lineTo(bx, top - 3)
-			g.lineTo(bx - 6, top - 3)
-			g.stroke()
-			// the pattern's length sits under its bracket
-			g.font = `600 ${Math.max(11, Math.min(15, h * 0.045))}px ${SANS}`
-			g.textBaseline = 'middle'
-			g.textAlign = 'center'
-			const lw = g.measureText(`${state.len}`).width
-			g.fillStyle = tint(ink, 0.6)
-			if (!ui.swinging) g.fillText(`${state.len}`, clamp(bx, lw / 2 + 4, w - lw / 2 - 4), top + (h - top) * 0.62)
 		}
 
 		// ring: a note is a dot, a held note an arc round the dial as long as it sounds
@@ -685,7 +663,9 @@ export default {
 			},
 			setState(s) {
 				const old = !(s.v >= 2)
-				state.len = clamp(s.len | 0 || N, 1, N)
+				N = cellsOf(s.s?.length | 0)
+				// a whole-bar len is the whole pattern (the host may have resized it); shorter is an old polymeter part
+				state.len = s.len % BAR ? clamp(s.len | 0, 1, N) : N
 				state.s = Array.from({ length: N }, (_, k) => {
 					if (!Array.isArray(s.s[k])) return 0
 					const st = s.s[k].slice(0, 5).map((v) => v | 0)
@@ -696,6 +676,17 @@ export default {
 			},
 			clear() {
 				state.s = Array(N).fill(0)
+				state.len = N
+			},
+			// the host's bracket: longer copies the bars you have into the new ones, shorter cuts from the end
+			get bars() {
+				return N / BAR
+			},
+			set bars(b) {
+				if (!BARS.includes(b) || b * BAR === N) return
+				const from = state.len
+				N = b * BAR
+				state.s = Array.from({ length: N }, (_, k) => structuredClone(state.s[k % from]) || 0)
 				state.len = N
 			},
 			randomize() {
