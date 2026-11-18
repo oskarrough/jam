@@ -135,6 +135,19 @@ try {
 		k && mix.level > 0.9 && mix.tone < 1 && mixed,
 		`ben hears ana's mix (${JSON.stringify(mix)})`,
 	)
+	// ana taps her dot without moving it: her seat goes quiet for ben too
+	const own = await a.evaluate(() => window.jam.view.mixer()?.dot)
+	if (own) await a.mouse.click(own.x, own.y)
+	const muted = await b
+		.waitForFunction((seat) => window.jam.engine.seats[seat].mix.mute, seat, { timeout: 8000 })
+		.then(
+			() => true,
+			() => false,
+		)
+	check(
+		own && muted && (await a.evaluate((seat) => window.jam.engine.seats[seat].mix.mute, seat)),
+		"ben hears ana's mute",
+	)
 	// a jam of your own starts blank: cat gets an instrument, the rest are bare; dan sits at a bare ring and picks
 	const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 860 } })
 	const join = async (name) => {

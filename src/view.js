@@ -97,11 +97,9 @@ export function createView(
 		hover = null,
 		drag = null
 	// handing your part to a robot: press your own badge, drag the thread onto theirs
-	let handing = null // a press on a badge: {from, id, x, y, x0, y0, moved, own, long, timer}
-	let lastTap = null
+	let handing = null // a press on a badge: {from, id, x, y, x0, y0, moved, own}
 	const TAP_MS = 180
-	const LONG_MS = 550,
-		DOUBLE_MS = 300
+	const LONG_MS = 550
 	const seatUnder = (px, py) =>
 		seats.findIndex((_, i) => {
 			const [x, y] = seatPos(i)
@@ -348,9 +346,8 @@ export function createView(
 	const mixer = {
 		on: false,
 		p: 0, // how far open, eased
-		drag: null, // your dot in hand: {i, id, x0, y0, from: {level, tone}, moved}
-		tap: 0,
-		back: null, // where your last drag started; a double tap goes there
+		drag: null, // a press in the square: {i, id, x0, y0, from: {level, tone}, moved, on, long, timer}
+		dots: [], // where each dot was last drawn, after stepping aside: {i, x, y, r}
 		pulse: seats.map(() => 0),
 	}
 	const mixField = () => {
@@ -365,7 +362,19 @@ export function createView(
 	}
 	const setMixer = (on) => {
 		mixer.on = on
-		if (!on) mixer.drag = null
+		if (!on && mixer.drag) {
+			clearTimeout(mixer.drag.timer)
+			mixer.drag = null
+		}
+	}
+	const dotUnder = (x, y) => {
+		let best = -1,
+			bd = Infinity
+		for (const d of mixer.dots) {
+			const dd = Math.hypot(x - d.x, y - d.y)
+			if (dd < d.r + 10 && dd < bd) (best = d.i), (bd = dd)
+		}
+		return best
 	}
 
 	// screen -> seat hit: {seat, x, y} in the seat's 0..1 space
@@ -428,14 +437,24 @@ export function createView(
 			if (!m || !inField(F, e.clientX, e.clientY, 12)) return setMixer(false)
 			canvas.setPointerCapture(e.pointerId)
 			const { level, tone } = seats[m.i].mix
-			mixer.drag = {
+			// moving drags your dot from wherever you pressed; a still tap on a dot mutes that seat for
+			// everyone, holding one solos it in your ears
+			const md = (mixer.drag = {
 				i: m.i,
 				id: e.pointerId,
 				x0: e.clientX,
 				y0: e.clientY,
 				from: { level, tone },
 				moved: false,
-			}
+				on: dotUnder(e.clientX, e.clientY),
+				long: false,
+			})
+			if (md.on >= 0)
+				md.timer = setTimeout(() => {
+					if (mixer.drag !== md || md.moved) return
+					md.long = true
+					onSolo?.(md.on)
+				}, LONG_MS)
 			return
 		}
 		if (inSheet(e.clientX, e.clientY) && canDraw(focus.seat)) {
@@ -467,8 +486,7 @@ export function createView(
 			const [x, y] = seatPos(i)
 			if (Math.hypot(e.clientX - x, e.clientY - y) < seatR() + 6) {
 				press(seatJelly[i], Math.atan2(e.clientY - y, e.clientX - x))
-				// a badge waits for release: a tap sits or zooms, a double tap solos, a long press mutes,
-				// and dragging your own hands your part to a robot
+				// a badge waits for release: a tap sits or zooms, and dragging your own hands your part to a robot
 				canvas.setPointerCapture(e.pointerId)
 				const h = (handing = {
 					from: i,
@@ -480,13 +498,6 @@ export function createView(
 					moved: false,
 					own: !!onHand && occupant(i).me,
 				})
-				h.timer = setTimeout(() => {
-					if (handing === h && !h.moved) {
-						h.long = true
-						release(seatJelly[i])
-						onMute?.(i)
-					}
-				}, LONG_MS)
 				return
 			}
 		}
@@ -539,7 +550,7 @@ export function createView(
 			// your dot follows the finger from wherever you pressed in the square
 			const dx = e.clientX - md.x0,
 				dy = e.clientY - md.y0
-			if (Math.hypot(dx, dy) > 4) md.moved = true
+			if (!md.long && Math.hypot(dx, dy) > 4) md.moved = true
 			if (!md.moved) return
 			canvas.style.cursor = 'grabbing'
 			const F = mixField(),
@@ -589,41 +600,15 @@ export function createView(
 		clearTimeout(d.timer)
 		onPointer(d.seat, { type: 'down', ...sheetXY(x, y), id: d.id, alt: d.alt, button: d.button })
 	}
-	// a tap on a badge acts at once. A second tap on the same badge soon after makes it a double tap: solo.
-	// Whatever the first tap did, the second puts back: zoom in or out again, or return to your old seat.
-	function tapBadge(from) {
-		if (lastTap && lastTap.i === from && performance.now() - lastTap.t < DOUBLE_MS) {
-			const { own, prev } = lastTap
-			lastTap = null
-			if (own) onSit(from)
-			else if (prev >= 0 && occupant(from).me) onSit(prev)
-			return onSolo?.(from)
-		}
-		lastTap = {
-			i: from,
-			t: performance.now(),
-			own: occupant(from).me,
-			prev: seats.findIndex((_, j) => occupant(j).me),
-		}
-		onSit(from)
-	}
+	// a tap on a badge sits there, or zooms if it's yours
+	const tapBadge = (from) => onSit(from)
 	const up = (e) => {
 		if (mixer.drag && e.pointerId === mixer.drag.id) {
-			const { i, moved, from } = mixer.drag
+			const { moved, on, long, timer } = mixer.drag
 			mixer.drag = null
-			if (e.type === 'pointercancel') return
-			if (moved) {
-				mixer.back = from
-				mixer.tap = 0
-				return
-			}
-			// a double tap goes back to where your last drag started (and again, back to here)
-			if (performance.now() - mixer.tap < DOUBLE_MS) {
-				mixer.tap = 0
-				const { level, tone } = seats[i].mix
-				onMix(i, mixer.back || { level: 0.9, tone: 1 })
-				mixer.back = { level, tone }
-			} else mixer.tap = performance.now()
+			clearTimeout(timer)
+			if (e.type === 'pointercancel' || moved || long || on < 0) return
+			onMute?.(on)
 			return
 		}
 		if (drag?.pending && e.pointerId === drag.id) {
@@ -641,11 +626,10 @@ export function createView(
 			return setFocus(-1)
 		}
 		if (handing && e.pointerId === handing.id) {
-			const { from, moved, own, long, timer } = handing
+			const { from, moved, own } = handing
 			handing = null
-			clearTimeout(timer)
 			release(seatJelly[from])
-			if (e.type === 'pointercancel' || long) return
+			if (e.type === 'pointercancel') return
 			if (!moved || !own) {
 				tapBadge(from)
 				return
@@ -1741,7 +1725,7 @@ export function createView(
 				g.stroke()
 			}
 			// the dots: yours stays where it is, others that sit on the same spot step aside so all show
-			const rd = Math.max(6, F.s * 0.03)
+			const rd = Math.max(9, F.s * 0.032)
 			const dots = []
 			seats.forEach((L, i) => {
 				if (!L.module || L.module.hidden) return
@@ -1765,6 +1749,7 @@ export function createView(
 						a.y += Math.sin(ang) * push
 					}
 			dots.sort((a, b) => (a.i === me) - (b.i === me))
+			mixer.dots = dots.map((d) => ({ i: d.i, x: d.x, y: d.y, r: d.i === me ? rd * 1.35 : rd }))
 			for (const d of dots) {
 				const L = seats[d.i],
 					own = d.i === me,
@@ -1785,6 +1770,14 @@ export function createView(
 				g.strokeStyle = L.mix.mute ? L.color : INK
 				g.lineWidth = own ? 1.6 : L.mix.mute ? 1.5 : 0.8
 				g.stroke()
+				// soloed in your ears: a second ring round it
+				if (engine.solo === d.i) {
+					g.beginPath()
+					g.arc(d.x, d.y, r + 4, 0, TAU)
+					g.strokeStyle = INK
+					g.lineWidth = 1
+					g.stroke()
+				}
 				// names while you drag, so you can see you're about to bury the bass
 				if ((dragging && !own) || (own && mixer.p > 0.5 && !dragging)) {
 					g.font = serif(Math.max(11, F.s * 0.045), own ? 600 : 400)
@@ -2106,6 +2099,8 @@ export function createView(
 				open: mixer.on,
 				field: mixer.on ? { x: F.x, y: F.y, s: F.s } : null,
 				dot: mixer.on ? { x, y } : null,
+				// every dot as drawn, to tap: {i, x, y, r}
+				dots: mixer.on ? mixer.dots.map((d) => ({ ...d })) : [],
 			}
 		},
 		// the bare disc inside the innermost ring, CSS px; null in strips mode
