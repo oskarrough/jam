@@ -67,6 +67,10 @@ export function createEngine(transport, { seatIds, instruments }) {
 
 	const seats = seatIds.map((id, i) => {
 		const { out, send, lp } = seatStrip(audio, master, roomIn)
+		// what the seat sounds like after its level and tone, for the mixer's dots
+		const meter = audio.createAnalyser()
+		meter.fftSize = 256
+		lp.connect(meter)
 		return {
 			id,
 			index: i,
@@ -74,6 +78,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 			out,
 			send,
 			lp,
+			meter,
 			mix: { ...MIX, mute: false },
 			module: null,
 			instance: null,
@@ -230,13 +235,15 @@ export function createEngine(transport, { seatIds, instruments }) {
 	}
 
 	const buf = new Float32Array(512)
-	function level() {
+	function rms(an) {
 		if (!soundOn) return 0
-		analyser.getFloatTimeDomainData(buf)
+		const b = an.fftSize === buf.length ? buf : buf.subarray(0, an.fftSize)
+		an.getFloatTimeDomainData(b)
 		let s = 0
-		for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]
-		return Math.sqrt(s / buf.length)
+		for (let i = 0; i < b.length; i++) s += b[i] * b[i]
+		return Math.sqrt(s / b.length)
 	}
+	const level = () => rms(analyser)
 
 	return {
 		audio,
@@ -254,6 +261,8 @@ export function createEngine(transport, { seatIds, instruments }) {
 		applyMix,
 		setSound,
 		level,
+		// one seat's loudness as heard (after its level, tone and mute), about 0..0.5
+		seatLevel: (i) => rms(seats[i].meter),
 		heard: (i) => heard(seats[i]),
 		get solo() {
 			return solo

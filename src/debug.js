@@ -92,10 +92,10 @@ function buildPanel(gui, { engine, transport, view, bots, me, sit, registry, hea
 			},
 		}
 		f.add(sel, 'instrument', ids)
-		f.add(L.mix, 'level', 0, 1.5, 0.01).onChange((v) => engine.setMix(L, { level: v }))
-		f.add(L.mix, 'tone', 0, 1, 0.01).onChange((v) => engine.setMix(L, { tone: v }))
-		f.add(L.mix, 'space', 0, 1, 0.01).onChange((v) => engine.setMix(L, { space: v }))
-		f.add(L.mix, 'mute').onChange((v) => engine.setMute(L, v))
+		f.add(L.mix, 'level', 0, 1.5, 0.01).listen().onChange((v) => engine.setMix(L, { level: v }))
+		f.add(L.mix, 'tone', 0, 1, 0.01).listen().onChange((v) => engine.setMix(L, { tone: v }))
+		f.add(L.mix, 'space', 0, 1, 0.01).listen().onChange((v) => engine.setMix(L, { space: v }))
+		f.add(L.mix, 'mute').listen().onChange((v) => engine.setMute(L, v))
 		f.add(
 			{
 				clear: () => {

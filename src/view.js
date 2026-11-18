@@ -337,16 +337,36 @@ export function createView(
 			: { i, xy: rimFrom(i, 1.75), r: seatR() * 0.72 }
 	}
 	const wipeJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
-	// your seat's mix knob sits on the badge's other side: drag up for louder, sideways for darker or brighter
+	// the mixer: a button on your badge's other side opens a square over the dial where every seat is a dot,
+	// up louder, right brighter. You drag your own; the others move as their players drag theirs.
 	const mixAt = () => {
 		const w = wipeAt()
 		return w && onMix ? { i: w.i, xy: rimFrom(w.i, -1.75), r: w.r } : null
 	}
 	const mixJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
-	let mixing = null, // a press on the knob: {i, id, x0, y0, level, tone, moved}
-		mixTap = 0,
-		mixShow = 0 // until when the knob's four words stay up
-	const MIX_PX = () => Math.max(110, S * 0.35) // drag this far to go from one end to the other
+	const LEVEL_MAX = 1.5
+	const mixer = {
+		on: false,
+		p: 0, // how far open, eased
+		drag: null, // your dot in hand: {i, id, x0, y0, from: {level, tone}, moved}
+		tap: 0,
+		back: null, // where your last drag started; a double tap goes there
+		pulse: seats.map(() => 0),
+	}
+	const mixField = () => {
+		const s = Math.round(Math.max(180, Math.min(S * 0.5, 320)))
+		return { x: CX - s / 2, y: CY - s / 2, s, pad: Math.round(s * 0.13) }
+	}
+	const inField = (F, x, y, m = 0) =>
+		x >= F.x - m && x <= F.x + F.s + m && y >= F.y - m && y <= F.y + F.s + m
+	const mixXY = (F, m) => {
+		const k = F.s - F.pad * 2
+		return [F.x + F.pad + m.tone * k, F.y + F.pad + (1 - m.level / LEVEL_MAX) * k]
+	}
+	const setMixer = (on) => {
+		mixer.on = on
+		if (!on) mixer.drag = null
+	}
 
 	// screen -> seat hit: {seat, x, y} in the seat's 0..1 space
 	function hit(px, py, only = null) {
@@ -394,7 +414,30 @@ export function createView(
 	})
 	canvas.addEventListener('pointerdown', (e) => {
 		// a second finger never draws: two-finger gestures (tap undoes, drag erases) belong to the host
-		if (e.pointerType === 'touch' && (drag || handing || mixing)) return
+		if (e.pointerType === 'touch' && (drag || handing || mixer.drag)) return
+		const m = mixAt()
+		const onButton = m && Math.hypot(e.clientX - m.xy[0], e.clientY - m.xy[1]) < m.r + 9
+		if (onButton) {
+			press(mixJelly, Math.atan2(e.clientY - m.xy[1], e.clientX - m.xy[0]))
+			setTimeout(() => release(mixJelly), 110)
+			return setMixer(!mixer.on)
+		}
+		if (mixer.on) {
+			const F = mixField()
+			// a press outside the open mixer only closes it
+			if (!m || !inField(F, e.clientX, e.clientY, 12)) return setMixer(false)
+			canvas.setPointerCapture(e.pointerId)
+			const { level, tone } = seats[m.i].mix
+			mixer.drag = {
+				i: m.i,
+				id: e.pointerId,
+				x0: e.clientX,
+				y0: e.clientY,
+				from: { level, tone },
+				moved: false,
+			}
+			return
+		}
 		if (inSheet(e.clientX, e.clientY) && canDraw(focus.seat)) {
 			canvas.setPointerCapture(e.pointerId)
 			drag = { seat: focus.seat, id: e.pointerId, alt: e.shiftKey, button: e.button, sheet: true }
@@ -419,15 +462,6 @@ export function createView(
 			press(wipeJelly, Math.atan2(e.clientY - w.xy[1], e.clientX - w.xy[0]))
 			setTimeout(() => release(wipeJelly), 110)
 			return onWipe()
-		}
-		const m = mixAt()
-		if (m && Math.hypot(e.clientX - m.xy[0], e.clientY - m.xy[1]) < m.r + 9) {
-			press(mixJelly, Math.atan2(e.clientY - m.xy[1], e.clientX - m.xy[0]))
-			canvas.setPointerCapture(e.pointerId)
-			const { level, tone } = seats[m.i].mix
-			mixing = { i: m.i, id: e.pointerId, x0: e.clientX, y0: e.clientY, level, tone, moved: false }
-			mixShow = Infinity
-			return
 		}
 		for (let i = 0; i < seats.length; i++) {
 			const [x, y] = seatPos(i)
@@ -487,23 +521,34 @@ export function createView(
 		const w = wipeAt(),
 			onWipeTok = w && Math.hypot(e.clientX - w.xy[0], e.clientY - w.xy[1]) < w.r + 5,
 			m = mixAt(),
-			onKnob = m && Math.hypot(e.clientX - m.xy[0], e.clientY - m.xy[1]) < m.r + 5
-		canvas.style.cursor =
-			onSeat || onDial || onWipeTok || onKnob || (focus.on && !inSheet(e.clientX, e.clientY))
-				? 'pointer'
-				: inSheet(e.clientX, e.clientY) || (hover && canDraw(hover.seat))
-					? ''
+			onButton = m && Math.hypot(e.clientX - m.xy[0], e.clientY - m.xy[1]) < m.r + 5
+		if (mixer.on) hover = null
+		canvas.style.cursor = onButton
+			? 'pointer'
+			: mixer.on
+				? inField(mixField(), e.clientX, e.clientY, 12)
+					? 'grab'
 					: 'default'
-		if (mixing && e.pointerId === mixing.id) {
-			const dx = e.clientX - mixing.x0,
-				dy = e.clientY - mixing.y0
-			if (Math.hypot(dx, dy) > 4) mixing.moved = true
-			if (!mixing.moved) return
+				: onSeat || onDial || onWipeTok || (focus.on && !inSheet(e.clientX, e.clientY))
+					? 'pointer'
+					: inSheet(e.clientX, e.clientY) || (hover && canDraw(hover.seat))
+						? ''
+						: 'default'
+		const md = mixer.drag
+		if (md && e.pointerId === md.id) {
+			// your dot follows the finger from wherever you pressed in the square
+			const dx = e.clientX - md.x0,
+				dy = e.clientY - md.y0
+			if (Math.hypot(dx, dy) > 4) md.moved = true
+			if (!md.moved) return
 			canvas.style.cursor = 'grabbing'
-			const k = MIX_PX()
-			return onMix(mixing.i, {
-				level: Math.round(Math.max(0, Math.min(1.5, mixing.level - (dy / k) * 1.5)) * 100) / 100,
-				tone: Math.round(Math.max(0, Math.min(1, mixing.tone + dx / k)) * 100) / 100,
+			const F = mixField(),
+				k = F.s - F.pad * 2
+			return onMix(md.i, {
+				level:
+					Math.round(Math.max(0, Math.min(LEVEL_MAX, md.from.level - (dy / k) * LEVEL_MAX)) * 100) /
+					100,
+				tone: Math.round(Math.max(0, Math.min(1, md.from.tone + dx / k)) * 100) / 100,
 			})
 		}
 		if (handing && e.pointerId === handing.id) {
@@ -563,17 +608,22 @@ export function createView(
 		onSit(from)
 	}
 	const up = (e) => {
-		if (mixing && e.pointerId === mixing.id) {
-			const { i, moved } = mixing
-			mixing = null
-			release(mixJelly)
-			mixShow = performance.now() + (moved ? 600 : 1800)
-			if (moved || e.type === 'pointercancel') return
-			// a double tap puts the seat back as it was: default level, wide open
-			if (performance.now() - mixTap < DOUBLE_MS) {
-				mixTap = 0
-				onMix(i, { level: 0.9, tone: 1 })
-			} else mixTap = performance.now()
+		if (mixer.drag && e.pointerId === mixer.drag.id) {
+			const { i, moved, from } = mixer.drag
+			mixer.drag = null
+			if (e.type === 'pointercancel') return
+			if (moved) {
+				mixer.back = from
+				mixer.tap = 0
+				return
+			}
+			// a double tap goes back to where your last drag started (and again, back to here)
+			if (performance.now() - mixer.tap < DOUBLE_MS) {
+				mixer.tap = 0
+				const { level, tone } = seats[i].mix
+				onMix(i, mixer.back || { level: 0.9, tone: 1 })
+				mixer.back = { level, tone }
+			} else mixer.tap = performance.now()
 			return
 		}
 		if (drag?.pending && e.pointerId === drag.id) {
@@ -623,11 +673,12 @@ export function createView(
 	}
 	canvas.addEventListener('pointerup', up)
 	canvas.addEventListener('pointercancel', (e) => {
-		if ((handing && e.pointerId === handing.id) || (mixing && e.pointerId === mixing.id)) up(e)
+		if ((handing && e.pointerId === handing.id) || (mixer.drag && e.pointerId === mixer.drag.id)) up(e)
 	})
 
 	function setFocus(i) {
 		if (drag) return
+		if (i >= 0) setMixer(false)
 		const on = i >= 0 && opts.mode === 'dial'
 		if (on === focus.on && i === focus.seat) return
 		focus.on = on
@@ -952,6 +1003,7 @@ export function createView(
 		drawHandHint()
 		if (opts.mode === 'dial') {
 			drawOffer()
+			drawMixer(dt)
 		}
 		requestAnimationFrame(frame)
 	}
@@ -1519,7 +1571,7 @@ export function createView(
 			g.globalAlpha = Math.min(1, sp * 3)
 			around(x, y, EASES['out back'](sp), () => drawSeat(i, x, y, true))
 			if (canDraw(i)) around(x, y, EASES['out back'](sp), drawWipe)
-			if (canDraw(i)) around(x, y, EASES['out back'](sp), drawKnob)
+			if (canDraw(i)) around(x, y, EASES['out back'](sp), drawMixButton)
 			g.restore()
 		})
 	}
@@ -1549,65 +1601,201 @@ export function createView(
 			g.drawImage(img, x - r * 0.72, y - r * 0.72, r * 1.44, r * 1.44)
 	}
 	let broom = null
-	// the mix knob: a ring of level in the seat's colour round a dot that darkens with the tone
-	function drawKnob() {
+	// the mixer's button: a little square with three dots in it, like the field it opens
+	function drawMixButton() {
 		const m = mixAt()
 		if (!m) return
 		const [x, y] = m.xy,
-			r = m.r,
-			L = seats[m.i],
-			{ level, tone } = L.mix
+			r = m.r
 		g.fillStyle = 'rgba(40,25,60,.4)'
 		g.beginPath()
 		g.arc(x + 2, y + 3, r, 0, TAU)
 		g.fill()
 		const path = outline(x, y, r, 43, 0.5, { a: mixJelly.a, depth: mixJelly.s.x * r * 0.4, w: 0.7 })
-		g.fillStyle = PAPER
+		g.fillStyle = mixer.on ? mixHex(PAPER, INK, 0.12) : PAPER
 		g.fill(path)
 		g.strokeStyle = INK
 		g.lineWidth = 1
 		g.stroke(path)
-		const a0 = Math.PI * 0.75,
-			span = Math.PI * 1.5,
-			rr = r * 0.62
-		g.lineCap = 'round'
-		g.lineWidth = Math.max(2, r * 0.22)
-		g.strokeStyle = ink(0.15)
-		g.beginPath()
-		g.arc(x, y, rr, a0, a0 + span)
-		g.stroke()
-		g.strokeStyle = L.color
-		g.beginPath()
-		g.arc(x, y, rr, a0, a0 + span * Math.min(1, level / 1.5) + 0.001)
-		g.stroke()
-		g.lineCap = 'butt'
-		g.fillStyle = mixHex(L.color, INK, (1 - tone) * 0.85)
-		g.strokeStyle = INK
-		g.lineWidth = 0.8
-		g.beginPath()
-		g.arc(x, y, r * 0.3, 0, TAU)
-		g.fill()
-		g.stroke()
-		if (mixShow < performance.now()) return
-		// pressed, dragged or tapped: four words say which way is which
-		const d = r * 1.55
-		g.font = serif(Math.max(11, S * 0.017))
-		g.textAlign = 'center'
-		g.textBaseline = 'middle'
-		g.lineJoin = 'round'
-		g.lineWidth = 3
-		g.strokeStyle = rgba(PAPER, 0.9)
-		g.fillStyle = INK
-		for (const [w, dx, dy] of [
-			['louder', 0, -1],
-			['quieter', 0, 1],
-			['darker', -1, 0],
-			['brighter', 1, 0],
+		const h = r * 0.5
+		g.lineWidth = 1.1
+		g.strokeRect(x - h, y - h, h * 2, h * 2)
+		for (const [dx, dy, j] of [
+			[-0.45, 0.35, 0],
+			[0.1, -0.4, 1],
+			[0.5, 0.15, 2],
 		]) {
-			g.textAlign = dx < 0 ? 'right' : dx > 0 ? 'left' : 'center'
-			g.strokeText(w, x + dx * d, y + dy * d)
-			g.fillText(w, x + dx * d, y + dy * d)
+			g.fillStyle = j === 1 ? seats[m.i].color : seats[(m.i + j) % seats.length].color
+			g.beginPath()
+			g.arc(x + dx * h, y + dy * h, Math.max(1.6, r * 0.13), 0, TAU)
+			g.fill()
 		}
+	}
+	// a hand-drawn square: each side bows a little, the same way every frame
+	const squares = new Map()
+	function roughSquare(x, y, s, seed) {
+		const key = [x, y, s, seed].join()
+		let p = squares.get(key)
+		if (p) return p
+		if (squares.size > 8) squares.clear()
+		const R = rng(seed),
+			j = () => (R() - 0.5) * s * 0.012
+		const c = [
+			[x + j(), y + j()],
+			[x + s + j(), y + j()],
+			[x + s + j(), y + s + j()],
+			[x + j(), y + s + j()],
+		]
+		p = new Path2D()
+		p.moveTo(...c[0])
+		for (let k = 1; k <= 4; k++) {
+			const a = c[k - 1],
+				b = c[k % 4]
+			p.quadraticCurveTo((a[0] + b[0]) / 2 + j() * 1.5, (a[1] + b[1]) / 2 + j() * 1.5, ...b)
+		}
+		p.closePath()
+		squares.set(key, p)
+		return p
+	}
+	// the open mixer: a square over the dial, one dot a seat, pulsing with what it plays
+	function drawMixer(dt) {
+		const m = mixAt()
+		if (!m && mixer.on) setMixer(false)
+		mixer.p += ((mixer.on ? 1 : 0) - mixer.p) * Math.min(1, dt * (mixer.on ? 14 : 18))
+		if (mixer.p < 0.01) return (mixer.p = 0)
+		if (!m) return
+		const F = mixField(),
+			e = EASES['out back'](Math.min(1, mixer.p)),
+			dragging = mixer.drag?.moved,
+			me = m.i,
+			k = F.s - F.pad * 2
+		g.save()
+		g.globalAlpha = Math.min(1, mixer.p * 1.4)
+		around(CX, CY, 0.85 + 0.15 * e, () => {
+			g.fillStyle = 'rgba(40,25,60,.35)'
+			g.fill(roughSquare(F.x + 3, F.y + 5, F.s, 7))
+			const sq = roughSquare(F.x, F.y, F.s, 5)
+			g.fillStyle = PAPER
+			g.fill(sq)
+			g.strokeStyle = INK
+			g.lineWidth = 1.2
+			g.stroke(sq)
+			// faint crosshair through the default: as loud as a seat starts, wide open
+			const [hx, hy] = mixXY(F, { level: 0.9, tone: 1 })
+			g.strokeStyle = ink(0.12)
+			g.lineWidth = 1
+			g.setLineDash([2, 4])
+			g.beginPath()
+			g.moveTo(F.x + F.pad, hy)
+			g.lineTo(hx, hy)
+			g.stroke()
+			g.setLineDash([])
+			// the four edges say which way is which; they light up while you drag
+			const fs = Math.max(12, F.s * 0.05)
+			g.font = serif(fs)
+			g.textBaseline = 'middle'
+			g.lineJoin = 'round'
+			const md = mixer.drag,
+				cur = seats[me].mix,
+				dl = md ? cur.level - md.from.level : 0,
+				dtn = md ? cur.tone - md.from.tone : 0
+			for (const [w, x, y, al, rot, lit] of [
+				['louder', F.x + F.s / 2, F.y + F.pad * 0.5, 'center', 0, dl > 0.01],
+				['quieter', F.x + F.s / 2, F.y + F.s - F.pad * 0.5, 'center', 0, dl < -0.01],
+				['darker', F.x + F.pad * 0.5, F.y + F.s / 2, 'center', -Math.PI / 2, dtn < -0.01],
+				['brighter', F.x + F.s - F.pad * 0.5, F.y + F.s / 2, 'center', Math.PI / 2, dtn > 0.01],
+			]) {
+				g.save()
+				g.translate(x, y)
+				g.rotate(rot)
+				g.textAlign = al
+				g.font = serif(fs * (lit ? 1.15 : 1), lit ? 600 : 400)
+				g.lineWidth = 4
+				g.strokeStyle = rgba(PAPER, 0.85)
+				g.strokeText(w, 0, 0)
+				g.fillStyle = lit ? INK : ink(dragging ? 0.75 : 0.55)
+				g.fillText(w, 0, 0)
+				g.restore()
+			}
+			// where you set off from, while you drag
+			if (dragging) {
+				const [sx, sy] = mixXY(F, md.from),
+					[cx, cy] = mixXY(F, cur)
+				g.strokeStyle = rgba(seats[me].color, 0.55)
+				g.lineWidth = 1.5
+				g.setLineDash([3, 4])
+				g.beginPath()
+				g.moveTo(sx, sy)
+				g.lineTo(cx, cy)
+				g.stroke()
+				g.setLineDash([])
+				g.strokeStyle = ink(0.35)
+				g.lineWidth = 1
+				g.beginPath()
+				g.arc(sx, sy, Math.max(5, F.s * 0.025), 0, TAU)
+				g.stroke()
+			}
+			// the dots: yours stays where it is, others that sit on the same spot step aside so all show
+			const rd = Math.max(6, F.s * 0.03)
+			const dots = []
+			seats.forEach((L, i) => {
+				if (!L.module) return
+				const lv = engine.seatLevel(i)
+				mixer.pulse[i] = Math.max(mixer.pulse[i] * Math.pow(0.02, dt), Math.min(1, lv * 5))
+				const [x, y] = mixXY(F, L.mix)
+				dots.push({ i, x, y, ox: x, oy: y })
+			})
+			for (let it = 0; it < 4; it++)
+				for (const a of dots)
+					for (const b of dots) {
+						if (a === b || a.i === me) continue
+						const dx = a.x - b.x,
+							dy = a.y - b.y,
+							d = Math.hypot(dx, dy),
+							want = rd * 2.2
+						if (d >= want) continue
+						const ang = d > 0.01 ? Math.atan2(dy, dx) : -Math.PI / 2 + a.i * 2.4
+						const push = b.i === me ? want - d : (want - d) / 2
+						a.x += Math.cos(ang) * push
+						a.y += Math.sin(ang) * push
+					}
+			dots.sort((a, b) => (a.i === me) - (b.i === me))
+			for (const d of dots) {
+				const L = seats[d.i],
+					own = d.i === me,
+					r = own ? rd * 1.35 : rd,
+					pu = mixer.pulse[d.i],
+					heard = engine.heard(d.i)
+				g.globalAlpha = Math.min(1, mixer.p * 1.4) * (heard ? 1 : 0.35)
+				if (pu > 0.02) {
+					g.fillStyle = rgba(L.color, 0.28 * pu + 0.08)
+					g.beginPath()
+					g.arc(d.x, d.y, r * (1.2 + 1.3 * pu), 0, TAU)
+					g.fill()
+				}
+				g.beginPath()
+				g.arc(d.x, d.y, r * (1 + 0.15 * pu), 0, TAU)
+				g.fillStyle = L.mix.mute ? PAPER : mixHex(L.color, INK, (1 - L.mix.tone) * 0.5)
+				g.fill()
+				g.strokeStyle = L.mix.mute ? L.color : INK
+				g.lineWidth = own ? 1.6 : L.mix.mute ? 1.5 : 0.8
+				g.stroke()
+				// names while you drag, so you can see you're about to bury the bass
+				if ((dragging && !own) || (own && mixer.p > 0.5 && !dragging)) {
+					g.font = serif(Math.max(11, F.s * 0.045), own ? 600 : 400)
+					g.textAlign = d.x > F.x + F.s * 0.7 ? 'right' : 'left'
+					g.textBaseline = 'middle'
+					const tx = d.x + (g.textAlign === 'right' ? -1 : 1) * (r + 5)
+					g.lineWidth = 3
+					g.strokeStyle = rgba(PAPER, 0.9)
+					const name = own ? 'you' : L.module.name.toLowerCase()
+					g.strokeText(name, tx, d.y)
+					g.fillStyle = INK
+					g.fillText(name, tx, d.y)
+				}
+			}
+		})
+		g.restore()
 	}
 	let offer = null
 	function drawOffer() {
@@ -1902,13 +2090,25 @@ export function createView(
 			const [x, y] = seatPos(i)
 			return { x, y, r: seatR() }
 		},
-		// your mix knob, CSS px; null when it isn't on screen
-		knob: () => {
+		// the mixer, CSS px: its button, and when open its square and your dot; null when it isn't on screen
+		mixer: () => {
 			const m = mixAt()
-			return m && { x: m.xy[0], y: m.xy[1], r: m.r }
+			if (!m) return null
+			const F = mixField(),
+				[x, y] = mixXY(F, seats[m.i].mix)
+			return {
+				button: { x: m.xy[0], y: m.xy[1], r: m.r },
+				open: mixer.on,
+				field: mixer.on ? { x: F.x, y: F.y, s: F.s } : null,
+				dot: mixer.on ? { x, y } : null,
+			}
 		},
 		// the bare disc inside the innermost ring, CSS px; null in strips mode
-		center: () => (opts.mode === 'dial' ? { x: CX, y: CY, r: ringIn(0), ground: PAPER } : null),
+		// (null too while the mixer covers it)
+		center: () =>
+			opts.mode === 'dial' && !mixer.on && mixer.p === 0
+				? { x: CX, y: CY, r: ringIn(0), ground: PAPER }
+				: null,
 		resize,
 	}
 }

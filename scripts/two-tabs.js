@@ -85,12 +85,17 @@ try {
 			() => false,
 		)
 	check(want && rolled, `ben plays ana's chords (${want})`)
-	// ana pulls her knob up and to the left: louder and darker, for ben too
-	const k = await a.evaluate(() => window.jam.view.knob())
-	await a.mouse.move(k.x, k.y)
-	await a.mouse.down()
-	await a.mouse.move(k.x - 60, k.y - 30, { steps: 8 })
-	await a.mouse.up()
+	// ana opens the mixer and drags her dot up and to the left: louder and darker, for ben too
+	const b0 = await a.evaluate(() => window.jam.view.mixer()?.button)
+	if (b0) await a.mouse.click(b0.x, b0.y)
+	await a.waitForTimeout(300)
+	const k = await a.evaluate(() => window.jam.view.mixer()?.dot)
+	if (k) {
+		await a.mouse.move(k.x, k.y)
+		await a.mouse.down()
+		await a.mouse.move(k.x - 60, k.y - 30, { steps: 8 })
+		await a.mouse.up()
+	}
 	const mix = await a.evaluate((seat) => window.jam.engine.seats[seat].mix, seat)
 	const mixed = await b
 		.waitForFunction(
