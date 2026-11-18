@@ -2,9 +2,21 @@
 // quarter of the loop; tap the eye there to roll it on, or drag up and down to scrub. It travels with the
 // loop, so it lands on the next bar for everyone and replays carry it.
 // A tab leads with the chord a player can read (Dm) and carries its numeral (iv) small, as the lesson.
-// The key the numerals count from sits under the eye (A minor); press it for a ladder of keys, tap it to flip minor and major. Pressing a tab raises a ladder of the
+// The key the numerals count from sits under the eye (A minor). Press it for a grid of keys: up and down picks
+// the root among all twelve, sideways the mood, bright to dark. Pressing a tab raises a ladder of the
 // key's seven chords above your finger: slide to a rung and you hear it, quietly and only you; let go to play it.
-import { chordOf, nameOf, letterOf, triadOf, keyOf, mtof, ROOTS } from './instruments/lib/kit.js'
+import {
+	chordOf,
+	nameOf,
+	letterOf,
+	triadOf,
+	keyOf,
+	spell,
+	mtof,
+	ROOTS,
+	MOODS,
+	moodOf,
+} from './instruments/lib/kit.js'
 import { SERIF, INK, PAPER } from './palette.js'
 
 const VERMILION = '#d64a28'
@@ -18,8 +30,18 @@ const LEAN = [-7, 5, -3, 8, -5, 3, -8, 6]
 const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th']
 const QUALITY = { m: 'minor', '°': 'dim', '': 'major' }
 const KEYS = Object.keys(ROOTS)
-const wrap = (i) => ((i % 7) + 7) % 7
-const isMajor = (l) => keyOf(l).endsWith('major')
+const wrap = (i, n = 7) => ((i % n) + n) % n
+// the key grid: twelve roots a semitone apart, the one you're in level with the pointer; four mood columns
+const KEY_ROW = 24
+const KEY_COL = 44
+const KEY_W = 4 * KEY_COL + 24
+const KEY_ROWS = { up: 6, down: 5 }
+// what the grid's cell at (root step, mood) is, starting from loop l
+const keyAt = (h, l) => ({
+	...l,
+	root: KEYS[wrap(h.from + h.steps, 12)],
+	scale: MOODS[h.mood].scale,
+})
 
 export function createHarmony({ canvas, view, transport, heart, engine, readOnly = false }) {
 	const { clock } = transport
@@ -143,7 +165,8 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 				e.clientY < k.bottom + 6
 			) {
 				const from = Math.max(0, KEYS.indexOf(l.root ?? 'A'))
-				held = { ...start, kind: 'key', from, idx: from }
+				const mood = moodOf(l.scale)
+				held = { ...start, kind: 'key', from, idx: from, mood, mood0: mood, x0: e.clientX }
 				place(held, e)
 				canvas.setPointerCapture(e.pointerId)
 				return
@@ -160,13 +183,30 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 	)
 	canvas.addEventListener('pointermove', (e) => {
 		if (!held || e.pointerId !== held.id) return
-		if (Math.abs(e.clientY - held.y0) > 6) held.moved = true
+		if (Math.abs(e.clientY - held.y0) > 6 || Math.abs(e.clientX - (held.x0 ?? e.clientX)) > 6)
+			held.moved = true
 		if (!held.moved) return
+		const l = clock.latestLoop()
+		if (held.kind === 'key') {
+			// the row level with the pointer is the root; each column's width sideways is one mood
+			const steps = Math.max(
+				-KEY_ROWS.down,
+				Math.min(KEY_ROWS.up, Math.round((held.base - e.clientY) / KEY_ROW)),
+			)
+			const mood = Math.max(
+				0,
+				Math.min(3, held.mood0 + Math.round((e.clientX - held.x0) / KEY_COL)),
+			)
+			if (steps === held.steps && mood === held.mood) return
+			held.steps = steps
+			held.mood = mood
+			held.idx = wrap(held.from + steps, 12)
+			return hear(keyAt(held, l), 0)
+		}
 		// the rung level with the pointer; three each way reach all seven chords, so it stops instead of wrapping
 		const steps = Math.max(-3, Math.min(3, Math.round((held.base - e.clientY) / STEP_PX)))
 		const idx = wrap(held.from + steps)
-		const l = clock.latestLoop()
-		if (idx !== held.idx) held.kind === 'key' ? hear({ ...l, root: KEYS[idx] }, 0) : hear(l, idx)
+		if (idx !== held.idx) hear(l, idx)
 		held.idx = idx
 		held.steps = steps
 	})
@@ -186,10 +226,8 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		if (e.type === 'pointercancel') return
 		const l = clock.latestLoop()
 		if (h.kind === 'key') {
-			// slide picks the root; a tap flips minor and major on the same root. Root and scale travel
-			// together, since a patch lands on the playing loop and would drop a change still pending.
-			const root = h.moved ? KEYS[h.idx] : (l.root ?? 'A')
-			const scale = h.moved ? l.scale : isMajor(l) ? 'minor pent' : 'major pent'
+			if (!h.moved) return
+			const { root, scale } = keyAt(h, l)
 			if (root === (l.root ?? 'A') && scale === l.scale) return
 			return commit(l, { root, scale })
 		}
@@ -217,12 +255,12 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 			n = l.bars
 		// while you slide the key ladder, the tabs already speak the key under your pointer
 		let next = clock.latestLoop()
-		if (held?.kind === 'key') next = { ...next, root: KEYS[held.idx] }
+		if (held?.kind === 'key') next = keyAt(held, next)
 		const absBar = Math.floor(p.beats / l.beatsPerBar)
 		const first = absBar - (((absBar % n) + n) % n)
 		const px = Math.max(12, Math.round(c.r * 0.19))
 		const rr = c.r - px * 0.9
-		const key = `${c.x},${c.y},${c.r},${absBar},${held?.kind},${held?.bar},${held?.idx}`
+		const key = `${c.x},${c.y},${c.r},${absBar},${held?.kind},${held?.bar},${held?.idx},${held?.mood}`
 		if (shown?.loop === l && shown.next === clock.latestLoop() && key === shown.key) return
 		shown = { loop: l, next: clock.latestLoop(), key }
 		box.style.display = ''
@@ -258,15 +296,20 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 	// The ladder goes beside the pointer with the chord you pressed level with it, then each rung up or down
 	// is one step of the key, 1:1 under the pointer. Near a screen edge the ladder shifts rather than squeeze.
 	function place(h, e) {
-		const S = STEP_PX,
+		const key = h.kind === 'key'
+		const S = key ? KEY_ROW : STEP_PX,
+			up = key ? KEY_ROWS.up : 3,
+			down = key ? KEY_ROWS.down : 3,
+			head = key ? 40 : 24,
+			foot = key ? 22 : 6,
 			W = innerWidth,
 			H = innerHeight,
-			w = LADDER_W
+			w = key ? KEY_W : LADDER_W
 		const gap = GAP[e.pointerType] ?? GAP.mouse
 		const right = e.clientX + gap + w <= W - 6
 		h.side = right ? 1 : -1
 		h.x = right ? e.clientX + gap + w / 2 : Math.max(w / 2 + 6, e.clientX - gap - w / 2)
-		h.base = Math.max(3 * S + S / 2 + 24, Math.min(H - 3 * S - S / 2 - 6, e.clientY))
+		h.base = Math.max(up * S + S / 2 + head, Math.min(H - down * S - S / 2 - foot, e.clientY))
 	}
 
 	// Seven rungs, the chord you started on in the middle, one step of the key per rung. Each rung reads
@@ -286,43 +329,20 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 		const g = lx
 		g.setTransform(dpr, 0, 0, dpr, 0, 0)
 		g.clearRect(0, 0, W, H)
+		if (held.kind === 'key') return drawKeys(g, l)
 		const S = STEP_PX,
 			w = LADDER_W,
 			{ base, x, side } = held
 		const top = base - 3 * S - S / 2 - 18,
 			bot = base + 3 * S + S / 2
-		// paper card, a little crooked
-		g.save()
-		g.translate(x, (top + bot) / 2)
-		g.rotate(-0.025)
-		g.fillStyle = PAPER
-		g.strokeStyle = INK
-		g.lineWidth = 1.2
-		g.shadowColor = 'rgba(33,26,46,.35)'
-		g.shadowOffsetX = 1.5
-		g.shadowOffsetY = 2
-		g.beginPath()
-		g.roundRect(-w / 2, -(bot - top) / 2, w, bot - top, 12)
-		g.fill()
-		g.shadowColor = 'transparent'
-		g.stroke()
-		g.restore()
-		// a notch on the pointer's side, level with the lit rung
-		const ny = base - held.steps * S,
-			nx = x - (side * w) / 2
-		g.fillStyle = INK
-		g.beginPath()
-		g.moveTo(nx - side * 9, ny)
-		g.lineTo(nx, ny - 6)
-		g.lineTo(nx, ny + 6)
-		g.fill()
+		card(g, x, top, bot, w, base - held.steps * S, side)
 		// the key, as the ladder's title
 		g.fillStyle = INK
 		g.globalAlpha = 0.6
 		g.font = `italic 500 11px ${SERIF}`
 		g.textAlign = 'center'
 		g.textBaseline = 'middle'
-		g.fillText(held.kind === 'key' ? 'key · tap to flip' : `in ${keyOf(l)}`, x, top + 11)
+		g.fillText(`in ${keyOf(l)}`, x, top + 11)
 		g.globalAlpha = 1
 		// rails
 		g.strokeStyle = INK
@@ -341,9 +361,8 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 			const y = base - i * S
 			const on = i === lit,
 				start = i === 0
-			const keyed = held.kind === 'key' && { ...l, root: KEYS[idx] }
-			const name = keyed ? KEYS[idx] : letterOf(l, idx),
-				num = keyed ? keyOf(keyed).split(' ')[1] : nameOf(l.scale, idx)
+			const name = letterOf(l, idx),
+				num = nameOf(l.scale, idx)
 			if (on) {
 				// a scribbled ring round the lit rung
 				g.strokeStyle = VERMILION
@@ -364,7 +383,7 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 				// where you came from: a small tick on the left rail
 				g.fillRect(x - w / 2 + 10, y - 1, 8, 2)
 			}
-			if (on && !keyed) {
+			if (on) {
 				const quality = QUALITY[name.slice(-1)] ?? QUALITY['']
 				g.font = `italic 500 10px ${SERIF}`
 				g.globalAlpha = 0.85
@@ -372,6 +391,80 @@ export function createHarmony({ canvas, view, transport, heart, engine, readOnly
 			}
 			g.globalAlpha = 1
 		}
+	}
+	// A paper card, a little crooked, with a notch on the pointer's side level with what's lit
+	function card(g, x, top, bot, w, ny, side) {
+		g.save()
+		g.translate(x, (top + bot) / 2)
+		g.rotate(-0.025)
+		g.fillStyle = PAPER
+		g.strokeStyle = INK
+		g.lineWidth = 1.2
+		g.shadowColor = 'rgba(33,26,46,.35)'
+		g.shadowOffsetX = 1.5
+		g.shadowOffsetY = 2
+		g.beginPath()
+		g.roundRect(-w / 2, -(bot - top) / 2, w, bot - top, 12)
+		g.fill()
+		g.shadowColor = 'transparent'
+		g.stroke()
+		g.restore()
+		const nx = x - (side * w) / 2
+		g.fillStyle = INK
+		g.beginPath()
+		g.moveTo(nx - side * 9, ny)
+		g.lineTo(nx, ny - 6)
+		g.lineTo(nx, ny + 6)
+		g.fill()
+	}
+
+	// The key grid: twelve roots, a semitone a row, the key you're in level with your finger; four moods
+	// across, bright to dark. Each cell is spelled the way that key is written (C♯ in C♯ minor, D♭ in D♭
+	// major), and the foot spells out the lit key's seven chords, the ones the tabs will play.
+	function drawKeys(g, l) {
+		const S = KEY_ROW,
+			w = KEY_W,
+			{ base, x, side } = held
+		const top = base - KEY_ROWS.up * S - S / 2 - 40,
+			bot = base + KEY_ROWS.down * S + S / 2 + 22
+		card(g, x, top, bot, w, base - held.steps * S, side)
+		const lit = keyAt(held, l)
+		const col = (m) => x - w / 2 + 12 + KEY_COL * (m + 0.5)
+		g.textBaseline = 'middle'
+		g.textAlign = 'center'
+		g.fillStyle = INK
+		g.font = `italic 600 12px ${SERIF}`
+		g.fillText(keyOf(lit), x, top + 12)
+		g.globalAlpha = 0.6
+		g.font = `italic 500 9px ${SERIF}`
+		MOODS.forEach((m, i) => g.fillText(i === 1 ? 'mixo' : m.name, col(i), top + 30))
+		g.globalAlpha = 1
+		for (let i = -KEY_ROWS.down; i <= KEY_ROWS.up; i++) {
+			const y = base - i * S
+			const root = KEYS[wrap(held.from + i, 12)]
+			for (let m = 0; m < 4; m++) {
+				const on = i === held.steps && m === held.mood,
+					here = i === 0 && m === held.mood0
+				const name = spell({ root, scale: MOODS[m].scale })
+				if (on) {
+					g.strokeStyle = VERMILION
+					g.lineWidth = 1.6
+					g.beginPath()
+					g.ellipse(col(m), y, KEY_COL * 0.46, S * 0.44, -0.04, 0.2, Math.PI * 2 + 0.05)
+					g.stroke()
+				}
+				g.fillStyle = on ? VERMILION : INK
+				g.globalAlpha = on || here ? 1 : m === held.mood || i === held.steps ? 0.75 : 0.4
+				g.font = `italic ${on || here ? 600 : 500} ${on ? 16 : 13}px ${SERIF}`
+				g.fillText(name, col(m), y)
+				if (here && !on) g.fillRect(col(m) - 9, y + 8, 18, 1.5)
+			}
+		}
+		g.globalAlpha = 1
+		// the lit key's chords, the lesson: C♯ dorian is C♯m D♯m E F♯ G♯m A♯° B
+		g.fillStyle = VERMILION
+		g.font = `italic 500 11px ${SERIF}`
+		g.fillText(Array.from({ length: 7 }, (_, r) => letterOf(lit, r)).join(' '), x, bot - 12)
 	}
 	requestAnimationFrame(frame)
 }

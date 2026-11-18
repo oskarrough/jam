@@ -85,27 +85,34 @@ try {
 			() => false,
 		)
 	check(want && rolled, `ben plays ana's chords (${want})`)
-	// ana presses the key under the eye and slides two rungs up: ben's loop changes key too
+	// ana presses the key under the eye, slides four rows up and one mood left: C♯ dorian, for ben too
 	const kt = await a.evaluate(() => {
 		const k = [...document.querySelectorAll('span')].find((s) =>
-			/^[A-G] (minor|major)$/.test(s.textContent),
+			/^[A-G][♯♭]? (major|mixolydian|dorian|minor)$/.test(s.textContent),
 		)
 		const r = k.getBoundingClientRect()
 		return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
 	})
 	await a.mouse.move(kt.x, kt.y)
 	await a.mouse.down()
-	await a.mouse.move(kt.x, kt.y - 56, { steps: 6 })
+	await a.mouse.move(kt.x - 44, kt.y - 96, { steps: 6 })
 	await a.mouse.up()
 	const keyed = await b
-		.waitForFunction(() => window.jam.transport.clock.loopAt().root === 'C', null, {
-			timeout: 8000,
-		})
+		.waitForFunction(
+			() => {
+				const l = window.jam.transport.clock.loopAt()
+				return l.root === 'C#' && l.scale === 'dorian pent'
+			},
+			null,
+			{
+				timeout: 8000,
+			},
+		)
 		.then(
 			() => true,
 			() => false,
 		)
-	check(keyed, 'ben plays in the key ana picked (C)')
+	check(keyed, 'ben plays in the key ana picked (C♯ dorian)')
 	// ana opens the mixer and drags her dot up and to the left: louder and darker, for ben too
 	const b0 = await a.evaluate(() => window.jam.view.mixer()?.button)
 	if (b0) await a.mouse.click(b0.x, b0.y)

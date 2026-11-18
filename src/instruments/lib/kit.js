@@ -4,11 +4,38 @@
 export const SCALES = {
 	'minor pent': [0, 3, 5, 7, 10],
 	'major pent': [0, 2, 4, 7, 9],
+	// the moods' own pentatonics keep each mode's colour note: mixolydian's ♭7, dorian's 6
+	'mixolydian pent': [0, 2, 4, 7, 10],
+	'dorian pent': [0, 2, 3, 7, 9],
 	dorian: [0, 2, 3, 5, 7, 9, 10],
 	minor: [0, 2, 3, 5, 7, 8, 10],
 	'hira joshi': [0, 2, 3, 7, 8],
 }
-export const ROOTS = { C: 48, D: 50, E: 52, F: 53, G: 55, A: 57, B: 59 }
+// all twelve roots, stored plainly; how a key is spelled (C♯ minor, D♭ major) depends on its mood, see spell()
+export const ROOTS = {
+	C: 48,
+	'C#': 49,
+	D: 50,
+	Eb: 51,
+	E: 52,
+	F: 53,
+	'F#': 54,
+	G: 55,
+	Ab: 56,
+	A: 57,
+	Bb: 58,
+	B: 59,
+}
+// the key's mood, bright to dark: each is a mode of the major scale, with the pentatonic melodies use
+export const MOODS = [
+	{ name: 'major', scale: 'major pent', from: 0 },
+	{ name: 'mixolydian', scale: 'mixolydian pent', from: 4 },
+	{ name: 'dorian', scale: 'dorian pent', from: 1 },
+	{ name: 'minor', scale: 'minor pent', from: 5 },
+]
+// which mood a loop's scale belongs to; older and lab scales fall in with their nearest
+const MOOD_OF = { major: 0, 'major pent': 0, 'mixolydian pent': 1, dorian: 2, 'dorian pent': 2 }
+export const moodOf = (scale) => MOOD_OF[scale] ?? 3
 
 // Harmony is shared by the jam and travels with the loop, so changes land on the next loop boundary.
 // Chords are degrees of the key's parent scale, one per bar; default i III iv v is Am C Dm Em.
@@ -17,6 +44,8 @@ export const NUMERALS = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii']
 const PARENT = {
 	'minor pent': [0, 2, 3, 5, 7, 8, 10],
 	'major pent': [0, 2, 4, 5, 7, 9, 11],
+	'mixolydian pent': [0, 2, 4, 5, 7, 9, 10],
+	'dorian pent': [0, 2, 3, 5, 7, 9, 10],
 	dorian: [0, 2, 3, 5, 7, 9, 10],
 	minor: [0, 2, 3, 5, 7, 8, 10],
 	'hira joshi': [0, 2, 3, 5, 7, 8, 10],
@@ -44,14 +73,39 @@ export function nameOf(scale, r) {
 		fifth = at(4) - at(0)
 	return third === 4 ? NUMERALS[r].toUpperCase() : fifth === 6 ? NUMERALS[r] + '°' : NUMERALS[r]
 }
+// Spelling: a key's notes take seven different letters, borrowed from its parent major key, the one with
+// the fewest sharps or flats. So C♯ dorian reads C♯ D♯ E F♯ G♯ A♯ B, and F minor reads F G A♭ B♭ C D♭ E♭.
+const NATURAL = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+const LETTER = 'CDEFGAB'
+const MAJOR = [0, 2, 4, 5, 7, 9, 11]
+// parent major tonics by pitch class; at six accidentals (F♯ or G♭) the root the ladder shows wins
+const PARENT_KEY = ['C', 'D♭', 'D', 'E♭', 'E', 'F', ['F♯', 'G♭'], 'G', 'A♭', 'A', 'B♭', 'B']
+const USUAL = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B']
+const ACC = { '-2': '𝄫', '-1': '♭', 0: '', 1: '♯', 2: '𝄪' }
+function majorSpelling(tonic) {
+	const L = LETTER.indexOf(tonic[0]),
+		t = NATURAL[tonic[0]] + (tonic[1] === '♭' ? -1 : tonic[1] === '♯' ? 1 : 0)
+	return MAJOR.map((iv, i) => {
+		const letter = LETTER[(L + i) % 7]
+		const d = ((((t + iv - NATURAL[letter]) % 12) + 18) % 12) - 6
+		return letter + ACC[d]
+	})
+}
+function scaleSpelling(l) {
+	const mood = MOODS[moodOf(l?.scale)]
+	const pc = (ROOTS[l?.root ?? 'A'] ?? 57) % 12
+	const tonics = [PARENT_KEY[(pc - MAJOR[mood.from] + 12) % 12]].flat()
+	const majors = tonics.map(majorSpelling)
+	const major = majors.find((m) => m[mood.from] === USUAL[pc]) ?? majors[0]
+	return Array.from({ length: 7 }, (_, i) => major[(mood.from + i) % 7])
+}
+// the key's root as written: C♯ in C♯ minor, D♭ in D♭ major
+export const spell = (l) => scaleSpelling(l)[0]
 // the same chord as a player reads it, in the loop's key: degree 3 of A minor pent is 'Dm'
-const LETTERS = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B']
 export function letterOf(l, r) {
-	const p = PARENT[l?.scale] || PARENT['minor pent']
-	const root = ROOTS[l?.root ?? 'A'] ?? 57
 	const n = nameOf(l?.scale, r)
 	const quality = n.endsWith('°') ? '°' : n === n.toUpperCase() ? '' : 'm'
-	return LETTERS[(root + p[r]) % 12] + quality
+	return scaleSpelling(l)[r] + quality
 }
 
 // the triad a degree plays in the loop's key, as midi notes from the root's octave
@@ -60,9 +114,8 @@ export function triadOf(l, r) {
 	const root = ROOTS[l?.root ?? 'A'] ?? 57
 	return [0, 2, 4].map((i) => root + p[(r + i) % 7] + 12 * Math.floor((r + i) / 7))
 }
-// what a key is called: its parent scale, since that's where the chords come from ('A minor' for minor pent)
-const KEYNAME = { 'minor pent': 'minor', 'major pent': 'major', 'hira joshi': 'minor' }
-export const keyOf = (l) => `${l?.root ?? 'A'} ${KEYNAME[l?.scale] ?? l?.scale ?? 'minor'}`
+// what a key is called: its root as written and its mood ('A minor' for minor pent, 'C♯ dorian')
+export const keyOf = (l) => `${spell(l)} ${MOODS[moodOf(l?.scale)].name}`
 
 export const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))

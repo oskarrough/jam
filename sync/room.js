@@ -13,7 +13,7 @@ export function nextLoopAt(cur, patch, t) {
 // key and chords: kept if new ones don't look right. Chords are degrees 0..6, one per bar, at most 16.
 function harmony(m, cur) {
 	const h = {}
-	const root = /^[A-G]$/.test(m.root) ? m.root : cur.root
+	const root = /^([A-G]|C#|Eb|F#|Ab|Bb)$/.test(m.root) ? m.root : cur.root
 	const scale = typeof m.scale === 'string' && /^[a-z ]{1,20}$/.test(m.scale) ? m.scale : cur.scale
 	const chords =
 		Array.isArray(m.chords) && m.chords.length
