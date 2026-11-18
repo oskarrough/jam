@@ -14,6 +14,7 @@ import { createHarmony } from './harmony.js'
 import { createUndo } from './undo.js'
 import { createGhost } from './ghost.js'
 import { createRecorder, createReplayTransport, loadRecording, saveRecording } from './record.js'
+import { songOf, loadSong, encodeSong, decodeSong } from './song.js'
 
 const SEAT_IDS = ['seat1', 'seat2', 'seat3', 'seat4']
 
@@ -63,6 +64,8 @@ const name = q.get('name') || ''
 
 // Network if there's a relay (?ws=url, jam.0sk.ar, or same-origin /sync/relay); otherwise tabs in this browser. ?ws=off forces tabs.
 const sameOrigin = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/`
+let relayP = null
+const relay = () => (relayP ||= relayUrl())
 async function relayUrl() {
 	if (q.get('ws') === 'off' || !/^https?:$/.test(location.protocol)) return null
 	if (q.get('ws')) return q.get('ws')
@@ -73,8 +76,34 @@ async function relayUrl() {
 	} catch {}
 	return null
 }
-async function makeTransport() {
-	const url = await relayUrl()
+// a jam's name for "start your own" and for a fork of a shared song
+const JAM_A = [
+	'dusk',
+	'amber',
+	'moss',
+	'salt',
+	'velvet',
+	'copper',
+	'hollow',
+	'paper',
+	'lantern',
+	'violet',
+]
+const JAM_B = [
+	'moth',
+	'heron',
+	'fern',
+	'kettle',
+	'orchard',
+	'tide',
+	'comet',
+	'wren',
+	'ember',
+	'quarry',
+]
+const pick = (a) => a[Math.floor(Math.random() * a.length)]
+const freshJam = () => pick(JAM_A) + '-' + pick(JAM_B)
+async function makeTransport(url) {
 	if (url) {
 		try {
 			const { createTransport } = await import('../sync/sync.js')
@@ -86,6 +115,14 @@ async function makeTransport() {
 		}
 	}
 	return createLocalTransport({ room, name })
+}
+
+// #song=…: a shared song. With a relay it forks into a new jam of its own (#seed= there), so the original stays
+// untouched; without one it loads into this jam. Either way it lands once the jam has welcomed us.
+const songHash = !replayId && location.hash.match(/^#(song|seed)=([\w-]+)$/)
+if (songHash?.[1] === 'song' && (await relay())) {
+	location.replace('/j/' + freshJam() + '#seed=' + songHash[2])
+	await new Promise(() => {})
 }
 
 // /r/<id>: read-only replay
@@ -102,7 +139,7 @@ const transport = rec
 			seatIds: SEAT_IDS,
 			onCursor: (i, x, y, down, who) => view?.showCursor('r' + who + i, i, x, y, who),
 		})
-	: await makeTransport()
+	: await makeTransport(await relay())
 const replay = transport.kind === 'replay'
 if (replay) document.body.classList.add('replay')
 const engine = createEngine(transport, {
@@ -243,7 +280,7 @@ const freeName = () => {
 	while (taken.has(`player ${n}`)) n++
 	return `player ${n}`
 }
-transport.on('welcome', () => {
+transport.on('welcome', ({ seats: snap }) => {
 	if (!me.name) me.name = freeName()
 	if (me.seat < 0)
 		for (const i of [1, 2, 0, 3])
@@ -251,9 +288,55 @@ transport.on('welcome', () => {
 				sit(i)
 				break
 			}
-	// the jam's seats as they stand land a moment after the welcome; deal after them, or they'd undo the deal here
-	setTimeout(deal)
+	// the jam's seats as they stand land a moment after the welcome; deal after them, or they'd undo the deal here.
+	// A song from the link, or the one saved here when the jam comes back empty, takes the place of the deal.
+	if (!replay && !restoring)
+		restoring = setTimeout(async () => ((await restore(snap)) ? ghost.play() : deal(), autosave()))
+	else if (replay) setTimeout(deal)
 })
+let restoring = 0
+const saveKey = 'roughjam.song.' + room
+async function restore(snap) {
+	let song = null,
+		from = ''
+	try {
+		if (songHash) {
+			from = 'link'
+			history.replaceState(null, '', location.pathname + location.search)
+			song = await decodeSong(songHash[2])
+		} else if (!Object.keys(snap || {}).length) {
+			from = 'saved'
+			const saved = localStorage.getItem(saveKey)
+			song = saved && (await decodeSong(saved))
+		}
+		if (!song) return false
+		loadSong(engine, transport, song)
+		if (from === 'link')
+			say(transport.kind === 'ws' ? 'a copy of the shared song, yours to play' : 'the shared song')
+		return true
+	} catch (e) {
+		console.warn(e)
+		// a save that won't load is kept aside rather than overwritten
+		if (from === 'saved') localStorage.setItem(saveKey + '.broken', localStorage.getItem(saveKey))
+		say(from === 'link' ? e.message : 'the song saved here would not load')
+		return false
+	}
+}
+// every change to the jam lands in localStorage, so a reload or a closed tab never loses a song
+function autosave() {
+	let last = ''
+	const save = () => {
+		try {
+			const json = JSON.stringify(songOf(engine, transport))
+			if (json !== last) localStorage.setItem(saveKey, (last = json))
+		} catch (e) {
+			console.warn('autosave', e)
+		}
+	}
+	save()
+	setInterval(save, 1000)
+	addEventListener('pagehide', save)
+}
 function deal() {
 	let want = registry.get(q.get('instrument'))
 	if (want?.hidden) want = null
@@ -280,31 +363,6 @@ function deal() {
 
 const $ = (id) => document.getElementById(id)
 
-const JAM_A = [
-	'dusk',
-	'amber',
-	'moss',
-	'salt',
-	'velvet',
-	'copper',
-	'hollow',
-	'paper',
-	'lantern',
-	'violet',
-]
-const JAM_B = [
-	'moth',
-	'heron',
-	'fern',
-	'kettle',
-	'orchard',
-	'tide',
-	'comet',
-	'wren',
-	'ember',
-	'quarry',
-]
-const pick = (a) => a[Math.floor(Math.random() * a.length)]
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
 const word = (text, fn) => {
@@ -343,7 +401,7 @@ if (replay) {
 else if (transport.kind === 'ws') {
 	const fresh = (text) =>
 		Object.assign(
-			word(text, () => (location.href = '/j/' + pick(JAM_A) + '-' + pick(JAM_B))),
+			word(text, () => (location.href = '/j/' + freshJam())),
 			{ title: 'a new jam with its own link, for you and whoever you send it to' },
 		)
 	if (isOpenJam) {
@@ -370,6 +428,52 @@ else if (transport.kind === 'ws') {
 		out.title = 'back to the jam everyone lands in'
 		jamline.append(b, ' · ', out, ' · ', fresh('another'))
 	}
+}
+// share: a link that carries the song itself, so it works with no relay and offline; opening it forks the song
+// into a new jam. Without a relay here it points at jam.0sk.ar, the one place a friend can open it.
+if (!replay && !replayId) {
+	const chip = word('share this song', share)
+	chip.className = 'chip'
+	chip.title = 'copy a link that holds this song: whoever opens it gets their own copy to play'
+	chip.insertAdjacentHTML(
+		'afterbegin',
+		'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1.3-1.3a2.5 2.5 0 0 1 3.5 3.5L10.5 8M9 11.5l-1.3 1.3a2.5 2.5 0 0 1-3.5-3.5L5.5 8"/></svg>',
+	)
+	jellify(chip, { amount: 0.12 })
+	jamline.append(jamline.childNodes.length ? ' ' : '', chip)
+}
+async function songLink() {
+	const base = transport.kind === 'ws' ? location.origin : 'https://jam.0sk.ar'
+	return base + '/#song=' + (await encodeSong(songOf(engine, transport)))
+}
+async function share() {
+	const chip = this
+	const label = chip.lastChild,
+		was = label.textContent
+	const link = songLink()
+	try {
+		// Safari only lets the clipboard wait for a promise handed over inside the tap
+		if (window.ClipboardItem)
+			await navigator.clipboard.write([
+				new ClipboardItem({
+					'text/plain': link.then((u) => new Blob([u], { type: 'text/plain' })),
+				}),
+			])
+		else await navigator.clipboard.writeText(await link)
+		label.textContent = 'link copied'
+		say('')
+	} catch {
+		// no clipboard: the link itself, to copy by hand
+		const a = Object.assign(document.createElement('a'), {
+			href: await link,
+			textContent: 'the song',
+		})
+		say('copy this link: ', a)
+	}
+	setTimeout(() => (label.textContent = was), 1600)
+}
+function say(...what) {
+	$('recline').replaceChildren(...what)
 }
 // save audio: render the recording offline (m4a or WAV); phones share it, desktops download it
 function saveAudio() {
@@ -657,7 +761,23 @@ function popFlash(id) {
 	flashT = setTimeout(() => (flash.hidden = true), 1100)
 }
 
-Object.assign(window, { jam: { engine, transport, view, bots, registry, me, heart, undo } })
+Object.assign(window, {
+	jam: {
+		engine,
+		transport,
+		view,
+		bots,
+		registry,
+		me,
+		heart,
+		undo,
+		// the escape hatch: jam.export() is the song as data, jam.import() takes that, its JSON or a share link
+		export: () => songOf(engine, transport),
+		import: async (song) =>
+			loadSong(engine, transport, typeof song === 'string' ? await decodeSong(song) : song),
+		link: songLink,
+	},
+})
 
 // records 8 bars from the next loop start
 const recBtn = $('rec')
@@ -713,4 +833,6 @@ if (recBtn && transport.kind === 'ws') {
 		}
 	}
 	jellify(recBtn)
-} else if (recBtn) recBtn.closest('li').hidden = true
+} else if (recBtn && !replay)
+	recBtn.onclick = () => say('recording needs the relay; share keeps the song as a link')
+else if (recBtn) recBtn.closest('li').hidden = true
