@@ -23,6 +23,7 @@ export default {
 		decay: { value: 0.5, min: 0.05, max: 2, step: 0.05 },
 		shape: { value: 'sine', options: ['sine', 'square'] },
 	},
+	ownLength: true, // optional: the seat's loop length does nothing you'd notice, or a gesture of yours sets it (ctx.setLen, a pattern length), so the host's bracket stays off your sheet
 	playhead: 'x', // optional: the host draws the playhead along x (default), 'y', or false if you show time yourself
 	demo: (shape, aspect) => [
 		[
@@ -41,7 +42,7 @@ export default {
 }
 ```
 
-`ctx` is `{ audio, out, clock, params, color, setLen }`. Connect your sound to `out`, never to `audio.destination`. `color` is your ring's colour as `#rrggbb`. `clock` is `{ bpm, steps, stepDur, startTime, now(), pos(), playing }` in AudioContext seconds, with `pos()` the fractional step in the loop. `clock` is your seat's own: each seat sets its loop length on its sheet (1, 2, 4 or 8 bars, like a clip), so `clock.steps` and `pos()` are your loop's while `startTime` stays the jam's. It changes live, so read `clock.steps` rather than assuming 16. `ctx.setLen(n)` sets it from a gesture of yours (n steps, `null` for the jam's length); arrays in your state that are one entry per step are cut or repeated to fit.
+`ctx` is `{ audio, out, clock, params, color, setLen }`. Connect your sound to `out`, never to `audio.destination`. `color` is your ring's colour as `#rrggbb`. `clock` is `{ bpm, steps, stepDur, startTime, now(), pos(), playing }` in AudioContext seconds, with `pos()` the fractional step in the loop. `clock` is your seat's own: each seat sets its loop length with the bracket on its sheet's right edge (1, 2, 4 or 8 bars, like a clip), so `clock.steps` and `pos()` are your loop's while `startTime` stays the jam's. It changes live, so read `clock.steps` rather than assuming 16. `ctx.setLen(n)` sets it from a gesture of yours (n steps, `null` for the jam's length); arrays in your state that are one entry per step are cut or repeated to fit.
 
 The instance does five things:
 
@@ -59,7 +60,7 @@ If someone sends a state your instrument doesn't understand, the registry ignore
 
 The controls should vanish into the instrument. A knob gets built in only when it matters enough to play with, and then in one of two places:
 
-1. The drawing is the control. Height, length, speed and shape of the stroke carry the parameter: bass's knot stretches the riff, gears' outward drag adds pulses, steps' bracket sets the length. Prefer this; if a knob can become part of the gesture, make it so.
+1. The drawing is the control. Height, length, speed and shape of the stroke carry the parameter: bass's knot stretches the riff, gears' outward drag adds pulses, the host's bracket on every sheet's right edge sets the loop to 1, 2, 4 or 8 bars, steps' own bracket the pattern, and dragging steps' offbeat ticks swings them. Prefer this; if a knob can become part of the gesture, make it so.
 2. The tool row. Anything that changes what your next stroke does (inks, modes like steps' pitch/loud/chance) is a round chip in the one row under the sheet, in the brush style. Nowhere else.
 
 Everything else stays off the sheet. `d` always holds every param, as the whole machine opened up, so it's never where a control gets moved to; the only question is whether to build a knob in. No clickable words on the sheet, nothing outside its frame but the tool row. Legends and readouts that take no taps (drums' row names, the chord) are fine.

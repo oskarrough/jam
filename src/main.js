@@ -241,6 +241,10 @@ view = createView(document.getElementById('c'), engine, {
 	onSolo: (i) => engine.setSolo(i),
 	onMix: (i, patch) => !replay && engine.setMix(seats[i], patch),
 	onPointer: pointerTo,
+	onBars(i, n) {
+		undo.remember(i)
+		engine.setBars(seats[i], n)
+	},
 })
 const ghost = createGhost({ engine, view, me })
 const heart = createHeart({

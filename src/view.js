@@ -33,7 +33,7 @@ function rng(seed) {
 export function createView(
 	canvas,
 	engine,
-	{ occupant, canDraw, onSit, onPointer, onHand, canHand, onWipe, onMute, onSolo, onMix },
+	{ occupant, canDraw, onSit, onPointer, onHand, canHand, onWipe, onMute, onSolo, onMix, onBars },
 ) {
 	const g = canvas.getContext('2d')
 	const { seats, transport } = engine
@@ -433,7 +433,34 @@ export function createView(
 		x: Math.max(0, Math.min(0.9999, (x - sheet.x) / sheet.w)),
 		y: Math.max(0, Math.min(1, (y - sheet.y) / sheet.h)),
 	})
+	// The length bracket on the sheet's right edge: drag it left to halve the loop, right to double it, 1 to 8 bars.
+	// While it's held the sheet shows what you'd get (cut, or repeated to fill); it lands when you let go.
+	// Instruments with a length gesture of their own (mod.ownLength) go without it.
+	const BARS = [1, 2, 4, 8]
+	let lenDrag = null
+	const barsOf = (L) => engine.steps(L) / (engine.loop().beatsPerBar * 4)
+	const snapBars = (b) => BARS.reduce((a, c) => (Math.abs(Math.log2(c / b)) < Math.abs(Math.log2(a / b)) ? c : a))
+	const hasBracket = () =>
+		focus.on && sheet && onBars && canDraw(focus.seat) && !seats[focus.seat]?.module.ownLength
+	const onBracket = (x, y) =>
+		hasBracket() &&
+		y >= sheet.y &&
+		y <= sheet.y + sheet.h &&
+		Math.abs(x - (sheet.x + sheet.w)) < (matchMedia('(pointer: coarse)').matches ? 22 : 14)
+	const bracketStep = () => Math.max(40, Math.min(110, sheet.w * 0.16)) // px of drag per halving or doubling
+	function bracketMove(x) {
+		const d = lenDrag,
+			n = Math.round((x - d.x0) / bracketStep())
+		d.bars = snapBars(Math.max(1, Math.min(8, d.from * 2 ** n)))
+	}
 	canvas.addEventListener('pointerdown', (e) => {
+		if (!drag && !lenDrag && !mixer.on && onBracket(e.clientX, e.clientY)) {
+			canvas.setPointerCapture(e.pointerId)
+			const from = snapBars(barsOf(seats[focus.seat]))
+			lenDrag = { id: e.pointerId, seat: focus.seat, x0: e.clientX, from, bars: from, was: barsOf(seats[focus.seat]) }
+			return
+		}
+		if (lenDrag) return
 		// a second finger never draws: two-finger gestures (tap undoes, drag erases) belong to the host
 		if (e.pointerType === 'touch' && (drag || handing || mixer.drag)) return
 		const m = mixAt()
@@ -583,6 +610,7 @@ export function createView(
 			if (handing.moved) canvas.style.cursor = 'grabbing'
 			return
 		}
+		if (lenDrag && e.pointerId === lenDrag.id) return bracketMove(e.clientX)
 		if (!drag || e.pointerId !== drag.id) return
 		if (drag.pending) {
 			if (Math.hypot(e.clientX - drag.pending.x, e.clientY - drag.pending.y) < 6) return
@@ -617,6 +645,12 @@ export function createView(
 	// a tap on a badge sits there, or zooms if it's yours
 	const tapBadge = (from) => onSit(from)
 	const up = (e) => {
+		if (lenDrag && e.pointerId === lenDrag.id) {
+			const { seat, bars, was } = lenDrag
+			lenDrag = null
+			if (e.type !== 'pointercancel' && bars !== was) onBars(seat, bars)
+			return
+		}
 		if (mixer.drag && e.pointerId === mixer.drag.id) {
 			const { moved, on, long, timer } = mixer.drag
 			mixer.drag = null
@@ -1107,26 +1141,80 @@ export function createView(
 			const steps = engine.steps(L),
 				fg = dark ? (a) => rgba(PALE, a) : ink,
 				axis = L.module.playhead ?? 'x'
+			// the bracket held: r is the new length over the old, shown on the sheet when time runs across it
+			const held = lenDrag?.seat === sheetSeat ? lenDrag : null,
+				r = held && axis === 'x' ? held.bars / barsOf(L) : 1
 			// beat lines across the way time runs
-			for (let s = 0; s < steps; s += 4) {
+			const shown = steps * Math.max(1, r)
+			for (let s = 0; s < shown; s += 4) {
 				g.fillStyle = s % 16 ? fg(0.07) : fg(0.18)
 				if (axis === 'y') g.fillRect(x, y + (s / steps) * h, w, 1)
-				else g.fillRect(x + (s / steps) * w, y, 1, h)
+				else g.fillRect(x + (s / shown) * w, y, 1, h)
 			}
 			const ph = { color: L.color, ink: dark ? PALE : INK, axis }
 			g.save()
 			g.translate(x, y)
-			if (axis) playhead.under(g, w, h, L.clock, ph)
+			if (axis && r === 1) playhead.under(g, w, h, L.clock, ph)
 			if (dark) g.filter = 'invert(1) hue-rotate(180deg)'
-			g.drawImage(L.canvas, 0, 0, w, h)
+			if (r > 1)
+				// longer: the part repeats to fill, the copies fainter
+				for (let k = 0; k < r; k++) {
+					g.globalAlpha = k ? 0.4 : 1
+					g.drawImage(L.canvas, (k * w) / r, 0, w / r, h)
+				}
+			else g.drawImage(L.canvas, 0, 0, w, h)
+			g.globalAlpha = 1
 			g.filter = 'none'
-			if (axis) playhead.over(g, w, h, L.clock, ph)
+			if (r < 1) {
+				// shorter: what gets cut sinks into the sheet
+				g.fillStyle = dark ? 'rgba(20,12,34,.72)' : 'rgba(244,238,226,.75)'
+				g.fillRect(w * r, 0, w * (1 - r), h)
+			}
+			if (axis && r === 1) playhead.over(g, w, h, L.clock, ph)
+			if (!L.module.ownLength && canDraw(sheetSeat)) drawBracket(w * Math.min(1, r), h, fg, L.color, held)
 			g.restore()
 		}
 		g.strokeStyle = INK
 		g.lineWidth = 1.4
 		g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
 		g.restore()
+	}
+
+	// a ] hugging the right edge, with a grip like a clip's trim handle; held, it says how many bars
+	function drawBracket(bx, h, fg, color, held) {
+		const arm = Math.min(12, h * 0.04),
+			x = bx - 5
+		g.strokeStyle = fg(held ? 0.95 : 0.55)
+		g.lineWidth = 2
+		g.lineCap = 'round'
+		g.lineJoin = 'round'
+		g.beginPath()
+		g.moveTo(x - arm, 5)
+		g.lineTo(x, 5)
+		g.lineTo(x, h - 5)
+		g.lineTo(x - arm, h - 5)
+		g.stroke()
+		const gw = held ? 11 : 9,
+			gh = Math.min(56, h * 0.16)
+		g.beginPath()
+		g.roundRect(x - gw / 2, h / 2 - gh / 2, gw, gh, gw / 2)
+		g.fillStyle = color
+		g.fill()
+		g.strokeStyle = fg(0.9)
+		g.lineWidth = 1.4
+		g.stroke()
+		if (!held) return
+		const say = held.bars === 1 ? '1 bar' : `${held.bars} bars`
+		g.font = serif(19)
+		g.textAlign = 'right'
+		g.textBaseline = 'middle'
+		const tw = g.measureText(say).width
+		g.fillStyle = 'rgba(20,12,34,.85)'
+		g.beginPath()
+		g.roundRect(x - gw - 18 - tw, h / 2 - 16, tw + 20, 32, 16)
+		g.fill()
+		g.fillStyle = color
+		g.fillText(say, x - gw - 8, h / 2)
 	}
 
 	function drawStrips(phase) {

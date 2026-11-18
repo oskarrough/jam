@@ -16,43 +16,11 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	row.className = 'glyphs'
 	const caption = document.createElement('p')
 	caption.className = 'caption'
-	// the seat's loop length in bars, in the sheet's other top corner: a little drawn loop, then 1 2 4 8
-	const loops = document.createElement('p')
-	loops.className = 'loops'
-	loops.setAttribute('aria-label', 'Loop length in bars')
-	loops.innerHTML =
-		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 6.5A7.5 7.5 0 1 0 19.5 12"/><path d="M14 5.5l3.4 1.2-.8-3.6"/></svg>'
-	const BARS = [1, 2, 4, 8]
-	for (const n of BARS) {
-		const b = document.createElement('button')
-		b.textContent = n
-		b.title = n === 1 ? 'loop one bar' : `loop ${n} bars`
-		b.onclick = () => {
-			const L = seat()
-			if (!L) return
-			before?.()
-			engine.setBars(L, n)
-			paintLoops()
-		}
-		loops.append(b)
-	}
-	const odd = document.createElement('i')
-	loops.append(odd)
 	// an instrument's inks (mod.inks), like a painter's brushes, under the sheet's bottom-left corner; one per stroke
 	const inks = document.createElement('p')
 	inks.className = 'inks'
 	inks.setAttribute('aria-label', 'Inks')
-	el.append(row, caption, loops, inks)
-	function paintLoops() {
-		const L = seat()
-		if (!L) return
-		const bars = engine.steps(L) / (engine.loop().beatsPerBar * 4)
-		for (const b of loops.querySelectorAll('button'))
-			b.setAttribute('aria-pressed', +b.textContent === bars)
-		// a length set some other way (an instrument's own gesture) that isn't 1, 2, 4 or 8 bars
-		odd.textContent = BARS.includes(bars) ? '' : engine.steps(L) + '/16'
-	}
-
+	el.append(row, caption, inks)
 	const seat = () => engine.seats[me.seat]
 	const showCurrent = () => {
 		const L = seat()
@@ -165,7 +133,6 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 		for (const b of buttons) b.setAttribute('aria-pressed', b.dataset.id === L.module.id)
 		showCurrent()
 		paintInks()
-		paintLoops()
 		const cur = buttons.find((b) => b.dataset.id === L.module.id)
 		// arrows switch the instrument (main.js), so a focused glyph follows the choice
 		if (cur && buttons.includes(document.activeElement)) cur.focus()

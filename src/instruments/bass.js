@@ -88,6 +88,7 @@ const inksOf = (s, n) => Array.from({ length: n }, (_, c) => +s?.[c] || 0)
 
 export default {
 	id: 'bass',
+	ownLength: true, // the knot sets the loop, so the sheet's bracket stays off
 	glyph:
 		'<path d="M3 19c4-9 8 9 13 0s9 9 13 0" stroke-width="2.4"/><circle class="f" cx="29" cy="19" r="2.6"/>',
 	name: 'Bass',

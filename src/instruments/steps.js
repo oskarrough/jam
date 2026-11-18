@@ -1,6 +1,7 @@
 // 02 Steps: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
 // Each note has a tail, piano-roll style: pull its knob sideways to hold the note for more steps.
-// Chips under the sheet pick what a drag draws: pitch, loud or chance; drag the bracket to shorten the pattern (polymeter).
+// Chips under the sheet pick what a drag draws: pitch, loud or chance; drag the bracket to shorten the pattern (polymeter);
+// drag the offbeat ticks under the grid sideways to swing them (params.swing, in steps).
 //
 // state: { v: 2, len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9]
 // Mono: a note that sounds cuts the tail it lands on. Parts without v (length 0..9) are migrated on load.
@@ -68,12 +69,13 @@ function blob(g, x, y, rx, ry, seed) {
 
 export default {
 	id: 'steps',
+	ownLength: true, // its own bracket shortens the pattern instead
 	// columns are pattern steps, not loop phase, so the host playhead would lie; the playing step glows
 	playhead: false,
 	glyph:
 		'<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
 	name: 'Steps',
-	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one under the sheet); drag the bracket to shorten the pattern.',
+	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one under the sheet); drag the bracket to shorten the pattern; drag the little ticks under the grid sideways to swing.',
 	optional: ['v'],
 	inks: INKS,
 	modes: PARAMS,
@@ -99,7 +101,7 @@ export default {
 		let shape = 'ring'
 		const state = { v: 2, len: N, s: Array(N).fill(0) }
 		const fx = flashes()
-		const ui = { param: 'pitch', pull: -1 } // what a drag draws, and the tail being pulled; local to this player
+		const ui = { param: 'pitch', pull: -1, swinging: false } // what a drag draws, and the tail being pulled; local to this player
 		let press = null
 		let held = null // the note still sounding, so the next one can cut it
 		let ink = 0 // the brush in your hand; local, but every note keeps its own
@@ -273,8 +275,10 @@ export default {
 					press = { kind: 'len' }
 					return
 				}
+				// the rest of the bottom edge holds the offbeat ticks: drag them sideways to swing
 				if (e.y > BAND) {
-					press = null
+					press = { kind: 'swing', x0: e.px, s0: params.swing }
+					ui.swinging = true
 					return
 				}
 				press = {
@@ -291,6 +295,10 @@ export default {
 			} else if (e.type === 'move' && press) {
 				if (press.kind === 'len') {
 					state.len = clamp(Math.round(e.x * N), 1, N)
+					return
+				}
+				if (press.kind === 'swing') {
+					params.swing = clamp(Math.round((press.s0 + (e.px - press.x0) / cw) * 100) / 100, 0, 0.5)
 					return
 				}
 				const dx = e.px - press.x0,
@@ -325,6 +333,7 @@ export default {
 							: inked(fresh(ui.param === 'pitch' ? Math.round((1 - yy) * PMAX) : 7))
 				press = null
 				ui.pull = -1
+				ui.swinging = false
 			}
 		}
 
@@ -409,11 +418,36 @@ export default {
 							py = top + 4 + Math.sin(u * 9 + k) * 1.5
 						u ? g.lineTo(px, py) : g.moveTo(px, py)
 					}
-				else {
+				else if (k % 2 === 0) {
 					g.moveTo(x, top + 2)
 					g.lineTo(x, top + 6)
 				}
 				g.stroke()
+				// offbeats lean late by the swing; their ticks are the handle, so they stand a little taller
+				if (k % 2) {
+					const sx = x + params.swing * cw
+					if (params.swing > 0) {
+						g.strokeStyle = tint(ink, inPat ? 0.18 : 0.08)
+						g.beginPath()
+						g.moveTo(x, top + 2)
+						g.lineTo(x, top + 6)
+						g.stroke()
+					}
+					g.strokeStyle = params.swing > 0 ? tint(col, inPat ? 1 : 0.35) : tint(ink, inPat ? 0.6 : 0.2)
+					g.lineWidth = params.swing > 0 || ui.swinging ? 2 : 1.4
+					g.beginPath()
+					g.moveTo(x, top + 2)
+					g.quadraticCurveTo(sx, top + 4, sx, top + 9)
+					g.stroke()
+				}
+			}
+			// while the ticks are held, the swing as a drum machine would print it
+			if (ui.swinging) {
+				g.font = `600 ${Math.max(11, Math.min(15, h * 0.045))}px ${SANS}`
+				g.textBaseline = 'middle'
+				g.textAlign = 'center'
+				g.fillStyle = col
+				g.fillText(`${Math.round((1 + params.swing) * 50)}%`, w / 2, top + (h - top) * 0.62)
 			}
 			// tails: solid while the note sounds, a thin dotted run where the next note has cut it
 			for (let k = 0; k < state.len; k++) {
@@ -556,7 +590,7 @@ export default {
 			g.textAlign = 'center'
 			const lw = g.measureText(`${state.len}`).width
 			g.fillStyle = tint(ink, 0.6)
-			g.fillText(`${state.len}`, clamp(bx, lw / 2 + 4, w - lw / 2 - 4), top + (h - top) * 0.62)
+			if (!ui.swinging) g.fillText(`${state.len}`, clamp(bx, lw / 2 + 4, w - lw / 2 - 4), top + (h - top) * 0.62)
 		}
 
 		// ring: a note is a dot, a held note an arc round the dial as long as it sounds

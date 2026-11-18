@@ -6,6 +6,7 @@ export default {
 	id: 'empty',
 	name: 'Empty',
 	hidden: true,
+	ownLength: true, // nothing to loop yet, so no bracket
 	how: 'Pick an instrument from the glyphs above.',
 	glyph: '<path d="M16 10v12M10 16h12" stroke-width="1.4"/>',
 	playhead: false,

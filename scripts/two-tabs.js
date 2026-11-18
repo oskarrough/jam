@@ -49,7 +49,15 @@ try {
 			() => false,
 		)
 	check(got, "ben hears ana's drawing")
-	await a.click('.loops button:text-is("1")')
+	// the bracket on the sheet's right edge: each notch left halves the loop, down to one bar
+	await play(a, 'tide', { sheet: true })
+	const t = await a.evaluate(() => window.jam.view.focus.sheet)
+	await a.mouse.move(t.x + t.w - 4, t.y + t.h / 2)
+	await a.mouse.down()
+	await a.mouse.move(t.x + t.w - 4 - 4 * Math.max(40, Math.min(110, t.w * 0.16)), t.y + t.h / 2, {
+		steps: 8,
+	})
+	await a.mouse.up()
 	const len = await b
 		.waitForFunction(
 			(seat) => {
@@ -63,7 +71,7 @@ try {
 			() => true,
 			() => false,
 		)
-	check(len, "ben's copy of ana's bass loops one bar")
+	check(len, "ben's copy of ana's tide loops one bar")
 	// the eye holds the chords: ana taps it, ben's loop rolls the same bar on
 	await a.mouse.click(5, 5)
 	await a.waitForFunction(() => !window.jam.view.focus.on && !window.jam.view.moving)
