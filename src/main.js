@@ -311,8 +311,6 @@ async function restore(snap) {
 		}
 		if (!song) return false
 		loadSong(engine, transport, song)
-		if (from === 'link')
-			say(transport.kind === 'ws' ? 'a copy of the shared song, yours to play' : 'the shared song')
 		return true
 	} catch (e) {
 		console.warn(e)
