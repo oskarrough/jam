@@ -3,7 +3,7 @@
 //
 // state = { marbles } 't,y,h,i;…' (a string, so the engine's loop-length resize leaves it alone)
 //   t  where it first lands, 0..1 of the loop    y  pitch, 0 low .. 1 high    h  drop height, 0 (a tap) .. 1
-//   i  its ink, picked under the sheet per marble; absent on parts from before inks (the seat's old voice)
+//   i  its ink, picked in the tool strip per marble; absent on parts from before inks (the seat's old voice)
 
 import { voice as jukebox } from './lib/voices.js'
 import { voiced, head, dash } from './lib/voiced.js'

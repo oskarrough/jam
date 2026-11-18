@@ -18,7 +18,7 @@ const cutoffOf = (o) => 160 * Math.pow(2, o * 5.6)
 // the filter ink: sweep's cutoff, y = 0 bright
 const sweepOf = (y) => 60 * Math.pow(2, (1 - y) * 7.5)
 // two inks, like brushes: glow is today's bloom, filter is a hand on sweep's cutoff over the same chord
-// [name, 32×32 svg for its brush under the sheet]; the first is the default
+// [name, 32×32 svg for its brush in the tool strip]; the first is the default
 const INKS = [
 	[
 		'glow',

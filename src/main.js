@@ -707,7 +707,9 @@ addEventListener('zoom', (e) => {
 		sheetbar.style.left = sheet.x + 'px'
 		sheetbar.style.top = sheet.y - (innerWidth < 640 ? 104 : 54) + 'px'
 		sheetbar.style.width = sheet.w + 'px'
-		sheetbar.style.setProperty('--inks-top', (innerWidth < 640 ? 104 : 54) + sheet.h + 8 + 'px')
+		// the tool strip sits inside the sheet's frame, under the drawing
+		sheetbar.style.setProperty('--inks-top', (innerWidth < 640 ? 104 : 54) + sheet.h + 'px')
+		sheetbar.style.setProperty('--inks-h', (sheet.tools || 0) + 'px')
 		strip.paint()
 	}
 	rideSheet()

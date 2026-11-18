@@ -4,7 +4,7 @@
 //
 // state = { riff, ink, len? }
 //   riff  one character per cell: '0'..'7' a scale degree, '.' a rest. The cells spread evenly over the loop.
-//   ink   one digit per cell, its ink, picked under the sheet per note. Absent before inks: the seat's old voice.
+//   ink   one digit per cell, its ink, picked in the tool strip per note. Absent before inks: the seat's old voice.
 //   len   only on hosts without ctx.setLen: the loop length in steps the riff stretches over.
 
 import { voice as jukebox } from './lib/voices.js'

@@ -17,7 +17,7 @@ import { line } from './lib/demo.js'
 
 const STRINGS = 6
 const MAX_HITS = 96
-// two inks, picked under the sheet per strum: nylon is today's pluck, steel rings bright and long
+// two inks, picked in the tool strip per strum: nylon is today's pluck, steel rings bright and long
 const INKS = [
 	['nylon', '<path d="M6 26C10 16 22 16 26 6" stroke-width="5"/>'],
 	[

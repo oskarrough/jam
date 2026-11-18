@@ -118,6 +118,18 @@ export function createView(
 		}
 	}
 
+	// The sheet's frame holds the drawing and, for an instrument with inks or modes, a darker tool strip along
+	// its bottom edge, like the knobs on a device. `sheet` is the drawing alone; sheet.tools is the strip's height.
+	let frameBox = null
+	const toolsOf = (mod) =>
+		mod?.inks?.length || mod?.modes?.length ? (innerWidth < 640 ? 46 : 54) : 0
+	function fitTools() {
+		const T = toolsOf(seats[sheetSeat]?.module)
+		if (sheet && frameBox && sheet.tools === T && sheet.h === frameBox.h - T) return false
+		sheet = { ...frameBox, h: frameBox.h - T, tools: T }
+		return true
+	}
+
 	function resize() {
 		DPR = Math.min(dprCap, devicePixelRatio || 1)
 		W = innerWidth
@@ -137,17 +149,18 @@ export function createView(
 		const sy = (narrow ? 8 : 12) + STRIP
 		if (narrow) {
 			const band = 132
-			sheet = { x: 8, y: sy, w: W - 16, h: Math.max(160, H - sy - bottom - band) }
+			frameBox = { x: 8, y: sy, w: W - 16, h: Math.max(160, H - sy - bottom - band) }
 			SF = (band - 10) / 1.1
 			CXF = W / 2
-			CYF = sheet.y + sheet.h + band / 2
+			CYF = frameBox.y + frameBox.h + band / 2
 		} else {
 			const gutter = Math.max(100, Math.min(W * 0.1, 200))
-			sheet = { x: gutter, y: sy, w: W - gutter - 16, h: Math.max(160, H - sy - bottom - 16) }
+			frameBox = { x: gutter, y: sy, w: W - gutter - 16, h: Math.max(160, H - sy - bottom - 16) }
 			SF = gutter - 12 // whole, badges and all: at 45° they reach 0.36 S + their radius, inside the disc's 0.5 S
 			CXF = gutter / 2
-			CYF = sheet.y + sheet.h / 2
+			CYF = frameBox.y + frameBox.h / 2
 		}
+		fitTools()
 		applyZoom()
 		sizeSeats()
 		if (focus.on)
@@ -718,6 +731,7 @@ export function createView(
 		focus.seat = on ? i : -1
 		if (on) {
 			sheetSeat = i
+			fitTools()
 			sizeSeats()
 		} // on the way out the sheet keeps its drawing until it has slid away
 		hover = null
@@ -960,6 +974,13 @@ export function createView(
 	}
 
 	function frame(t) {
+		// the instrument on the sheet changed to one with (or without) a tool strip
+		if (focus.on && fitTools()) {
+			sizeSeats()
+			dispatchEvent(
+				new CustomEvent('zoom', { detail: { on: true, seat: focus.seat, sheet: { ...sheet } } }),
+			)
+		}
 		adapt(t, t - lastT)
 		const dt = Math.min(0.05, (t - lastT) / 1000)
 		lastT = t
@@ -1130,13 +1151,23 @@ export function createView(
 			L = seats[sheetSeat]
 		g.save()
 		g.translate((1 - e) * slideDist(), 0) // slides in from the right edge, never translucent
+		const T = sheet.tools || 0
 		g.fillStyle = 'rgba(42,28,72,.5)'
-		g.fillRect(x + 6, y + 8, w, h)
+		g.fillRect(x + 6, y + 8, w, h + T)
 		// canvas is drawn in ink for the paper rings, so here it goes through invert + half-turn hue: ink turns pale,
 		// pigments keep their hue and come up bright. Browsers without canvas filters keep a paper sheet.
 		const dark = canFilter()
 		g.fillStyle = dark ? CHAMBER : PAPER
 		g.fillRect(x, y, w, h)
+		if (T) {
+			// the tool strip: the instrument's own panel, a shade darker, its chips (picker.js) sitting on it
+			g.fillStyle = dark ? '#110c1c' : '#e2d8c4'
+			g.fillRect(x, y + h, w, T)
+			g.fillStyle = dark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.08)'
+			g.fillRect(x, y + h, w, 1)
+			g.fillStyle = 'rgba(0,0,0,.35)'
+			g.fillRect(x, y + h + 1, w, 2)
+		}
 		if (L && L.w === Math.round(w)) {
 			const steps = engine.steps(L),
 				fg = dark ? (a) => rgba(PALE, a) : ink,
@@ -1176,7 +1207,7 @@ export function createView(
 		}
 		g.strokeStyle = INK
 		g.lineWidth = 1.4
-		g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+		g.strokeRect(x + 0.5, y + 0.5, w - 1, h + T - 1)
 		g.restore()
 	}
 

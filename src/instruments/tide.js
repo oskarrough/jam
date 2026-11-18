@@ -4,7 +4,7 @@
 //
 // state = { tide } one character per sample, W samples across the loop: '.' is dry, otherwise a height
 // (LEVELS of them, '0' the bottom). A string, so the engine's loop-length resize leaves it alone.
-// state.ink: the ink of each sample, one digit each, picked under the sheet per stretch of water.
+// state.ink: the ink of each sample, one digit each, picked in the tool strip per stretch of water.
 // Parts from before inks have none: their water is all the seat's old voice.
 
 import { voice as jukebox } from './lib/voices.js'

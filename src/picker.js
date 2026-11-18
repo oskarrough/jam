@@ -16,7 +16,7 @@ export function createStrip({ engine, registry, me, el, before, chosen }) {
 	row.className = 'glyphs'
 	const caption = document.createElement('p')
 	caption.className = 'caption'
-	// an instrument's inks (mod.inks), like a painter's brushes, under the sheet's bottom-left corner; one per stroke
+	// an instrument's inks (mod.inks), like a painter's brushes, in the tool strip along the sheet's bottom edge; one per stroke
 	const inks = document.createElement('p')
 	inks.className = 'inks'
 	inks.setAttribute('aria-label', 'Inks')

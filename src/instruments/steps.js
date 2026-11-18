@@ -1,6 +1,6 @@
 // 02 Steps: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
 // Each note has a tail, piano-roll style: pull its knob sideways to hold the note for more steps.
-// Chips under the sheet pick what a drag draws: pitch, loud or chance; drag the bracket to shorten the pattern (polymeter);
+// Chips in the sheet's tool strip pick what a drag draws: pitch, loud or chance; drag the bracket to shorten the pattern (polymeter);
 // drag the offbeat ticks under the grid sideways to swing them (params.swing, in steps).
 //
 // state: { v: 2, len, s: [step x16] }, step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9]
@@ -12,7 +12,7 @@ import { INK, SANS } from '../palette.js'
 import { tap, line } from './lib/demo.js'
 import { voice as jukebox } from './lib/voices.js'
 
-// Inks, one per note, picked under the sheet. pluck is today's sound (the wave knob); keys a Rhodes,
+// Inks, one per note, picked in the tool strip. pluck is today's sound (the wave knob); keys a Rhodes,
 // organ holds flat for the whole tail, reed breathes in and wavers. A note's ink is step[4], absent = pluck.
 const INKS = [
 	['pluck', '<path d="M6 24c3-14 5-16 7-16s3 10 15 14" stroke-width="1.6"/>'],
@@ -75,7 +75,7 @@ export default {
 	glyph:
 		'<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
 	name: 'Steps',
-	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one under the sheet); drag the bracket to shorten the pattern; drag the little ticks under the grid sideways to swing.',
+	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one in the strip below); drag the bracket to shorten the pattern; drag the little ticks under the grid sideways to swing.',
 	optional: ['v'],
 	inks: INKS,
 	modes: PARAMS,
@@ -645,7 +645,7 @@ export default {
 			get state() {
 				return state
 			},
-			// what a drag draws: a tool from the row under the sheet, not a place on it
+			// what a drag draws: a tool from the strip at the sheet's bottom, not a place on it
 			get mode() {
 				return ui.param
 			},

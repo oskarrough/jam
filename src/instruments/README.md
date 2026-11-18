@@ -34,7 +34,7 @@ export default {
 	generate(steps, params) {}, // optional: a fresh state; robots play your instrument with it
 	sample(steps) {}, // optional: the state an empty jam starts with
 	optional: ['vel'], // optional: state keys an older saved part may lack; setState fills them in
-	inks: [['soft', '<circle …/>'], ['hard', '…']], // optional: brushes under the sheet, [name, 32×32 svg]; the first is the default. The instance keeps `ink` (get/set), and each stroke records its ink in state, so others hear it
+	inks: [['soft', '<circle …/>'], ['hard', '…']], // optional: brushes in the sheet's tool strip, [name, 32×32 svg]; the first is the default. The instance keeps `ink` (get/set), and each stroke records its ink in state, so others hear it
 	modes: ['pitch', 'loud'], // optional: what a drag draws, as word chips beside the inks; the first is the default. The instance keeps `mode` (get/set); local to the player, never in state
 	create(ctx) {
 		return instance
@@ -61,12 +61,12 @@ If someone sends a state your instrument doesn't understand, the registry ignore
 The controls should vanish into the instrument. A knob gets built in only when it matters enough to play with, and then in one of two places:
 
 1. The drawing is the control. Height, length, speed and shape of the stroke carry the parameter: bass's knot stretches the riff, gears' outward drag adds pulses, the host's bracket on every sheet's right edge sets the loop to 1, 2, 4 or 8 bars, steps' own bracket the pattern, and dragging steps' offbeat ticks swings them. Prefer this; if a knob can become part of the gesture, make it so.
-2. The tool row. Anything that changes what your next stroke does (inks, modes like steps' pitch/loud/chance) is a round chip in the one row under the sheet, in the brush style. Nowhere else.
+2. The tool strip. Anything that changes what your next stroke does (inks, modes like steps' pitch/loud/chance) is a round chip in a strip inside the sheet's bottom edge, in the brush style: part of the instrument, like knobs on a device. The drawing ends above it, and taps on it never reach the drawing. Nowhere else.
 
-Everything else stays off the sheet. `d` always holds every param, as the whole machine opened up, so it's never where a control gets moved to; the only question is whether to build a knob in. No clickable words on the sheet, nothing outside its frame but the tool row. Legends and readouts that take no taps (drums' row names, the chord) are fine.
+Everything else stays off the sheet. `d` always holds every param, as the whole machine opened up, so it's never where a control gets moved to; the only question is whether to build a knob in. No clickable words on the sheet, nothing outside its frame. Legends and readouts that take no taps (drums' row names, the chord) are fine.
 
 ## Helpers
 
-`lib/util.js` has small timing, pointer and drawing helpers (`withPointer`, `subSlots`, `flashes`, `view`, `isStrip`) plus synth parts (`env`, `osc`, `noiseSrc`, `mtof`). `lib/kit.js` holds the jam's harmony and some voices: `kit(audio).degree(d, octave)` is a scale degree in the jam's key, `kit(audio).chord(absStep)` the triad for that bar. The key and chords travel with the loop, so use these rather than fixed notes and your instrument follows when someone changes them. `lib/voiced.js` turns `[[name, fn, mark], …]` into inks, one voice per stroke: chips under the sheet, and a note head and dash per ink so the drawing shows which is which (bass, tide and bell use it). `lib/voices.js` is a trimmed copy of the jukebox synth's voices (synbass, 808, rhodes, glock…); `voice('rhodes', -9)` plays one, trimmed in dB.
+`lib/util.js` has small timing, pointer and drawing helpers (`withPointer`, `subSlots`, `flashes`, `view`, `isStrip`) plus synth parts (`env`, `osc`, `noiseSrc`, `mtof`). `lib/kit.js` holds the jam's harmony and some voices: `kit(audio).degree(d, octave)` is a scale degree in the jam's key, `kit(audio).chord(absStep)` the triad for that bar. The key and chords travel with the loop, so use these rather than fixed notes and your instrument follows when someone changes them. `lib/voiced.js` turns `[[name, fn, mark], …]` into inks, one voice per stroke: chips in the tool strip, and a note head and dash per ink so the drawing shows which is which (bass, tide and bell use it). `lib/voices.js` is a trimmed copy of the jukebox synth's voices (synbass, 808, rhodes, glock…); `voice('rhodes', -9)` plays one, trimmed in dB.
 
 The [lab](../../lab/) plays the ten drawable instruments one at a time, each with its own panel.
