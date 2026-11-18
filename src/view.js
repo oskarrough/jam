@@ -1106,13 +1106,15 @@ export function createView(
 		g.fillRect(x, y, w, h)
 		if (L && L.w === Math.round(w)) {
 			const steps = engine.steps(L),
-				fg = dark ? (a) => rgba(PALE, a) : ink
+				fg = dark ? (a) => rgba(PALE, a) : ink,
+				axis = L.module.playhead ?? 'x'
+			// beat lines across the way time runs
 			for (let s = 0; s < steps; s += 4) {
 				g.fillStyle = s % 16 ? fg(0.07) : fg(0.18)
-				g.fillRect(x + (s / steps) * w, y, 1, h)
+				if (axis === 'y') g.fillRect(x, y + (s / steps) * h, w, 1)
+				else g.fillRect(x + (s / steps) * w, y, 1, h)
 			}
-			const axis = L.module.playhead ?? 'x',
-				ph = { color: L.color, ink: dark ? PALE : INK, axis }
+			const ph = { color: L.color, ink: dark ? PALE : INK, axis }
 			g.save()
 			g.translate(x, y)
 			if (axis) playhead.under(g, w, h, L.clock, ph)
