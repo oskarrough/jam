@@ -129,9 +129,40 @@ h1 {
 	outline: 1.5px solid currentColor;
 	outline-offset: 2px;
 }
-/* "New jam" is the one way out of the open jam, so it's a deck chip, not a word: easier to notice */
+/* the header's chips sit in one row, deck-styled so they read as buttons: "New jam" · Share, or ‹ · name · Share */
 .jamline:has(> .chip) {
 	opacity: 1;
+	display: flex;
+	gap: 8px;
+	width: max-content;
+	max-width: calc(100vw - 320px); /* clear of the controls panel, top right */
+}
+@media (pointer: coarse), (max-width: 640px) {
+	.jamline:has(> .chip) {
+		max-width: calc(100vw - 144px);
+	}
+}
+.chip.back {
+	width: 40px;
+	padding: 0;
+	justify-content: center;
+	flex: none;
+}
+.chip.back svg {
+	width: 18px;
+	height: 18px;
+}
+/* a long name gives way; the word Share never does */
+.chip .name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.chip .name + span::before {
+	content: '· ';
+}
+.chip > span:last-child {
+	flex: none;
 }
 .chip {
 	height: 40px;
@@ -142,6 +173,7 @@ h1 {
 	font: italic 400 17px/1 var(--serif);
 	font-variation-settings: 'WONK' 1;
 	white-space: nowrap;
+	min-width: 0;
 }
 .chip:not(:has(svg)) {
 	padding: 0 16px;

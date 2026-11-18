@@ -396,14 +396,11 @@ if (replay) {
 		document.createElement('br'),
 		live(),
 	)
-else if (transport.kind === 'ws') {
-	const fresh = (text) =>
-		Object.assign(
-			word(text, () => (location.href = '/j/' + freshJam())),
-			{ title: 'a new jam with its own link, for you and whoever you send it to' },
-		)
-	if (isOpenJam) {
-		const chip = fresh('New jam')
+else if (isOpenJam) {
+	// the open jam: "New jam" (only with a relay to meet in), then Share
+	if (transport.kind === 'ws') {
+		const chip = word('New jam', () => (location.href = '/j/' + freshJam()))
+		chip.title = 'a new jam with its own link, for you and whoever you send it to'
 		chip.className = 'chip'
 		chip.insertAdjacentHTML(
 			'afterbegin',
@@ -411,30 +408,30 @@ else if (transport.kind === 'ws') {
 		)
 		jellify(chip, { amount: 0.12 })
 		jamline.append(chip)
-	} else {
-		const b = word(room, async () => {
-			try {
-				await navigator.clipboard.writeText(location.origin + '/j/' + encodeURIComponent(room))
-				b.textContent = 'link copied'
-			} catch {
-				b.textContent = location.host + '/j/' + room
-			}
-			setTimeout(() => (b.textContent = room), 1600)
-		})
-		b.title = 'copy the link to this jam'
-		const out = word('leave', () => (location.href = '/'))
-		out.title = 'back to the jam everyone lands in'
-		jamline.append(b, ' · ', out, ' · ', fresh('another'))
 	}
+	jamline.append(shareChip())
+} else {
+	// a named jam, like an iOS header: a round back chip, then the jam's name and Share in one chip.
+	// Another new jam is back, then New jam.
+	const back = word('', () => (location.href = '/'))
+	back.className = 'chip back'
+	back.title = 'back to the jam everyone lands in'
+	back.setAttribute('aria-label', 'back to the open jam')
+	back.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>'
+	jellify(back, { amount: 0.12 })
+	const chip = shareChip()
+	chip.prepend(Object.assign(document.createElement('span'), { className: 'name', textContent: room }))
+	jamline.append(back, chip)
 }
 // share: a link that carries the song itself, so it works with no relay and offline; opening it forks the song
-// into a new jam.
-if (!replay && !replayId) {
-	const chip = word('Share', share)
+// into a new jam. Its last child is the word that flips to "link copied".
+function shareChip() {
+	const chip = word('', share)
 	chip.className = 'chip'
+	chip.append(Object.assign(document.createElement('span'), { textContent: 'Share' }))
 	chip.title = 'copy a link that holds this song: whoever opens it gets their own copy to play'
 	jellify(chip, { amount: 0.12 })
-	jamline.append(jamline.childNodes.length ? ' ' : '', chip)
+	return chip
 }
 async function songLink() {
 	return location.origin + '/#song=' + (await encodeSong(songOf(engine, transport)))
