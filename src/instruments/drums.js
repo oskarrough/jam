@@ -248,11 +248,8 @@ export default {
 		// play the hit you're placing, just for you, once per change of level
 		const hear = (row, lv) => {
 			if (g.heard === lv || ctx.audio.state !== 'running') return
-			g.heard = lv(is808(g.s, row) ? hit808 : hitVoice)[1 << row](
-				ctx,
-				ctx.audio.currentTime + 0.005,
-				lv,
-			)
+			g.heard = lv
+			;(is808(g.s, row) ? hit808 : hitVoice)[1 << row](ctx, ctx.audio.currentTime + 0.005, lv)
 		}
 		// "soft" and "hard" at the bottom and top of the row you're pressing in, fading after you let go
 		let scale = null
