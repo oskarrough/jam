@@ -229,7 +229,7 @@ const presence = replay
 			sit,
 			getUp,
 			rejoin: () => ((me.out = true), backInLine()),
-			draw: (i, f, x, y) => view.showCursor('crowd' + f.id, i, x, y, f.name),
+			draw: (i, f, x, y) => view.showCursor('crowd' + f.id, i, x, y),
 		})
 // two who sat on one seat at the same moment: the later arrival gets up and waits again
 transport.on('peers', () => {

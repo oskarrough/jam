@@ -1537,7 +1537,8 @@ export function createView(
 				g.arc(d.x, d.y + bob, rr * 0.45, 0, TAU)
 				g.stroke()
 			}
-			if (dotHover && Math.hypot(dotHover[0] - d.x, dotHover[1] - d.y) < rr + 5) tip = d
+			if (d.p.name && dotHover && Math.hypot(dotHover[0] - d.x, dotHover[1] - d.y) < rr + 5)
+				tip = d
 		}
 		if (tip) {
 			g.globalAlpha = show

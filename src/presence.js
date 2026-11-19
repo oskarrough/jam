@@ -20,7 +20,6 @@ const PALETTE = [
 	'#ef8354',
 	'#7fc8f8',
 ]
-const NAMES = ['ada', 'bo', 'cleo', 'dev', 'eli', 'fen', 'gus', 'ivy', 'jo', 'kit', 'lou', 'mo']
 const ORDER = [1, 2, 0, 3] // the seats arrivals take first
 const LOOPS = 2 // a candle lasts this many loops
 
@@ -129,7 +128,6 @@ export function createPresence({ transport, seats, sit, getUp, rejoin, draw }) {
 			const k = fakes.length
 			fakes.push({
 				id: 'crowd' + k,
-				name: NAMES[k],
 				fake: true,
 				joinedAt: t + k,
 				seat: 'out',
@@ -156,7 +154,7 @@ export function createPresence({ transport, seats, sit, getUp, rejoin, draw }) {
 			const k = q.indexOf(p)
 			return {
 				id: p.id,
-				name: p.id === transport.id ? 'you' : p.name || 'someone',
+				name: p.fake ? null : p.id === transport.id ? 'you' : p.name || 'someone',
 				color: hue(p.id),
 				seat: seatOf(p),
 				near: k >= 0 && idlest !== undefined ? idlest : -1,

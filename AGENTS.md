@@ -21,5 +21,6 @@
 - Controls: the drawing is the control. Where it can't be, a chip in the strip inside the sheet's bottom edge. `d` holds every param of the whole machine anyway, so it's never where a control gets moved to. Full rule under Controls in `src/instruments/README.md`.
 - Desktop first. The phone only has to not break.
 - Minimal copy. No web-app buttons, panels or settings screens, and no clickable words on the sheet. Presence is visual: dots, badges, burning candles, never lists or sentences.
+- Never invent names for people or players.
 - Robots are opt-in help, off by default; silent empty seats are not a bug.
 - Before shipping: fun in 5 seconds without reading? Strange over safe? One gesture?
