@@ -1,14 +1,16 @@
 // 02 Steps: a pocket step sequencer. Tap a step to toggle it, drag to draw a value across steps.
 // Each note has a tail, piano-roll style: pull its knob sideways to hold the note for more steps.
-// Chips in the sheet's tool strip pick what a drag draws: pitch, loud or chance; drag the bracket on the right edge to double or halve the pattern (1 to 8 bars);
-// drag the offbeat ticks under the grid sideways to swing them (params.swing, in steps).
+// A drag draws pitch (height). Press and hold a note to swell it: its dot breathes bigger and smaller, and you let go
+// at the loudness you want. Fog, the last ink in the strip, paints mist over notes: the thicker it is, the less often
+// the note plays; rub it away with the eraser. Drag the bracket on the right edge to double or halve the pattern
+// (1 to 8 bars); drag the offbeat ticks under the grid sideways to swing them (params.swing, in steps).
 //
-// state: { v: 2, len, s: [step x 16 a bar, 1 to 8 bars] }; len < cells only in older parts (they kept a shorter loop), step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9]
+// state: { v: 2, len, s: [step x 16 a bar, 1 to 8 bars] }; len < cells only in older parts (they kept a shorter loop), step = 0 (off) or [pitch 0..14, length 1..len steps, loud 0..9, chance 0..9 (drawn as fog: 9 is clear)]
 // Mono: a note that sounds cuts the tail it lands on. Parts without v (length 0..9) are migrated on load.
 // Chance rolls are seeded by the absolute step, so every peer hears the same notes.
 import { kit } from './lib/kit.js'
 import { withPointer, absNow, absOf, clamp, flashes, tint, mtof, isStrip, TAU } from './lib/util.js'
-import { INK, SANS } from '../palette.js'
+import { INK } from '../palette.js'
 import { tap, line } from './lib/demo.js'
 import { voice as jukebox } from './lib/voices.js'
 
@@ -29,12 +31,58 @@ const BARS = [1, 2, 4, 8]
 // a pattern's cell count from a saved part's: whole bars, 1 to 8 (older parts were all one bar)
 const cellsOf = (n) => BAR * BARS.reduce((a, b) => (b * BAR <= n ? b : a), 1)
 const PMAX = 14
-const PARAMS = ['pitch', 'loud', 'chance']
-const MAXOF = { pitch: PMAX, loud: 9, chance: 9 }
-const IDX = { pitch: 0, loud: 2, chance: 3 }
 const fresh = (p = 7) => [p, 1, 7, 9]
 // version 1 kept length as 0..9, a pluck's decay; roughly the steps that pluck was heard for
 const oldLen = (d) => clamp(Math.round(d / 2), 1, 5)
+
+// Fog: not a voice but a tool in the same strip. Its chip is a dithered puff.
+const FOG = [
+	'fog',
+	(() => {
+		let s = ''
+		for (let y = 6; y <= 26; y += 4)
+			for (let x = 6; x <= 26; x += 4) {
+				const u = (x - 16) / 11,
+					v = (y - 16) / 9
+				if (u * u + v * v < 1 && ((x + y) / 4) % 2 === 0)
+					s += `<circle class="f" cx="${x}" cy="${y}" r="1.4"/>`
+			}
+		return s
+	})(),
+]
+// hold this long, still, before a note starts to swell; then it breathes this many loudness steps a second
+const HOLD = 0.3,
+	SWELL = 7
+// Mist is drawn the way the backdrop paints its tones: an ordered (Bayer) dither, here thinning out towards
+// the edge of a lumpy puff. Sprites are cached per size, thickness and colour.
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16)
+const mists = new Map()
+function mist(rx, ry, thick, color, px) {
+	rx = Math.max(px, Math.round(rx))
+	ry = Math.max(px, Math.round(ry))
+	const key = `${rx}|${ry}|${thick}|${color}|${px}`
+	let cv = mists.get(key)
+	if (cv) return cv
+	if (mists.size > 80) mists.clear()
+	cv = document.createElement('canvas')
+	cv.width = 2 * rx
+	cv.height = 2 * ry
+	const c = cv.getContext('2d')
+	c.fillStyle = color
+	const d = (thick / 9) * 0.9
+	for (let y = 0; y < 2 * ry; y += px)
+		for (let x = 0; x < 2 * rx; x += px) {
+			const u = (x + px / 2 - rx) / rx,
+				v = (y + px / 2 - ry) / ry
+			const f = 1 - (u * u + v * v) + 0.12 * Math.sin(u * 7 + v * 4) + 0.08 * Math.cos(v * 9 - u * 3)
+			if (f <= 0) continue
+			if (BAYER[((y / px) & 3) * 4 + ((x / px) & 3)] < d * Math.min(1, Math.sqrt(f) * 1.3))
+				c.fillRect(x, y, px - 0.5, px - 0.5)
+		}
+	mists.set(key, cv)
+	return cv
+}
+const thickOf = (st) => 9 - clamp(st[3], 0, 9) // 0 is clear air
 
 // a stable 0..1 roll per absolute step, the same on every machine
 const roll = (abs, k) =>
@@ -77,10 +125,9 @@ export default {
 	glyph:
 		'<path class="f" d="M5 20h4v6H5zM11 12h4v14h-4zM17 17h4v9h-4z"/><path d="M23 9h4v17h-4z" stroke-dasharray="1.5 2"/><path d="M4 6h24" stroke-dasharray="1 3"/>',
 	name: 'Steps',
-	how: 'Tap a step for a note. Pull the knob on its tail right to hold it longer. Drag across steps to draw pitch, loud or chance (pick one in the strip below); drag the bracket on the right edge to double or halve the pattern; drag the little ticks under the grid sideways to swing.',
+	how: 'Tap a step for a note, higher is higher. Hold a note to swell it louder or softer. Pull the knob on its tail right to hold it longer. Fog from the strip mists notes so they play less often; the eraser rubs it away. Drag the bracket on the right edge to double or halve the pattern; drag the little ticks under the grid sideways to swing.',
 	optional: ['v'],
-	inks: INKS,
-	modes: PARAMS,
+	inks: [...INKS, FOG],
 	demo: () => [tap(0.03, 0.45), line(0.06, 0.47, 0.3, 0.47, 10), tap(0.34, 0.45), tap(0.47, 0.45)],
 	params: {
 		wave: { value: 'square', options: ['square', 'triangle', 'sawtooth', 'bell'] },
@@ -104,7 +151,7 @@ export default {
 		const state = { v: 2, len: BAR, s: Array(BAR).fill(0) }
 		let N = BAR // cells in the pattern, state.s.length; len under it only in older parts (polymeter, no longer drawn)
 		const fx = flashes()
-		const ui = { param: 'pitch', pull: -1, swinging: false } // what a drag draws, and the tail being pulled; local to this player
+		const ui = { pull: -1, swinging: false, fog: false } // the tail being pulled, and whether fog is in hand; local to this player
 		let press = null
 		let held = null // the note still sounding, so the next one can cut it
 		let ink = 0 // the brush in your hand; local, but every note keeps its own
@@ -234,9 +281,12 @@ export default {
 				state.s[k] = 0
 				return
 			}
-			const st = inked(ensure(k))
-			const max = MAXOF[ui.param]
-			st[IDX[ui.param]] = clamp(Math.round((1 - y) * max), ui.param === 'chance' ? 1 : 0, max)
+			inked(ensure(k))[0] = clamp(Math.round((1 - y) * PMAX), 0, PMAX)
+		}
+		// fog thickens (or, rubbed, thins) the mist on the note in column k by n
+		function fog(k, n) {
+			const st = state.s[k]
+			if (st) st[3] = clamp(st[3] + n, 1, 9)
 		}
 
 		const BAND = 0.9 // under it, the bottom edge belongs to the bracket alone
@@ -272,11 +322,19 @@ export default {
 			const yy = clamp(e.y / BAND, 0, 1)
 			const cw = e.w / N
 			if (e.type === 'down') {
-				const knob = e.alt || e.y > BAND ? null : knobAt(e.px, e.py, e.w, e.h)
+				const knob = e.alt || e.y > BAND || ui.fog ? null : knobAt(e.px, e.py, e.w, e.h)
 				// the bottom edge holds the offbeat ticks: drag them sideways to swing
 				if (e.y > BAND) {
 					press = { kind: 'swing', x0: e.px, s0: params.swing }
 					ui.swinging = true
+					return
+				}
+				// fog: entering a note's column mists it two notches, scrubbing over it one more per half a column;
+				// rubbing (the eraser) clears it the same way
+				if (ui.fog) {
+					const k = colOf(e.x)
+					press = { kind: 'fog', sign: e.alt ? 1 : -1, last: k, px: e.px, py: e.py, acc: 0 }
+					fog(k, 2 * press.sign)
 					return
 				}
 				press = {
@@ -288,6 +346,7 @@ export default {
 					last: colOf(e.x),
 					erase: e.alt,
 					knob,
+					t0: performance.now() / 1000,
 					L0: knob == null ? 0 : lenOf(state.s[knob]),
 				}
 			} else if (e.type === 'move' && press) {
@@ -295,6 +354,27 @@ export default {
 					params.swing = clamp(Math.round((press.s0 + (e.px - press.x0) / cw) * 100) / 100, 0, 0.5)
 					return
 				}
+				if (press.kind === 'fog') {
+					const k = colOf(e.x)
+					if (k !== press.last) {
+						const a = Math.min(k, press.last),
+							b = Math.max(k, press.last)
+						for (let j = a; j <= b; j++) if (j !== press.last) fog(j, 2 * press.sign)
+						press.last = k
+						press.acc = 0
+					} else {
+						press.acc += Math.hypot(e.px - press.px, e.py - press.py)
+						const notch = Math.max(14, cw * 0.5)
+						while (press.acc >= notch) {
+							press.acc -= notch
+							fog(k, press.sign)
+						}
+					}
+					press.px = e.px
+					press.py = e.py
+					return
+				}
+				if (press.swell) return
 				const dx = e.px - press.x0,
 					dy = e.py - press.y0
 				if (!press.moved && Math.hypot(dx, dy) < 6) return
@@ -319,12 +399,12 @@ export default {
 				for (let j = a; j <= b; j++) paint(j, yy, press.erase)
 				press.last = k
 			} else if (e.type === 'up' && press) {
-				if (press.kind === 'step' && !press.moved)
+				if (press.kind === 'step' && !press.moved && !press.swell)
 					state.s[press.k] = press.erase
 						? 0
 						: state.s[press.k]
 							? 0
-							: inked(fresh(ui.param === 'pitch' ? Math.round((1 - yy) * PMAX) : 7))
+							: inked(fresh(Math.round((1 - yy) * PMAX)))
 				press = null
 				ui.pull = -1
 				ui.swinging = false
@@ -359,7 +439,30 @@ export default {
 			g.stroke()
 		}
 
+		// a still press on a step, held past HOLD, swells its note: loudness climbs to full, falls to a whisper and
+		// climbs again, so letting go anywhere sets it. A held empty step gets a note first, starting soft.
+		function swell(h) {
+			if (press?.kind !== 'step' || press.moved || press.erase || press.knob != null && press.k !== press.knob)
+				return
+			const dt = performance.now() / 1000 - press.t0 - HOLD
+			if (dt < 0) return
+			if (!press.swell) {
+				const had = state.s[press.k]
+				const st = had || inked(fresh(Math.round((1 - clamp(press.y0 / (h * BAND), 0, 1)) * PMAX)))
+				if (!had) {
+					st[2] = 1
+					state.s[press.k] = st
+				}
+				press.swell = { v0: st[2] }
+			}
+			const st = state.s[press.k]
+			if (!st) return
+			const x = (press.swell.v0 + dt * SWELL) % 18
+			st[2] = Math.round(x <= 9 ? x : 18 - x)
+		}
+
 		function drawSheet(g, w, h, t) {
+			swell(h)
 			const cw = w / N,
 				top = h * BAND
 			const ink = ctx.theme?.sheet?.ink || INK,
@@ -369,23 +472,6 @@ export default {
 			const th = Math.max(6, Math.min(cw * 0.34, top * 0.05))
 			g.lineCap = 'round'
 			g.lineJoin = 'round'
-			if (ui.param !== 'pitch') {
-				g.strokeStyle = tint(ink, 0.35)
-				g.lineWidth = 1.2
-				g.beginPath()
-				let pen = false
-				for (let k = 0; k < N; k++) {
-					const st = state.s[k]
-					if (!st) {
-						pen = false
-						continue
-					}
-					const y = (1 - st[IDX[ui.param]] / MAXOF[ui.param]) * top * 0.92 + top * 0.04
-					pen ? g.lineTo((k + 0.5) * cw, y) : g.moveTo((k + 0.5) * cw, y)
-					pen = true
-				}
-				g.stroke()
-			}
 			// the grid and the playing step's glow
 			for (let k = 0; k < N; k++) {
 				const x = (k + 0.5) * cw,
@@ -434,14 +520,6 @@ export default {
 					g.quadraticCurveTo(sx, top + 4, sx, top + 9)
 					g.stroke()
 				}
-			}
-			// while the ticks are held, the swing as a drum machine would print it
-			if (ui.swinging) {
-				g.font = `600 ${Math.max(11, Math.min(15, h * 0.045))}px ${SANS}`
-				g.textBaseline = 'middle'
-				g.textAlign = 'center'
-				g.fillStyle = col
-				g.fillText(`${Math.round((1 + params.swing) * 50)}%`, w / 2, top + (h - top) * 0.62)
 			}
 			// tails: solid while the note sounds, a thin dotted run where the next note has cut it
 			for (let k = 0; k < state.len; k++) {
@@ -503,7 +581,7 @@ export default {
 				if (!st) continue
 				const inPat = k < state.len,
 					x = (k + 0.5) * cw
-				const [p, , v, c] = st
+				const [p, , v] = st
 				const y = noteY(p, top)
 				const r = rOf(v)
 				const glow = fx.glow(k, t.now, 0.3)
@@ -531,16 +609,28 @@ export default {
 				g.fill()
 				g.strokeStyle = tint(ink, inPat ? 0.9 : 0.3)
 				g.lineWidth = 1.2
-				g.setLineDash(c < 9 ? [1.5, 2.5 + (9 - c) * 0.6] : [])
 				g.stroke()
-				g.setLineDash([])
-				if (c < 9) {
-					g.fillStyle = tint(ink, 0.55)
-					g.font = `${Math.max(9, Math.min(13, cw * 0.28))}px ${SANS}`
-					g.textAlign = 'center'
-					g.textBaseline = 'top'
-					g.fillText(`${(c + 1) * 10}%`, x, top * 0.94)
+				// a swelling note breathes a ring as wide as it will get
+				if (press?.swell && press.k === k) {
+					g.strokeStyle = tint(ink, 0.35)
+					g.setLineDash([2, 4])
+					g.beginPath()
+					g.arc(x, y, rOf(9) * 1.25, 0, TAU)
+					g.stroke()
+					g.setLineDash([])
 				}
+			}
+			// mist over the notes it hangs on, drifting a little; thicker is less often heard
+			for (let k = 0; k < N; k++) {
+				const st = state.s[k]
+				if (!st || st[3] >= 9) continue
+				const x = (k + 0.5) * cw + Math.sin(t.now * 0.4 + k * 1.7) * cw * 0.06,
+					y = noteY(st[0], top) + Math.cos(t.now * 0.3 + k) * 2
+				const rx = cw * 0.62,
+					ry = Math.max(rx * 0.8, top * 0.09)
+				g.globalAlpha = k < state.len ? 0.85 : 0.35
+				g.drawImage(mist(rx, ry, thickOf(st), ink, 3), x - rx, y - ry)
+				g.globalAlpha = 1
 			}
 			// knobs on top, so they read as the thing to grab
 			const kr = clamp(cw * 0.22, 4, 10)
@@ -561,13 +651,6 @@ export default {
 				g.strokeStyle = ink
 				g.lineWidth = 1.6
 				g.stroke()
-				if (pulled) {
-					g.fillStyle = ink
-					g.font = `600 ${Math.max(11, Math.min(15, cw * 0.4))}px ${SANS}`
-					g.textAlign = 'center'
-					g.textBaseline = 'bottom'
-					g.fillText(`${L}`, x, y - kh / 2 - 4)
-				}
 			}
 		}
 
@@ -589,7 +672,7 @@ export default {
 				if (!st) continue
 				const hl = heard(k, st)
 				if (s < 0 && s + hl <= 0) continue
-				const [p, , v, c] = st
+				const [p, , v] = st
 				const y = (1 - p / PMAX) * h * 0.8 + h * 0.1
 				const r = Math.max(1.8, Math.min(h * 0.09, cw * 0.35) * (0.6 + (v / 9) * 0.5))
 				if (hl > 1) {
@@ -613,9 +696,15 @@ export default {
 				g.fill()
 				g.strokeStyle = INK
 				g.lineWidth = 1
-				g.setLineDash(c < 9 ? [1.2, 2] : [])
 				g.stroke()
-				g.setLineDash([])
+				// a wisp of the sheet's fog, so a misty note reads from the dial too
+				if (st[3] < 9) {
+					const rx = Math.max(4, Math.min(cw * 0.7, r * 3)),
+						ry = Math.max(3, h * 0.12)
+					g.globalAlpha = 0.7
+					g.drawImage(mist(rx, ry, thickOf(st), INK, 2), x - rx, y - ry)
+					g.globalAlpha = 1
+				}
 			}
 		}
 
@@ -623,17 +712,13 @@ export default {
 			get state() {
 				return state
 			},
-			// what a drag draws: a tool from the strip at the sheet's bottom, not a place on it
-			get mode() {
-				return ui.param
-			},
-			set mode(v) {
-				if (PARAMS.includes(v)) ui.param = v
-			},
+			// the brush in your hand; fog is a tool, so a note never records it
 			get ink() {
-				return INKS[ink][0]
+				return ui.fog ? 'fog' : INKS[ink][0]
 			},
 			set ink(v) {
+				ui.fog = v === 'fog'
+				if (ui.fog) return
 				ink = Math.max(
 					0,
 					INKS.findIndex((i) => i[0] === v),
