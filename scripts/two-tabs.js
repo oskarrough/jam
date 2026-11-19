@@ -230,8 +230,19 @@ try {
 		await p.waitForTimeout(800)
 		five.push(p)
 	}
-	await five[4].waitForTimeout(600)
-	const sat = await Promise.all(five.map((p) => p.evaluate(() => window.jam.me.seat)))
+	// seats every tab agrees on: a tab that sat on a taken seat in its first moments has to get up first
+	const seated = () => Promise.all(five.map((p) => p.evaluate(() => window.jam.me.seat)))
+	const settled = async (ok) => {
+		let v
+		for (let t = 0; t < 50; t++) {
+			if (ok((v = await seated()))) return v
+			await five[0].waitForTimeout(100)
+		}
+		return v
+	}
+	const fourAndOne = (v) =>
+		new Set(v.slice(0, 4)).size === 4 && !v.slice(0, 4).includes(-1) && v[4] === -1
+	const sat = await settled(fourAndOne)
 	check(
 		new Set(sat.slice(0, 4)).size === 4 && !sat.slice(0, 4).includes(-1) && sat[4] === -1,
 		`four seated, the fifth listens (${sat})`,
@@ -246,11 +257,9 @@ try {
 			() => true,
 			() => false,
 		)
-	const after = await Promise.all(five.map((p) => p.evaluate(() => window.jam.me.seat)))
-	check(
-		took && after.filter((x) => x < 0).length === 1,
-		`an idle seat burns out and the fifth sits (${after})`,
-	)
+	const handed = (v) => v[4] >= 0 && v.filter((x) => x < 0).length === 1 && new Set(v).size === 5
+	const after = await settled(handed)
+	check(took && handed(after), `an idle seat burns out and the fifth sits (${after})`)
 	const errs = [
 		...a.errors,
 		...b.errors,

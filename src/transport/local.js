@@ -63,6 +63,7 @@ export function createLocalTransport({
 		else schedule(clock.now() + d, () => chan.postMessage(msg))
 	}
 
+	const who = () => ({ name: me.name, seat: me.seat, color: me.color, joinedAt: me.joinedAt })
 	const peers = () =>
 		[me, ...others.values()].map(({ id, name, seat, color, joinedAt }) => ({
 			id,
@@ -80,10 +81,19 @@ export function createLocalTransport({
 			if (known) known.last = Date.now()
 			switch (m.t) {
 				case 'hello':
-				case 'presence': {
+				case 'presence':
+				case 'beat': {
+					// every one of these carries the whole of who's sending, so a tab we lost track of (a heartbeat
+					// late under load) comes back as it is, arrival time and all, not as a stranger
 					const p = known || { id: m.from, last: Date.now() }
+					const was = JSON.stringify(p)
 					for (const k of ['name', 'seat', 'color', 'joinedAt']) if (k in m) p[k] = m[k]
 					others.set(m.from, p)
+					if (m.t === 'beat') {
+						if (!known) tx({ t: 'presence', ...who() })
+						if (JSON.stringify(p) !== was) emit('peers', peers())
+						break
+					}
 					if (m.t === 'hello')
 						tx({
 							t: 'welcome',
@@ -127,11 +137,6 @@ export function createLocalTransport({
 					clock.setLoop(m.loop, m.at)
 					schedule(m.at - LOOKAHEAD, () => emit('loop', { loop: m.loop, at: m.at }))
 					break
-				case 'beat':
-					if (!known) {
-						tx({ t: 'presence', ...me })
-					}
-					break
 				case 'bye':
 					others.delete(m.from)
 					emit('peers', peers())
@@ -139,7 +144,7 @@ export function createLocalTransport({
 			}
 		}
 
-	tx({ t: 'hello', name: me.name, seat: me.seat, color: me.color, joinedAt: me.joinedAt })
+	tx({ t: 'hello', ...who() })
 	schedule(clock.now() + 400, () => {
 		if (!welcomed) {
 			welcomed = true
@@ -148,8 +153,8 @@ export function createLocalTransport({
 		emit('status', { connected: !!chan })
 	})
 	const heartbeat = setInterval(() => {
-		tx({ t: 'beat' })
-		const cutoff = Date.now() - 4000
+		tx({ t: 'beat', ...who() })
+		const cutoff = Date.now() - 6000
 		let changed = false
 		for (const [pid, p] of others)
 			if (p.last < cutoff) {
@@ -196,7 +201,7 @@ export function createLocalTransport({
 		setLoop,
 		setMe: (patch) => {
 			Object.assign(me, patch)
-			tx({ t: 'presence', ...patch })
+			tx({ t: 'presence', ...who() })
 			emit('peers', peers())
 		},
 		clock,

@@ -237,10 +237,9 @@ transport.on('peers', () => {
 		mine = all.find((p) => p.id === transport.id)
 	const rival =
 		me.seat >= 0 && mine && all.find((p) => p.id !== transport.id && p.seat === seats[me.seat].id)
-	if (
-		rival &&
-		((rival.joinedAt ?? 0) - (mine.joinedAt ?? 0) || (rival.id < mine.id ? -1 : 1)) < 0
-	) {
+	// an arrival time we don't know yet counts as late: nobody gets up for a stranger
+	const t = (p) => p.joinedAt ?? Infinity
+	if (rival && (t(rival) - t(mine) || (rival.id < mine.id ? -1 : 1)) < 0) {
 		me.seat = -1
 		if (view.focus.on) view.setFocus(-1)
 		transport.setMe({ seat: null, name: me.name })
