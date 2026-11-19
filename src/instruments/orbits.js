@@ -37,6 +37,7 @@ export default {
 	glyph:
 		'<ellipse cx="16" cy="16" rx="12" ry="6" transform="rotate(-25 16 16)"/><circle class="f" cx="16" cy="16" r="2.4"/><circle class="f" cx="26.5" cy="11" r="2"/>',
 	name: 'Orbits',
+	trim: 5,
 	playhead: false,
 	how: 'Press to place a planet and drag outward to grow it (bigger is lower). Drag a planet to another orbit; tap it to remove.',
 	demo: (shape, aspect) =>

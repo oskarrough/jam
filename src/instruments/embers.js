@@ -39,6 +39,7 @@ export default {
 	glyph:
 		'<path class="f" d="M16 22l2 3-2 3-2-3zM10 13l1.5 2.2L10 17.5 8.5 15.2zM21 7l1.5 2.2L21 11.5 19.5 9.2z"/><path d="M11 28c3-2 7-2 10 0"/>',
 	name: 'Embers',
+	trim: 14,
 	how: 'Tap or drag in the dark above the fire to throw sparks. Each one pops on the grid and fades after a few loops; flick upward fast to blow on them and bring them back.',
 	playhead: false, // across is where a spark flies, not when it pops
 	demo: () => [tap(0.3, 0.3), tap(0.62, 0.5), tap(0.45, 0.18), line(0.2, 0.6, 0.7, 0.4, 8)],

@@ -206,6 +206,7 @@ export default {
 	glyph:
 		'<path d="M3 10h26M3 16h26M3 22h26" stroke-width="1"/><path d="M3 24c5 0 6-14 11-14s5 10 9 10 4-6 6-6" stroke-width="2.4"/>',
 	name: 'Tide',
+	trim: 3,
 	how: 'Draw a wave. The threads are this bar’s chord; a note sounds wherever the water crosses one. Steep is a chord, a slope an arpeggio, flat water holds. Shift-drag dries it up.',
 	inks: V.inks,
 	params: V.params,

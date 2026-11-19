@@ -84,6 +84,7 @@ export default {
 	id: 'scribble',
 	glyph: '<path d="M4 21c3-11 6 6 8-5s4 11 7 0 3 9 9-7"/>',
 	name: 'Scribble',
+	trim: 5,
 	playhead: false,
 	how: 'Scribble anywhere. The drawing replays once per loop in stroke order; left is oo, right is ee, height is pitch, and a fast scribble crackles where a slow one swells. The eraser or Shift rubs it out.',
 	demo: () => [

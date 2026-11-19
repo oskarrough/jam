@@ -71,8 +71,8 @@ export default {
 			o.start()
 			return { o, g }
 		})
-		// square and saw are loud next to sine; even them out
-		const TRIM = [1, 0.9, 0.55, 0.5]
+		// measured level: sine and triangle match, saw and square sit a touch under (they're brighter, so they still read as loud)
+		const TRIM = [0.74, 0.9, 0.82, 0.56]
 		const waveAt = (s) => {
 			const k = state.w[s]
 			return k == null ? Math.max(0, WAVES.indexOf(params.wave)) : k

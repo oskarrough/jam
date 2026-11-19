@@ -45,6 +45,7 @@ export default {
 	glyph:
 		'<path d="M4 9h24M4 13h24M4 17h24M4 21h24" stroke-width="1"/><path d="M9 26L23 5" stroke-width="2.2"/>',
 	name: 'Strum',
+	trim: 3,
 	how: 'Swipe down or up across the strings: the strum plays where you swiped, harder the faster you go. Shift or the eraser rubs it out.',
 	demo: () => [line(0.2, 0.04, 0.21, 0.96, 10), line(0.6, 0.96, 0.61, 0.04, 10)],
 	params: {
@@ -180,14 +181,15 @@ export default {
 				if (e.type === 'down') {
 					cur = { s: slotAt(e.x), dir: 0, fresh: true }
 					const j = clamp(Math.round(e.y * STRINGS - 0.5), 0, STRINGS - 1)
-					if (Math.abs(e.y - yOf(j)) < 0.04) liveHit(j, 0.6)
+					// a press on a string plucks it; the swipe that follows doesn't pluck it twice
+					if (Math.abs(e.y - yOf(j)) < 0.04) liveHit(j, 0.6), (cur.plucked = j)
 					lastY = e.y
 					lastT = now
 				} else if (e.type === 'move' && e.pressed && lastY !== null) {
 					const a = Math.min(lastY, e.y),
 						b = Math.max(lastY, e.y)
 					const speed = Math.abs(e.y - lastY) / Math.max(1, now - lastT) // sheet-heights per ms
-					const vel = clamp(0.25 + speed * 120, 0.25, 1)
+					const vel = clamp(0.4 + speed * 120, 0.4, 1)
 					const dir = e.y > lastY ? 1 : -1
 					const crossed = []
 					for (let j = 0; j < STRINGS; j++) if (yOf(j) > a && yOf(j) <= b) crossed.push(j)
@@ -201,7 +203,8 @@ export default {
 						}
 						cur.dir = dir
 					}
-					crossed.forEach((j) => liveHit(j, vel))
+					crossed.forEach((j) => j !== cur?.plucked && liveHit(j, vel))
+					if (cur && crossed.length) cur.plucked = -1
 					lastY = e.y
 					lastT = now
 				} else if (e.type === 'up') lastY = cur = null

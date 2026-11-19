@@ -115,6 +115,7 @@ export default {
 	glyph:
 		'<path d="M4 26h24"/><path d="M6 6v4M6 13q4 -9 8 0q3 -6 6 0q2 -3 4 0q1-2 2 0" stroke-width="1.6"/><circle class="f" cx="6" cy="11" r="2.4"/>',
 	name: 'Bell',
+	trim: 8,
 	how: 'Tap for a bell; higher is a higher note. Press and drag up to drop a marble from higher: it bounces, ringing on every bounce. Tap a marble to take it away; drag it to move it. Shift-drag erases.',
 	inks: V.inks,
 	params: V.params,

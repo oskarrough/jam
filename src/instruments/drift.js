@@ -21,6 +21,7 @@ export default {
 	glyph:
 		'<circle class="f" cx="16" cy="16" r="2.6"/><circle cx="16" cy="16" r="7"/><circle cx="16" cy="16" r="12" stroke-dasharray="2 3"/>',
 	name: 'Drift',
+	trim: 3,
 	playhead: false,
 	how: 'Tap to drop a stone, drag it to bend, tap it again to lift it out.',
 	demo: () => [tap(0.25, 0.6), tap(0.6, 0.35), line(0.6, 0.35, 0.72, 0.6, 10)],

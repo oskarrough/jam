@@ -97,7 +97,7 @@ export function createEngine(transport, { seatIds, instruments }) {
 	const heard = (L) => !L.mix.mute && (solo < 0 || solo === L.index)
 	function applyMix(L) {
 		const t = audio.currentTime
-		L.out.gain.setTargetAtTime(heard(L) ? L.mix.level : 0, t, 0.02)
+		L.out.gain.setTargetAtTime(heard(L) ? L.mix.level * trimOf(L.module) : 0, t, 0.02)
 		L.send.gain.setTargetAtTime(L.mix.space, t, 0.02)
 		setTone(L.tone, L.mix.tone, t)
 	}
@@ -326,6 +326,8 @@ export function resize(state, from, to) {
 }
 
 // A seat's mix: level (0..1.5), space (room send), tone (0 dark .. 0.5 untouched .. 1 bright)
+// an instrument's `trim` (dB) evens out how loud it plays, so every seat starts level with the rest
+export const trimOf = (mod) => 10 ** ((mod?.trim || 0) / 20)
 export const MIX = { level: 0.9, space: 0.25, tone: 0.5 }
 // what differs from the default, for the seat's data; null when nothing does. `v: 2` marks the centred tone
 export function mixData(mix) {

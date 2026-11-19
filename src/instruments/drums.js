@@ -72,8 +72,8 @@ function drumGen() {
 	return { d: a, v }
 }
 
-// steeper than linear: level 2 is a ghost note, 9 is roughly twice a plain hit
-const gainOf = (lv) => Math.pow(lv / LV, 1.8)
+// a little steeper than linear: level 2 is a ghost note about 11 dB under a plain hit (still heard), 9 an accent
+const gainOf = (lv) => Math.pow(lv / LV, 1.2)
 // accents (8, 9) go through a soft clipper: louder peak, harder transient, compressor sees it
 let clip
 const punchBus = (ac, out, lv) => {
@@ -212,6 +212,7 @@ export default {
 	glyph:
 		'<circle cx="11" cy="18" r="6"/><path class="f" d="M20 11h8v8h-8z"/><circle class="f" cx="23" cy="25" r="1.6"/>',
 	name: 'Drums',
+	trim: -3,
 	how: 'Kick, snare and hat in three rows. Tap a step for a hit: higher in the row hits harder. Drag up or down to adjust, sideways to paint. Shift-drag erases.',
 	demo: () => [
 		tap(0.07, 0.76),

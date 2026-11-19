@@ -81,6 +81,7 @@ export default {
 	glyph:
 		'<circle class="f" cx="8" cy="9" r="1.6"/><circle class="f" cx="22" cy="7" r="1.6"/><circle class="f" cx="13" cy="21" r="1.6"/><circle class="f" cx="25" cy="19" r="1.6"/><circle class="f" cx="17" cy="13" r="1.6"/><path d="M4 27L28 12"/>',
 	name: 'Swarm',
+	trim: 7,
 	playhead: false,
 	how: 'Drag to string a wire across the fireflies’ paths; tap a wire to cut it. Tap the dark to let a firefly go, tap one to catch it.',
 	demo: () => [line(0.15, 0.3, 0.75, 0.62, 14)],
