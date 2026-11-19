@@ -36,7 +36,34 @@
 
 		<header class="panel">
 			<h1>rough<em>jam</em></h1>
-			<p class="jamline" id="jamline"></p>
+			<div class="jamline" id="jamline">
+				<div class="jamchips">
+					<button class="chip" id="wtf" aria-expanded="false" aria-controls="jam-about">
+						wtf?
+					</button>
+					<form id="jam-about" hidden>
+						<p>
+							Hello, this is a live, multihuman instrument in your browser. Experiment! Have fun
+							together!
+						</p>
+						<textarea
+							aria-label="Feedback"
+							aria-describedby="feedback-notice"
+							placeholder="what felt off, what's missing?"
+							rows="3"
+							maxlength="2000"
+							required
+						></textarea>
+						<p id="feedback-notice">
+							Feedback is public. The page address and browser are sent with it.
+						</p>
+						<div>
+							<small role="status"></small>
+							<button type="submit" class="chip">Send</button>
+						</div>
+					</form>
+				</div>
+			</div>
 			<p class="jamline" id="recline" aria-live="polite"></p>
 		</header>
 

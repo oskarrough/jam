@@ -423,6 +423,59 @@ const $ = (id) => document.getElementById(id)
 
 const isOpenJam = room === 'open'
 const jamline = $('jamline')
+const wtf = $('wtf'),
+	about = $('jam-about'),
+	feedback = about.querySelector('textarea'),
+	feedbackStatus = about.querySelector('small'),
+	sendFeedback = about.querySelector('button')
+// Public write URL; the read key stays off-site.
+const INKAST = 'https://inkast.0sk.ar/akqewqir'
+function feedbackBody(text) {
+	const ua = navigator.userAgent
+	const browser = [...ua.matchAll(/(Edg|OPR|Firefox|Chrome|Version)\/(\d+)/g)].at(-1)
+	const name = browser
+		? { Edg: 'Edge', OPR: 'Opera', Version: 'Safari' }[browser[1]] || browser[1]
+		: 'unknown'
+	const os = /Android|iPhone|iPad|Windows|Mac OS X|Linux/.exec(ua)?.[0] || 'unknown'
+	// Song links can carry an entire song in the hash; the path is enough context.
+	const page = (location.origin + location.pathname).slice(0, 500)
+	const tail = `\n\npage: ${page}\nbrowser: ${name}${browser ? ' ' + browser[2] : ''} · ${os}`
+	const encoder = new TextEncoder()
+	while (encoder.encode(text + tail).length > 4000) text = text.slice(0, -50)
+	return text + tail
+}
+function showAbout(open) {
+	about.hidden = !open
+	wtf.setAttribute('aria-expanded', String(open))
+}
+wtf.onclick = () => showAbout(about.hidden)
+jellify(wtf, { amount: 0.12 })
+jellify(sendFeedback, { amount: 0.12 })
+feedback.oninput = () => (feedbackStatus.textContent = '')
+about.onsubmit = async (e) => {
+	e.preventDefault()
+	const text = feedback.value.trim()
+	if (sendFeedback.disabled || !text) return
+	sendFeedback.disabled = feedback.readOnly = true
+	feedbackStatus.textContent = 'Sending…'
+	try {
+		const response = await fetch(INKAST, { method: 'POST', body: feedbackBody(text) })
+		if (!response.ok) throw new Error(String(response.status))
+		feedback.value = ''
+		feedbackStatus.textContent = 'thanks'
+	} catch {
+		feedbackStatus.textContent = 'Not sent. Try again.'
+	} finally {
+		sendFeedback.disabled = feedback.readOnly = false
+	}
+}
+document.addEventListener(
+	'pointerdown',
+	(e) => {
+		if (!about.hidden && !wtf.contains(e.target) && !about.contains(e.target)) showAbout(false)
+	},
+	true,
+)
 const word = (text, fn) => {
 	const b = document.createElement('button')
 	b.textContent = text
@@ -467,9 +520,9 @@ else if (isOpenJam) {
 			'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>',
 		)
 		jellify(chip, { amount: 0.12 })
-		jamline.append(chip)
+		wtf.before(chip)
 	}
-	jamline.append(shareChip())
+	wtf.before(shareChip())
 } else {
 	// a named jam, like an iOS header: a round back chip, then the jam's name and Share in one chip.
 	// Another new jam is back, then New jam.
@@ -483,7 +536,7 @@ else if (isOpenJam) {
 	chip.prepend(
 		Object.assign(document.createElement('span'), { className: 'name', textContent: room }),
 	)
-	jamline.append(back, chip)
+	wtf.before(back, chip)
 }
 // share: a link that carries the song itself, so it works with no relay and offline; opening it forks the song
 // into a new jam. Its last child is the word that flips to "link copied".
@@ -685,6 +738,11 @@ onPress($('bots'), () => {
 	transport.setLoop({ robots: on })
 })
 addEventListener('keydown', (e) => {
+	if (e.key === 'Escape' && !about.hidden && !view.focus.on) {
+		if (about.contains(document.activeElement)) wtf.focus()
+		showAbout(false)
+		return
+	}
 	if (e.target.closest?.('input, select, textarea, .lil-gui')) return
 	if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return
 	if ((e.metaKey || e.ctrlKey) && /^[zy]$/i.test(e.key)) {

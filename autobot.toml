@@ -1,0 +1,2 @@
+repo = "oskarrough/jam"
+inbox = { inkast = "akqewqir", key = "~/.config/inkast/jam.env", label = "player-feedback" }
