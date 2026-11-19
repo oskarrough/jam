@@ -23,6 +23,7 @@ export default {
 		decay: { value: 0.5, min: 0.05, max: 2, step: 0.05 },
 		shape: { value: 'sine', options: ['sine', 'square'] },
 	},
+	trim: 4, // optional: dB, so you start as loud as the others (play it soloed beside drums; the mixer's level is the player's)
 	ownLength: true, // optional: the seat's loop length does nothing you'd notice, or a gesture of yours sets it (ctx.setLen, a pattern length), so the host's bracket stays off your sheet
 	playhead: 'x', // optional: the host draws the playhead along x (default), 'y', or false if you show time yourself
 	demo: (shape, aspect) => [
