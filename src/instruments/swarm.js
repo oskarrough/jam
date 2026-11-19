@@ -198,7 +198,7 @@ export default {
 					const p0 = s / SLOTS,
 						p1 = (s + 1) / SLOTS
 					let n = 0
-					flies.forEach((f, fi) => {
+					flies.forEach((f) => {
 						const [ax, ay] = pos(f, p0),
 							[bx, by] = pos(f, p1)
 						state.wires.forEach((wr, wi) => {
@@ -355,7 +355,7 @@ export default {
 					}
 				}
 
-				flies.forEach((f, fi) => {
+				flies.forEach((f) => {
 					const form = FORMS[f.k % FORMS.length],
 						pig = PIG[FORM_PIG[form]]
 					const [x, y] = pos(f, t.phase)

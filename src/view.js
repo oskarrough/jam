@@ -565,7 +565,7 @@ export function createView(
 				press(seatJelly[i], Math.atan2(e.clientY - y, e.clientX - x))
 				// a badge waits for release: a tap sits or zooms, and dragging your own hands your part to a robot
 				canvas.setPointerCapture(e.pointerId)
-				const h = (handing = {
+				handing = {
 					from: i,
 					id: e.pointerId,
 					x: e.clientX,
@@ -574,7 +574,7 @@ export function createView(
 					y0: e.clientY,
 					moved: false,
 					own: !!onHand && occupant(i).me,
-				})
+				}
 				return
 			}
 		}
@@ -1072,7 +1072,7 @@ export function createView(
 		g.globalAlpha = 1
 		seats.forEach(renderSeat)
 		// zoomed, the sheet goes under the machine: the small dial floats on top of it
-		if (opts.mode === 'dial' && eSheet() > 0) drawSheet(phase)
+		if (opts.mode === 'dial' && eSheet() > 0) drawSheet()
 		if (opts.mode === 'dial') drawDial(t, dt, phase, loop)
 		else drawStrips(phase)
 		drawTrails()
@@ -1169,7 +1169,7 @@ export function createView(
 		}
 		return filterOK
 	}
-	function drawSheet(phase) {
+	function drawSheet() {
 		const e = eSheet(),
 			{ x, y, w, h } = sheet,
 			L = seats[sheetSeat]
