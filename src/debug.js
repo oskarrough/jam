@@ -1,26 +1,55 @@
-// The machine's panel (lil-gui). d opens or folds it. Knobs change the jam live, for everyone.
+// The machine's panel (lil-gui). The corner chip or d opens it. Knobs change the jam live, for everyone.
 
 import GUI from './vendor/lil-gui.esm.min.js'
 import { ROOTS, SCALES, CHORDS, NUMERALS, parseChords } from './instruments/lib/kit.js'
 
 export function createDebug(options) {
-	const gui = new GUI({
-		title: matchMedia('(pointer: coarse), (max-width: 640px)').matches
-			? 'controls'
-			: 'controls  (d)',
-		width: 280,
-	})
-	gui.close()
-	let refresh, timer
-	gui.onOpenClose((folder) => {
-		if (folder !== gui) return
-		clearInterval(timer)
-		if (gui._closed) return
+	const dock = document.createElement('div')
+	dock.className = 'debug-dock'
+	const chip = document.createElement('button')
+	chip.type = 'button'
+	chip.className = 'chip debug-chip'
+	chip.title = 'Controls (d)'
+	chip.setAttribute('aria-label', 'Debug controls')
+	chip.setAttribute('aria-controls', 'debug-panel')
+	chip.setAttribute('aria-expanded', 'false')
+	chip.innerHTML =
+		'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h5m3 0h4M2 8h2m3 0h7M2 12h8m3 0h1M7 2v4M4 6v4m6 0v4"/></svg>'
+	dock.append(chip)
+	const gui = new GUI({ container: dock, width: 280 }).hide()
+	gui.domElement.id = 'debug-panel'
+	gui.domElement.setAttribute('role', 'region')
+	gui.domElement.setAttribute('aria-label', 'Debug controls')
+	document.body.append(dock)
+
+	let open = false,
+		refresh,
+		timer
+	function toggle() {
+		open = !open
+		chip.setAttribute('aria-expanded', open)
+		if (!open) {
+			clearInterval(timer)
+			if (gui.domElement.contains(document.activeElement)) chip.focus()
+			gui.hide()
+			return
+		}
+		gui.show()
 		refresh ??= buildPanel(gui, options)
 		refresh()
 		timer = setInterval(refresh, 100)
-	})
-	return { gui, toggle: () => (gui._closed ? gui.open() : gui.close()) }
+	}
+	chip.addEventListener('click', toggle)
+	// Capture before lil-gui swallows key events, but leave typing alone.
+	addEventListener(
+		'keydown',
+		(e) => {
+			if (e.key !== 'd' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
+			if (e.target.closest?.('input, select, textarea, [contenteditable]')) return
+			toggle()
+		},
+		true,
+	)
 }
 
 function buildPanel(gui, { engine, transport, view, bots, me, sit, presence, registry, heart }) {

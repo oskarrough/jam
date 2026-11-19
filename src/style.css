@@ -1,5 +1,5 @@
 /* The machine sits in a dusk landscape (painted on the canvas). Chrome is cut paper and ink:
-   tokens with flat offset shadows, serif italics, no app labels. Mono only for the debug panel. */
+   tokens with flat offset shadows, serif italics, no app labels. */
 :root {
 	--ink: #211a2e;
 	--paper: #f1ecc4;
@@ -12,7 +12,6 @@
 	--title: #f1ecc4;
 	--serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
 	--sans: 'Bricolage Grotesque', system-ui, sans-serif;
-	--mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 	color-scheme: light;
 }
 * {
@@ -386,33 +385,56 @@ output.pending {
 	color: var(--vermilion);
 }
 
-/* the debug panel is a data UI: dark, high contrast, plain mono */
-.lil-gui {
-	--background-color: #14111b;
-	--widget-color: #2a2535;
-	--hover-color: #363044;
-	--focus-color: #433b55;
-	--number-color: #ffb86b;
-	--string-color: #8fe0a8;
-	--text-color: #f2efe8;
-	--title-background-color: #000;
-	--title-text-color: #fff;
-	--font-family: var(--mono);
-	--font-family-mono: var(--mono);
-	--font-size: 12px;
-	--input-font-size: 12px;
-	--widget-height: 22px;
+/* the corner chip opens the machine's controls without taking room on the dial */
+.debug-dock {
+	--dock-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+	position: fixed;
+	z-index: 7;
+	right: max(12px, env(safe-area-inset-right, 0px));
+	bottom: var(--dock-bottom);
 }
-/* zoomed, the sheet and its instrument strip need the room */
-body.zoomed .lil-gui.root {
+.debug-chip {
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	justify-content: center;
+}
+.debug-chip[aria-expanded='true'] {
+	transform: translate(2px, 3px);
+	box-shadow: 1px 1px 0 var(--shadow);
+}
+/* On narrow screens leave the deck's rightmost token alone. */
+@media (max-width: 480px) {
+	.debug-dock {
+		--dock-bottom: calc(env(safe-area-inset-bottom, 0px) + 66px);
+	}
+}
+.debug-dock .lil-gui {
+	--background-color: var(--paper);
+	--text-color: var(--ink);
+	--title-text-color: var(--ink);
+	--widget-color: color-mix(in srgb, var(--paper), var(--ink) 9%);
+	--hover-color: color-mix(in srgb, var(--paper), var(--ink) 16%);
+	--focus-color: color-mix(in srgb, var(--paper), var(--ink) 25%);
+	--number-color: var(--violet);
+	--string-color: var(--ink);
+	--font-family: var(--sans);
+	--font-family-mono: var(--sans);
+	--widget-border-radius: 4px;
+}
+#debug-panel {
+	position: absolute;
+	right: 0;
+	bottom: calc(100% + 8px);
+	max-width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+	max-height: calc(100dvh - var(--dock-bottom) - env(safe-area-inset-top, 0px) - 56px);
+	border: 1.4px solid var(--ink);
+	border-radius: 10px;
+	box-shadow: 3px 4px 0 var(--shadow);
+	overflow: hidden;
+}
+#debug-panel > .title {
 	display: none;
-}
-.lil-gui.root {
-	top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
-	right: max(8px, env(safe-area-inset-right, 0px)) !important;
-	max-height: calc(100% - 120px);
-	border: 1px solid #000;
-	box-shadow: 3px 4px 0 rgba(0, 0, 0, 0.35);
 }
 
 @media (max-width: 640px) {
@@ -443,13 +465,6 @@ body.zoomed .lil-gui.root {
 	.deck svg {
 		width: 24px;
 		height: 24px;
-	}
-	/* on a phone, controls fold into a small tab in the top corner, clear of the deck; open, they drop down over the sky */
-	.lil-gui.root {
-		max-height: 62vh;
-	}
-	.lil-gui.root.closed {
-		--width: 104px !important;
 	}
 	/* every instrument on the strip: two rows of seven instead of a row running off the edge */
 	.sheetbar {

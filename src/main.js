@@ -697,7 +697,6 @@ addEventListener('keydown', (e) => {
 		e.preventDefault()
 		$('sound').click()
 	} else if (/^[1-9]$/.test(e.key) && +e.key <= seats.length) sit(+e.key - 1)
-	else if (e.key === 'd') debug.toggle()
 	else if (e.key === 'e') setErase(!me.erase)
 	else if (e.key === 'j' || e.key === 'ArrowLeft') {
 		e.preventDefault()
@@ -715,21 +714,9 @@ function showTempo() {
 }
 setInterval(showTempo, 200)
 
-let debug = { toggle() {} }
 import('./debug.js')
-	.then(
-		({ createDebug }) =>
-			(debug = createDebug({
-				engine,
-				transport,
-				view,
-				bots,
-				me,
-				sit,
-				presence,
-				registry,
-				heart,
-			})),
+	.then(({ createDebug }) =>
+		createDebug({ engine, transport, view, bots, me, sit, presence, registry, heart }),
 	)
 	.catch((e) => console.warn('debug panel unavailable', e))
 
