@@ -50,7 +50,7 @@ export function createRoom(io, state = {}) {
 		if (m.t === 'hello') {
 			io.setPeer(id, {
 				joined: true,
-				name: String(m.name || 'anon').slice(0, 32),
+				name: String(m.name || '').slice(0, 32),
 				seat: m.seat ?? null,
 				color: m.color ?? null,
 				joinedAt: io.now(),

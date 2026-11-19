@@ -26,7 +26,9 @@ const open = async (name, seat, skew = 0) => {
 			Object.defineProperty(performance, 'timeOrigin', { get: () => o })
 		}, skew)
 	page.on('pageerror', (e) => console.error(name, e))
-	await page.goto(`${BASE}/sync/?name=${name}&seat=${seat}&room=test${process.pid}`)
+	const query = new URLSearchParams({ seat, room: `test${process.pid}` })
+	if (name) query.set('name', name)
+	await page.goto(`${BASE}/sync/?${query}`)
 	return page
 }
 const a = await open('alice', 'bass')
@@ -91,11 +93,18 @@ const loops = await Promise.all(
 )
 check(loops[0] === 120 && loops[1] === 120, 'tempo change scheduled on both')
 
-const c = await open('carol', 'lead')
+const c = await open('', 'lead')
 await new Promise((r) => setTimeout(r, 800))
 check(
 	(await c.evaluate(() => JSON.stringify(jam.seatAt('bass')))) === la,
 	'late joiner gets current seats',
+)
+
+check(
+	(await c.inputValue('#name')) === '' &&
+		(await b.evaluate(() => jam.peers.find((p) => p.seat === 'lead')?.name)) === '' &&
+		(await b.locator('[data-seat=lead] .who').textContent()) === '',
+	'unnamed peer stays nameless in the demo and over the relay',
 )
 
 const jamPage = async (name, path) => {

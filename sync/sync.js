@@ -219,7 +219,7 @@ export function seatHistory(clock, isLocal) {
 export function createTransport({
 	url,
 	room = 'open',
-	name = 'anon',
+	name = '',
 	seat = null,
 	color = null,
 } = {}) {

@@ -135,9 +135,7 @@
 				ROWS = 8
 			const COLORS = ['#ff8a3d', '#6fc3df', '#c7e36b', '#e46fd1', '#f2d45c', '#9a8cff']
 			const q = new URLSearchParams(location.search)
-			const name =
-				q.get('name') ||
-				['ember', 'ash', 'spark', 'log', 'smoke', 'kindle'][(Math.random() * 6) | 0]
+			const name = q.get('name') || ''
 			const color = COLORS[(Math.random() * COLORS.length) | 0]
 			let mine = q.get('seat') || SEATS[(Math.random() * SEATS.length) | 0]
 
