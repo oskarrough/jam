@@ -131,11 +131,11 @@ export function createView(
 		}
 	}
 
-	// The sheet's frame holds the drawing and, for an instrument with inks or modes, a darker tool strip along
+	// The sheet's frame holds the drawing and, for an instrument with inks, a darker tool strip along
 	// its bottom edge, like the knobs on a device. `sheet` is the drawing alone; sheet.tools is the strip's height.
 	let frameBox = null
 	const toolsOf = (mod) =>
-		mod?.inks?.length || mod?.modes?.length ? (innerWidth < 640 ? 46 : 54) : 0
+		mod?.inks?.length ? (innerWidth < 640 ? 46 : 54) : 0
 	function fitTools() {
 		const T = toolsOf(seats[sheetSeat]?.module)
 		if (sheet && frameBox && sheet.tools === T && sheet.h === frameBox.h - T) return false
@@ -1236,7 +1236,7 @@ export function createView(
 		g.restore()
 	}
 
-	// a ] hugging the right edge, with a grip like a clip's trim handle; held, it says how many bars
+	// a ] hugging the right edge, with a grip like a clip's trim handle; held, a pill beside it holds a dot per bar
 	function drawBracket(bx, h, fg, color, held) {
 		const arm = Math.min(12, h * 0.04),
 			x = bx - 5
@@ -1260,17 +1260,20 @@ export function createView(
 		g.lineWidth = 1.4
 		g.stroke()
 		if (!held) return
-		const say = held.bars === 1 ? '1 bar' : `${held.bars} bars`
-		g.font = serif(19)
-		g.textAlign = 'right'
-		g.textBaseline = 'middle'
-		const tw = g.measureText(say).width
+		const n = held.bars,
+			gap = 9,
+			ph = n * gap + 12,
+			cx = x - gw - 18
 		g.fillStyle = 'rgba(20,12,34,.85)'
 		g.beginPath()
-		g.roundRect(x - gw - 18 - tw, h / 2 - 16, tw + 20, 32, 16)
+		g.roundRect(cx - 11, h / 2 - ph / 2, 22, ph, 11)
 		g.fill()
 		g.fillStyle = color
-		g.fillText(say, x - gw - 8, h / 2)
+		for (let k = 0; k < n; k++) {
+			g.beginPath()
+			g.arc(cx, h / 2 - ((n - 1) * gap) / 2 + k * gap, 3, 0, TAU)
+			g.fill()
+		}
 	}
 
 	function drawStrips(phase) {
@@ -1421,16 +1424,19 @@ export function createView(
 			g.stroke()
 		}
 		if (L.mix.mute) muteSlash(x, y, r)
+		// soloed: a second rim in ink, like a spotlight's edge
+		if (engine.solo === i) {
+			g.strokeStyle = INK
+			g.lineWidth = 2
+			g.stroke(outline(x, y, r + 6, i * 7 + 3, 0.5))
+		}
 		if (!label || small()) return
-		// the legend runs round the badge like a coin's edge, centred on the side away from the dial:
-		// instrument ✦ who sits there. An empty seat names only its instrument; the rest of the rim is dashed, waiting.
-		const tag = L.mix.mute ? ' · muted' : engine.solo === i ? ' · solo' : ''
+		// the legend runs round the badge like a coin's edge, centred on the side away from the dial: who sits
+		// there. The glyph already says which instrument. An empty seat's rim is all dashes, waiting.
 		const px = Math.max(10, S * 0.016),
 			R = r + px * 0.95,
 			col = G.dark ? G.paper : INK
-		// a bare ring (a blank jam) names nobody's instrument: only who sits there, or nothing
-		const inst = L.module.hidden ? '' : L.module.name
-		const text = (empty ? inst : inst ? inst + ' ✦ ' + st.name : st.name) + tag
+		const text = empty ? '' : st.name
 		const halo = rgba(G.sky[G.dark ? 0 : 2], 0.85)
 		const key = [text, st.me, empty, px, R, a, halo, col, DPR].join('|')
 		let legend = legends[i]
@@ -1773,15 +1779,6 @@ export function createView(
 				g.arc(CX, CY, r0, 0, TAU, true)
 				g.fillStyle = ink(dark * 0.4)
 				g.fill()
-			}
-			if (!small()) {
-				g.translate(...polar(-Math.PI / 2 - 0.2, r0 + ringT() / 2))
-				g.rotate(-0.2)
-				g.font = serif(Math.max(11, S * 0.02))
-				g.fillStyle = own ? INK : ink(0.6)
-				g.textAlign = 'right'
-				g.textBaseline = 'middle'
-				g.fillText(L.module.name.toLowerCase(), 0, 0)
 			}
 			g.restore()
 		})

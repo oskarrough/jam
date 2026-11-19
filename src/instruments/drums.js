@@ -6,12 +6,23 @@
 //   vel[s]   [kick, snare, hat] levels 1..9 (6 is a plain hit, 9 an accent, 2 a ghost)
 
 import { env, osc, noiseSrc, fit, rgba, val, clamp, isStrip } from './lib/util.js'
-import { INK, SERIF } from '../palette.js'
+import { INK } from '../palette.js'
 import { tap, line } from './lib/demo.js'
 
 const ROWS = 3
 const LV = 6
-const LABELS = ['kick', 'snare', 'hat']
+// each row's hit has its own shape: kick a round, snare a square, hat a diamond
+function hitShape(gx, r, x, y, size) {
+	gx.beginPath()
+	if (r === 1) gx.rect(x - size, y - size, size * 2, size * 2)
+	else if (r === 2) {
+		gx.moveTo(x, y - size * 1.3)
+		gx.lineTo(x + size, y)
+		gx.lineTo(x, y + size * 1.3)
+		gx.lineTo(x - size, y)
+		gx.closePath()
+	} else gx.arc(x, y, size, 0, 6.283)
+}
 const blankVel = (n) => Array.from({ length: n }, () => [LV, LV, LV])
 
 function drumSample() {
@@ -307,7 +318,6 @@ export default {
 						// the dot follows the finger: same scale as lvAt
 						const lv = clamp(Math.round(g.lv - ((e.y - g.y0) * ROWS * 9) / 0.68), 1, 9)
 						put(g.s, g.row, true, lv, false)
-						g.shown = lv
 						hear(g.row, lv)
 						return
 					}
@@ -352,13 +362,14 @@ export default {
 				const rowY = (r) => (1 - (r + 0.5) / ROWS) * h
 				gx.fillStyle = rgba(INK, 0.22)
 				for (let r = 1; r < ROWS; r++) gx.fillRect(0, (r / ROWS) * h - 0.5, w, 1)
-				gx.font = `italic 400 ${Math.max(9, Math.min(strip ? 13 : 18, band * 0.3))}px ${SERIF}`
-				gx.textAlign = 'left'
-				gx.textBaseline = strip ? 'middle' : 'top'
-				gx.fillStyle = rgba(INK, 0.55)
-				LABELS.forEach((label, r) =>
-					gx.fillText(label, cw + 3, strip ? rowY(r) : h - (r + 1) * band + 6),
-				)
+				// each row's legend is its hit's shape, hollow, at the left
+				gx.strokeStyle = rgba(INK, 0.5)
+				gx.lineWidth = 1.2
+				for (let r = 0; r < ROWS; r++) {
+					const sz = strip ? Math.max(2.5, Math.min(5, band * 0.18)) : Math.max(4, Math.min(8, band * 0.05))
+					hitShape(gx, r, cw + 4 + sz, strip ? rowY(r) : h - (r + 1) * band + 8 + sz * 1.3, sz)
+					gx.stroke()
+				}
 				if (!strip) {
 					for (let r = 0; r < ROWS; r++) {
 						const base = h - r * band - band * 0.1
@@ -374,14 +385,14 @@ export default {
 					const a = scale.off ? 1 - (performance.now() - scale.off) / 900 : 1
 					if (a <= 0) scale = null
 					else {
+						// soft to hard, as the hit itself grows from small at the bottom to big at the top
 						const base = h - scale.row * band - band * 0.1
-						gx.font = `italic 400 ${Math.max(10, Math.min(15, band * 0.12))}px ${SERIF}`
-						gx.textAlign = 'right'
-						gx.fillStyle = rgba(INK, 0.6 * a)
-						gx.textBaseline = 'bottom'
-						gx.fillText('soft', w - 8, base - 3)
-						gx.textBaseline = 'middle'
-						gx.fillText('hard', w - 8, base - band * 0.68)
+						gx.strokeStyle = gx.fillStyle = rgba(INK, 0.5 * a)
+						gx.lineWidth = 1
+						for (let k = 0; k < 4; k++) {
+							hitShape(gx, scale.row, w - 14, base - 6 - (k / 3) * (band * 0.68 - 6), 2 + k * 1.6)
+							k === 3 ? gx.fill() : gx.stroke()
+						}
 					}
 				}
 				for (let s = 0; s < n; s++) {
@@ -413,15 +424,7 @@ export default {
 						const eight = is808(s, r)
 						if (eight) size *= 1.5
 						gx.fillStyle = eight ? 'rgba(0,0,0,0.55)' : f > 0.3 ? INK : lv >= 9 ? INK : color
-						gx.beginPath()
-						if (r === 1) gx.rect(x - size, y - size, size * 2, size * 2)
-						else if (r === 2) {
-							gx.moveTo(x, y - size * 1.3)
-							gx.lineTo(x + size, y)
-							gx.lineTo(x, y + size * 1.3)
-							gx.lineTo(x - size, y)
-							gx.closePath()
-						} else gx.arc(x, y, size, 0, 6.283)
+						hitShape(gx, r, x, y, size)
 						gx.fill()
 						gx.strokeStyle = eight ? (f > 0.3 ? '#fff' : color) : INK
 						gx.lineWidth = eight ? 3 + f * 3 : 1
@@ -436,12 +439,6 @@ export default {
 							gx.beginPath()
 							gx.arc(x, y, size + 3.5, 0, 6.283)
 							gx.stroke()
-						}
-						if (g?.shown && g.s === s && g.row === r && g.mode === 'level') {
-							gx.fillStyle = INK
-							gx.textAlign = 'center'
-							gx.textBaseline = 'bottom'
-							gx.fillText(String(lv), x, y - size * 1.4 - 3)
 						}
 					}
 				}

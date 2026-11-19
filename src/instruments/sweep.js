@@ -65,11 +65,9 @@ export default {
 		}
 		let live = null
 		let lastRec = null
-		let chordName = ''
 
 		function retune(abs, time) {
 			const ch = engine.chord(abs, clock.steps)
-			chordName = ch.name
 			for (const { o, n, d } of oscs) {
 				const f = 440 * Math.pow(2, (ch.notes[n] + 12 * params.octave - 69) / 12)
 				o.frequency.setTargetAtTime(f, time, 0.04)
@@ -169,9 +167,6 @@ export default {
 					g.arc(live.x * w, live.y * h, 10, 0, Math.PI * 2)
 					g.stroke()
 				}
-				g.fillStyle = th.dim
-				g.font = `${Math.max(10, h / 30)}px ${th.font}`
-				g.fillText(chordName, 8, h - 8)
 			},
 			setState(s) {
 				state.auto = s.auto.map((a) => (a ? a.slice() : null))

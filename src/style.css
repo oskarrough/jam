@@ -694,11 +694,6 @@ body.replay canvas {
 .flash .token svg .f {
 	fill: var(--paper);
 }
-.flash i {
-	color: var(--title);
-	font: italic 400 20px/1 var(--serif);
-	text-shadow: 0 1px 0 rgba(20, 12, 40, 0.6);
-}
 .flash.pop {
 	animation: flash-pop 1.1s ease-out both;
 }
@@ -761,7 +756,7 @@ body.replay canvas {
 }
 
 /* the tool strip, inside the sheet's frame along its bottom edge (view.js draws its darker panel): round brushes
-   on the left, mode words on the right. It takes every tap that lands on it, so none leak onto the drawing. */
+   on the left. It takes every tap that lands on it, so none leak onto the drawing. */
 .inks {
 	position: absolute;
 	left: 0;
@@ -777,14 +772,10 @@ body.replay canvas {
 	gap: 12px;
 	touch-action: none;
 }
-.inks .modes:only-child {
-	margin-left: auto;
-}
 .inks[hidden] {
 	display: none;
 }
-.inks .brushes,
-.inks .modes {
+.inks .brushes {
 	display: flex;
 	gap: 8px;
 }
@@ -823,32 +814,18 @@ body.replay canvas {
 	fill: currentColor;
 	stroke: none;
 }
-.inks .modes button {
-	width: auto;
-	padding: 0 14px;
-	border-radius: 20px;
-	font: inherit;
-	font-size: 15px;
-	font-weight: 600;
-}
-/* a phone keeps one row: smaller chips, tighter words */
+/* a phone keeps one row: smaller chips */
 @media (max-width: 639px) {
 	.inks {
 		padding: 0 6px;
 		gap: 8px;
 	}
-	.inks .brushes,
-	.inks .modes {
+	.inks .brushes {
 		gap: 5px;
 	}
 	.inks button {
 		width: 32px;
 		height: 32px;
 		padding: 3px;
-	}
-	.inks .modes button {
-		height: 28px;
-		padding: 0 8px;
-		font-size: 13px;
 	}
 }

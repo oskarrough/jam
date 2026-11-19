@@ -210,11 +210,19 @@ export default {
 				size[1] = h
 				const t = view(clock)
 				const N = state.pts.length
-				g.fillStyle = th.faint
-				g.font = `${Math.max(10, h / 28)}px ${th.font}`
-				g.fillText('oo', 8, h - 8)
-				g.fillText('ah', w / 2 - 8, h - 8)
-				g.fillText('ee', w - 24, h - 8)
+				// the vowels along the bottom, as mouths: a pursed oo, an open ah, a wide ee
+				g.strokeStyle = th.faint
+				g.lineWidth = 1.4
+				const m0 = Math.max(4, h / 50)
+				for (const [x, rx, ry] of [
+					[14, m0 * 0.7, m0 * 0.7],
+					[w / 2, m0, m0 * 1.3],
+					[w - 14 - m0 * 1.5, m0 * 1.5, m0 * 0.35],
+				]) {
+					g.beginPath()
+					g.ellipse(x, h - 10 - m0, rx, ry, 0, 0, Math.PI * 2)
+					g.stroke()
+				}
 				// coarse grains draw a fat soft line, fine ones a thin bright one
 				const gs = grains()
 				const m = Math.min(w, h)

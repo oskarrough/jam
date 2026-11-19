@@ -804,8 +804,7 @@ function popFlash(id) {
 	const s = view.seatAt(me.seat),
 		L = seats[me.seat]
 	flash.style.setProperty('--c', L.color)
-	flash.innerHTML = `<span class="token">${strip.glyph(id)}</span><i></i>`
-	flash.querySelector('i').textContent = registry.get(id).name.toLowerCase()
+	flash.innerHTML = `<span class="token">${strip.glyph(id)}</span>`
 	flash.style.left = s.x + 'px'
 	flash.style.top = s.y + 'px'
 	flash.hidden = false

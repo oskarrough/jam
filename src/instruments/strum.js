@@ -68,14 +68,12 @@ export default {
 		let lastY = null,
 			lastT = 0,
 			cur = null // the strum this swipe is writing: { s, dir, fresh }
-		let chordName = ''
 		const lit = flashes() // keyed by slot (the whole strum) and slot*8+string (one knot)
 
 		const yOf = (j) => (j + 0.5) / STRINGS
 		const slotAt = (x) => clamp(Math.floor(x * SLOTS), 0, SLOTS - 1)
 		function notes(abs) {
 			const c = engine.chord(abs, clock.steps)
-			chordName = c.name
 			const [r, third, fifth] = c.notes.map((n) => n + 12 * params.octave)
 			return [r - 12, fifth - 12, r, third, fifth, r + 12]
 		}
@@ -332,9 +330,6 @@ export default {
 				}
 				g.lineWidth = 1
 				g.lineCap = g.lineJoin = 'butt'
-				g.fillStyle = th.dim
-				g.font = `${Math.max(10, h / 30)}px ${th.font}`
-				g.fillText(chordName, 8, h - 8)
 			},
 			setState(s) {
 				state.hits = s.hits.map((x) => x.slice())

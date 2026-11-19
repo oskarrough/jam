@@ -247,9 +247,15 @@ export default {
 					g.beginPath()
 					g.arc(x, y, size * (1 + glow * 0.3), 0, TAU)
 					g.fill()
+					// its laps a loop, as a little row of dots trailing it
 					g.fillStyle = th.dim
-					g.font = `${Math.max(9, RR / 22)}px ${th.font}`
-					g.fillText(String(lapsOf(p.r)), x + size + 3, y + 3)
+					const n = lapsOf(p.r),
+						dr = Math.max(1.2, RR / 160)
+					for (let j = 0; j < n; j++) {
+						g.beginPath()
+						g.arc(x + size + 4 + dr + j * dr * 3, y + size + 2, dr, 0, TAU)
+						g.fill()
+					}
 				})
 			},
 			setState(s) {
