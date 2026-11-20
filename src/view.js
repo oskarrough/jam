@@ -6,6 +6,7 @@ import { INK, SERIF, GROUNDS } from './palette.js'
 import { spring, dentAt } from './jelly.js'
 import { paintLandscape, makeWisps } from './backdrop.js'
 import { registry } from './instruments/index.js'
+import { MIX } from './engine.js'
 
 const TAU = Math.PI * 2
 const BROOM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="96" height="96" fill="none" stroke="${INK}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 3l-4.6 10.4"/><path d="M14.5 11.6l8.6 3.6"/><path d="M14.5 11.6C11 15 8 19.5 6.3 24.5c4.6 2.4 10.4 3.7 15.4 3.7 1.2-4.6 1.5-9 1.4-13"/><path d="M17.3 12.8l-5.2 13.4M20.3 14l-2.3 13.8"/><circle fill="${INK}" cx="26" cy="28" r=".9"/><circle fill="${INK}" cx="28.6" cy="25.6" r=".7"/></svg>`
@@ -134,8 +135,7 @@ export function createView(
 	// The sheet's frame holds the drawing and, for an instrument with inks, a darker tool strip along
 	// its bottom edge, like the knobs on a device. `sheet` is the drawing alone; sheet.tools is the strip's height.
 	let frameBox = null
-	const toolsOf = (mod) =>
-		mod?.inks?.length ? (innerWidth < 640 ? 46 : 54) : 0
+	const toolsOf = (mod) => (mod?.inks?.length ? (innerWidth < 640 ? 46 : 54) : 0)
 	function fitTools() {
 		const T = toolsOf(seats[sheetSeat]?.module)
 		if (sheet && frameBox && sheet.tools === T && sheet.h === frameBox.h - T) return false
@@ -377,13 +377,19 @@ export function createView(
 		return w && onMix ? { i: w.i, xy: rimFrom(w.i, -1.75), r: w.r } : null
 	}
 	const mixJelly = { s: spring({ k: 700, c: 10 }), a: 0 }
-	const LEVEL_MAX = 1.5
+	// up the square is a fader taper, not linear gain: level = LEVEL_MAX · h^2.25, so the bottom edge is silence,
+	// halfway is about -10 dB (half as loud by ear), a quarter up -24 dB, and the top a little over full
+	const LEVEL_MAX = 1.5,
+		TAPER = 2.25
+	const heightOf = (level) => Math.max(0, Math.min(1, level / LEVEL_MAX)) ** (1 / TAPER)
+	const levelAt = (h) => Math.round(LEVEL_MAX * Math.max(0, Math.min(1, h)) ** TAPER * 1000) / 1000
 	const mixer = {
 		on: false,
 		p: 0, // how far open, eased
 		drag: null, // a press in the square: {i, id, x0, y0, from: {level, tone}, moved, on, long, timer}
 		dots: [], // where each dot was last drawn, after stepping aside: {i, x, y, r}
 		pulse: seats.map(() => 0),
+		hover: -1, // the dot under the mouse: its badge answers
 	}
 	const mixField = () => {
 		const s = Math.round(Math.max(180, Math.min(S * 0.5, 320)))
@@ -393,7 +399,7 @@ export function createView(
 		x >= F.x - m && x <= F.x + F.s + m && y >= F.y - m && y <= F.y + F.s + m
 	const mixXY = (F, m) => {
 		const k = F.s - F.pad * 2
-		return [F.x + F.pad + m.tone * k, F.y + F.pad + (1 - m.level / LEVEL_MAX) * k]
+		return [F.x + F.pad + m.tone * k, F.y + F.pad + (1 - heightOf(m.level)) * k]
 	}
 	const setMixer = (on) => {
 		mixer.on = on
@@ -612,6 +618,7 @@ export function createView(
 			m = mixAt(),
 			onButton = m && Math.hypot(e.clientX - m.xy[0], e.clientY - m.xy[1]) < m.r + 5
 		if (mixer.on) hover = null
+		mixer.hover = mixer.on && e.pointerType === 'mouse' ? dotUnder(e.clientX, e.clientY) : -1
 		canvas.style.cursor = onButton
 			? 'pointer'
 			: mixer.on
@@ -634,9 +641,7 @@ export function createView(
 			const F = mixField(),
 				k = F.s - F.pad * 2
 			return onMix(md.i, {
-				level:
-					Math.round(Math.max(0, Math.min(LEVEL_MAX, md.from.level - (dy / k) * LEVEL_MAX)) * 100) /
-					100,
+				level: levelAt(heightOf(md.from.level) - dy / k),
 				tone: Math.round(Math.max(0, Math.min(1, md.from.tone + dx / k)) * 100) / 100,
 			})
 		}
@@ -1398,11 +1403,18 @@ export function createView(
 		g.fillStyle = L.color
 		g.fill()
 		g.restore()
-		g.strokeStyle = empty ? rgba(PAPER, 0.7) : INK
-		g.lineWidth = st.me ? 2.2 : 1.1
-		if (empty) g.setLineDash([2.5, 3])
+		// every badge wears its seat's colour as a rim, so the mixer's dots and the rings find their badge.
+		// Outside it a hairline of ink, dashed round an empty seat: waiting
+		g.strokeStyle = L.color
+		g.lineWidth = st.me ? 2.2 : 3.5
 		g.stroke(disc)
-		g.setLineDash([])
+		if (!st.me) {
+			g.strokeStyle = empty ? rgba(PAPER, 0.8) : INK
+			g.lineWidth = 1
+			if (empty) g.setLineDash([2.5, 3])
+			g.stroke(outline(x, y, r + 2, i * 5 + 2, 0.6, { a: J.a, depth: J.s.x * r * 0.4, w: 0.7 }))
+			g.setLineDash([])
+		}
 		if (st.me) {
 			// yours: a second, inner rim in paper
 			g.strokeStyle = PAPER
@@ -1543,8 +1555,7 @@ export function createView(
 				g.arc(d.x, d.y + bob, rr * 0.45, 0, TAU)
 				g.stroke()
 			}
-			if (d.p.name && dotHover && Math.hypot(dotHover[0] - d.x, dotHover[1] - d.y) < rr + 5)
-				tip = d
+			if (d.p.name && dotHover && Math.hypot(dotHover[0] - d.x, dotHover[1] - d.y) < rr + 5) tip = d
 		}
 		if (tip) {
 			g.globalAlpha = show
@@ -1923,8 +1934,7 @@ export function createView(
 		const F = mixField(),
 			e = EASES['out back'](Math.min(1, mixer.p)),
 			dragging = mixer.drag?.moved,
-			me = m.i,
-			k = F.s - F.pad * 2
+			me = m.i
 		g.save()
 		g.globalAlpha = Math.min(1, mixer.p * 1.4)
 		around(CX, CY, 0.85 + 0.15 * e, () => {
@@ -1937,7 +1947,7 @@ export function createView(
 			g.lineWidth = 1.2
 			g.stroke(sq)
 			// faint crosshair through the default: as loud as a seat starts, the tone untouched
-			const [hx, hy] = mixXY(F, { level: 0.9, tone: 0.5 })
+			const [hx, hy] = mixXY(F, MIX)
 			g.strokeStyle = ink(0.12)
 			g.lineWidth = 1
 			g.setLineDash([2, 4])
@@ -1953,15 +1963,16 @@ export function createView(
 			g.font = serif(fs)
 			g.textBaseline = 'middle'
 			g.lineJoin = 'round'
-			// each edge swells as your dot heads its way: at rest from the middle, full at the edge
+			// each edge swells as your dot heads its way from where a seat starts, full at the edge
 			const md = mixer.drag,
 				cur = seats[me].mix,
-				u = Math.max(0, Math.min(1, cur.level / LEVEL_MAX)),
+				u = heightOf(cur.level),
+				u0 = heightOf(MIX.level),
 				v = Math.max(0, Math.min(1, cur.tone)),
 				toward = (t) => Math.max(0, t * 2 - 1)
 			for (const [w, x, y, rot, t] of [
-				['louder', F.x + F.s / 2, F.y + F.pad * 0.5, 0, toward(u)],
-				['quieter', F.x + F.s / 2, F.y + F.s - F.pad * 0.5, 0, toward(1 - u)],
+				['louder', F.x + F.s / 2, F.y + F.pad * 0.5, 0, Math.max(0, (u - u0) / (1 - u0))],
+				['quieter', F.x + F.s / 2, F.y + F.s - F.pad * 0.5, 0, Math.max(0, (u0 - u) / u0)],
 				['darker', F.x + F.pad * 0.5, F.y + F.s / 2, -Math.PI / 2, toward(1 - v)],
 				['brighter', F.x + F.s - F.pad * 0.5, F.y + F.s / 2, Math.PI / 2, toward(v)],
 			]) {
@@ -2103,6 +2114,32 @@ export function createView(
 				g.fillText(line, F.x + F.s / 2, F.y + F.s + 12)
 			}
 		})
+		// the dot under the mouse (or the one you drag) threads out to its badge, which throbs in its colour
+		const li = mixer.drag?.moved ? mixer.drag.i : mixer.hover,
+			d = mixer.dots.find((d) => d.i === li)
+		if (d && mixer.p > 0.5) {
+			const [bx, by] = seatPos(li),
+				br = seatR(),
+				col = seats[li].color,
+				ang = Math.atan2(by - d.y, bx - d.x),
+				t = performance.now() / 1000,
+				beat = 0.5 + 0.5 * Math.sin(t * 7)
+			g.globalAlpha = Math.min(1, (mixer.p - 0.5) * 2)
+			g.strokeStyle = rgba(col, 0.6)
+			g.lineWidth = 1.5
+			g.setLineDash([3, 5])
+			g.lineDashOffset = -t * 24
+			g.beginPath()
+			g.moveTo(d.x + Math.cos(ang) * (d.r + 4), d.y + Math.sin(ang) * (d.r + 4))
+			g.lineTo(bx - Math.cos(ang) * (br + 6), by - Math.sin(ang) * (br + 6))
+			g.stroke()
+			g.setLineDash([])
+			g.strokeStyle = rgba(col, 0.35 + 0.45 * beat)
+			g.lineWidth = 2 + 2 * beat
+			g.beginPath()
+			g.arc(bx, by, br + 5 + 3 * beat, 0, TAU)
+			g.stroke()
+		}
 		g.restore()
 	}
 	let offer = null
